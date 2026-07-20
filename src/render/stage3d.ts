@@ -84,7 +84,7 @@ export class Stage3D {
 
   /**
    * The battlefield floor: THE redline — a pulsing red perimeter marking the
-   * arena — over a whisper of nav grid so flight reads against the void.
+   * arena against the void.
    */
   private buildArena(): void {
     this.arena = new THREE.Group();
@@ -92,8 +92,10 @@ export class Stage3D {
     const RL = 0xff3b53;
     const X = 44.5; // just outside the player clamp (43 × 25)
     const Y = 25.8;
-    this.redlineMat = new THREE.MeshBasicMaterial({ color: RL, transparent: true, opacity: 0.5 });
-    const dimMat = new THREE.MeshBasicMaterial({ color: RL, transparent: true, opacity: 0.16 });
+    // fog:false so the far edge (screen-top) doesn't wash into the void.
+    const matOpts = { color: RL, transparent: true, fog: false, depthWrite: false } as const;
+    this.redlineMat = new THREE.MeshBasicMaterial({ ...matOpts, opacity: 0.28 });
+    const dimMat = new THREE.MeshBasicMaterial({ ...matOpts, opacity: 0.1 });
     const bar = (
       mat: THREE.MeshBasicMaterial,
       w: number,
@@ -102,38 +104,27 @@ export class Stage3D {
       z: number,
     ): void => {
       const m = new THREE.Mesh(new THREE.BoxGeometry(w, 0.04, d), mat);
-      m.position.set(x, 0.08, z);
+      m.position.set(x, 0.1, z);
+      m.renderOrder = 2;
       this.arena.add(m);
     };
     // Inner frame (pulsing) + a still outer echo.
-    bar(this.redlineMat, X * 2, 0.2, 0, -Y);
-    bar(this.redlineMat, X * 2, 0.2, 0, Y);
-    bar(this.redlineMat, 0.2, Y * 2, -X, 0);
-    bar(this.redlineMat, 0.2, Y * 2, X, 0);
-    bar(dimMat, (X + 1) * 2, 0.14, 0, -Y - 1);
-    bar(dimMat, (X + 1) * 2, 0.14, 0, Y + 1);
-    bar(dimMat, 0.14, (Y + 1) * 2, -X - 1, 0);
-    bar(dimMat, 0.14, (Y + 1) * 2, X + 1, 0);
-    // Heavier corner ticks.
-    const cornerMat = new THREE.MeshBasicMaterial({ color: RL, transparent: true, opacity: 0.85 });
+    bar(this.redlineMat, X * 2, 0.22, 0, -Y);
+    bar(this.redlineMat, X * 2, 0.22, 0, Y);
+    bar(this.redlineMat, 0.22, Y * 2, -X, 0);
+    bar(this.redlineMat, 0.22, Y * 2, X, 0);
+    bar(dimMat, (X + 0.8) * 2, 0.14, 0, -Y - 0.8);
+    bar(dimMat, (X + 0.8) * 2, 0.14, 0, Y + 0.8);
+    bar(dimMat, 0.14, (Y + 0.8) * 2, -X - 0.8, 0);
+    bar(dimMat, 0.14, (Y + 0.8) * 2, X + 0.8, 0);
+    // Corner ticks — quiet accents, not chrome.
+    const cornerMat = new THREE.MeshBasicMaterial({ ...matOpts, opacity: 0.4 });
     for (const sx of [-1, 1]) {
       for (const sz of [-1, 1]) {
-        bar(cornerMat, 3.2, 0.34, sx * (X - 1.6), sz * Y);
-        bar(cornerMat, 0.34, 3.2, sx * X, sz * (Y - 1.6));
+        bar(cornerMat, 2.4, 0.28, sx * (X - 1.2), sz * Y);
+        bar(cornerMat, 0.28, 2.4, sx * X, sz * (Y - 1.2));
       }
     }
-
-    // Nav grid: sparse dim lines; 1px at the low internal resolution.
-    const pts: number[] = [];
-    for (let x = -40; x <= 40; x += 8) pts.push(x, 0.05, -Y, x, 0.05, Y);
-    for (let z = -24; z <= 24; z += 8) pts.push(-X, 0.05, z, X, 0.05, z);
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
-    const grid = new THREE.LineSegments(
-      geo,
-      new THREE.LineBasicMaterial({ color: 0x27374e, transparent: true, opacity: 0.28, depthWrite: false }),
-    );
-    this.arena.add(grid);
 
     this.arena.visible = false;
     this.scene.add(this.arena);
@@ -159,6 +150,11 @@ export class Stage3D {
     this.scene.fog = showcase ? new THREE.Fog(VOID, 110, 200) : new THREE.Fog(VOID, 140, 260);
     this.worldEl.classList.remove('hidden');
     this.update(0);
+  }
+
+  /** Tint the showcase pad aura (title/select) to a pilot's glow colour. */
+  setShowcaseAura(color: number): void {
+    this.hangar.setAura(color);
   }
 
   clearBattle(): void {
@@ -218,7 +214,7 @@ export class Stage3D {
     this.hangar.update(dt);
     if (this.arena.visible) {
       this.arenaT += dt;
-      this.redlineMat.opacity = 0.42 + 0.14 * Math.sin(this.arenaT * 2.2);
+      this.redlineMat.opacity = 0.22 + 0.08 * Math.sin(this.arenaT * 2.2);
     }
     this.fx.update(dt);
     this.renderer.render(this.scene, this.camera);

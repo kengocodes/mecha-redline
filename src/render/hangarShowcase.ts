@@ -2,6 +2,52 @@
 
 import * as THREE from 'three';
 
+/**
+ * Vertical light-shaft texture: streaky columns (so the shaft shimmers as it
+ * rotates) with a bright base fading to nothing at the top.
+ */
+function pillarTexture(): THREE.CanvasTexture {
+  const W = 64;
+  const H = 64;
+  const cv = document.createElement('canvas');
+  cv.width = W;
+  cv.height = H;
+  const g = cv.getContext('2d')!;
+  const img = g.createImageData(W, H);
+  for (let x = 0; x < W; x++) {
+    const u = (x / W) * Math.PI * 2;
+    const streak = 0.55 + 0.45 * (0.5 + 0.5 * Math.sin(u * 3 + 1.7)) * (0.5 + 0.5 * Math.sin(u * 7));
+    for (let y = 0; y < H; y++) {
+      const v = y / (H - 1); // canvas top (pillar top) → 0 alpha
+      const i = (y * W + x) * 4;
+      img.data[i] = 255;
+      img.data[i + 1] = 255;
+      img.data[i + 2] = 255;
+      img.data[i + 3] = Math.round(255 * v ** 1.6 * streak);
+    }
+  }
+  g.putImageData(img, 0, 0);
+  const tex = new THREE.CanvasTexture(cv);
+  tex.wrapS = THREE.RepeatWrapping;
+  return tex;
+}
+
+/** Soft radial pool of light for the pad floor. */
+function discTexture(): THREE.CanvasTexture {
+  const S = 64;
+  const cv = document.createElement('canvas');
+  cv.width = S;
+  cv.height = S;
+  const g = cv.getContext('2d')!;
+  const grad = g.createRadialGradient(S / 2, S / 2, 2, S / 2, S / 2, S / 2);
+  grad.addColorStop(0, 'rgba(255,255,255,0.9)');
+  grad.addColorStop(0.55, 'rgba(255,255,255,0.32)');
+  grad.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = grad;
+  g.fillRect(0, 0, S, S);
+  return new THREE.CanvasTexture(cv);
+}
+
 function dustMotes(count: number): THREE.Points {
   const pos = new Float32Array(count * 3);
   for (let i = 0; i < count; i++) {
@@ -29,6 +75,11 @@ function dustMotes(count: number): THREE.Points {
 export class HangarShowcase {
   readonly group = new THREE.Group();
   private dust: THREE.Points;
+  private pillar: THREE.Mesh;
+  private pillarMat: THREE.MeshBasicMaterial;
+  private discMat: THREE.MeshBasicMaterial;
+  private glow: THREE.PointLight;
+  private flare = 0;
   private t = 0;
 
   constructor() {
@@ -64,9 +115,39 @@ export class HangarShowcase {
     fill.position.set(4, 12, 40);
     this.group.add(fill);
 
-    const glow = new THREE.PointLight(0x7ffbff, 0.9, 14, 2);
-    glow.position.set(0, 0.8, 0);
-    this.group.add(glow);
+    this.glow = new THREE.PointLight(0x7ffbff, 0.9, 14, 2);
+    this.glow.position.set(0, 0.8, 0);
+    this.group.add(this.glow);
+
+    // Upward aura: an additive light shaft rising off the pad between the two
+    // rings, plus a light pool on the floor. Tinted per pilot via setAura.
+    this.pillarMat = new THREE.MeshBasicMaterial({
+      map: pillarTexture(),
+      color: 0x7ffbff,
+      transparent: true,
+      opacity: 0.2,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+      fog: false,
+    });
+    this.pillar = new THREE.Mesh(new THREE.CylinderGeometry(2.05, 2.9, 11, 28, 1, true), this.pillarMat);
+    this.pillar.position.y = 5.5;
+    this.group.add(this.pillar);
+
+    this.discMat = new THREE.MeshBasicMaterial({
+      map: discTexture(),
+      color: 0x7ffbff,
+      transparent: true,
+      opacity: 0.5,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      fog: false,
+    });
+    const disc = new THREE.Mesh(new THREE.CircleGeometry(3.1, 36), this.discMat);
+    disc.rotation.x = -Math.PI / 2;
+    disc.position.y = 0.05;
+    this.group.add(disc);
 
     this.dust = dustMotes(70);
     this.group.add(this.dust);
@@ -74,9 +155,25 @@ export class HangarShowcase {
     this.group.visible = false;
   }
 
+  /** Tint the pad aura to a pilot's glow colour and flare it (call on swap). */
+  setAura(color: number): void {
+    this.pillarMat.color.set(color);
+    this.discMat.color.set(color);
+    this.glow.color.set(color);
+    this.flare = 1;
+  }
+
   update(dt: number): void {
     if (!this.group.visible) return;
     this.t += dt;
+
+    // Aura: slow breathing pulse, plus a bright flare that decays after swaps.
+    this.flare = Math.max(0, this.flare - dt * 2.6);
+    const pulse = 0.8 + 0.2 * Math.sin(this.t * 2.3);
+    this.pillarMat.opacity = 0.2 * pulse + 0.3 * this.flare;
+    this.discMat.opacity = 0.5 * pulse + 0.4 * this.flare;
+    this.glow.intensity = 0.9 + 1.5 * this.flare;
+    this.pillar.rotation.y += dt * 0.16;
     const pos = this.dust.geometry.getAttribute('position') as THREE.BufferAttribute;
     for (let i = 0; i < pos.count; i++) {
       let y = pos.getY(i) + dt * (0.12 + (i % 5) * 0.03);

@@ -48,6 +48,7 @@ export class SelectScene extends Phaser.Scene {
     this.yaw = ARRIVE_YAW;
     this.gear.root.rotation.y = this.yaw;
     s.battleGroup.add(this.gear.root);
+    s.setShowcaseAura(def.gear.palette.glow);
   }
 
   private pick(ix: number): void {

@@ -43,6 +43,7 @@ export class TitleScene extends Phaser.Scene {
     this.yaw = ARRIVE_YAW;
     this.gear.root.rotation.y = this.yaw;
     s.battleGroup.add(this.gear.root);
+    s.setShowcaseAura(def.gear.palette.glow);
     if (flash) {
       setGearFlash(this.gear, true);
       this.time.delayedCall(110, () => setGearFlash(this.gear, false));
