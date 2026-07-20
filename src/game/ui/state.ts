@@ -3,6 +3,7 @@
 export type Phase =
   | 'boot'
   | 'title'
+  | 'select'
   | 'intro'
   | 'battle'
   | 'warning'
@@ -51,6 +52,16 @@ export const hud: HudState = {
   msg: '',
   msgT: 0,
 };
+
+/** Hangar select UI state: SelectScene drives it, the overlay paints it. */
+export interface SelectState {
+  ix: number; // selected roster index
+  hover: number; // pointer-hovered roster slot, -1 = none
+  swapT: number; // seconds since the selection changed (drives glitch/type-on)
+  confirmT: number; // -1 idle; >= 0 counts up through the launch sequence
+}
+
+export const sel: SelectState = { ix: 0, hover: -1, swapT: 9, confirmT: -1 };
 
 export function setPhase(p: Phase): void {
   hud.phase = p;

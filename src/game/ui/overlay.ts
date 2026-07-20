@@ -3,7 +3,9 @@
 // DotGothic16 with katakana accents. Clean over the low-res 3D world.
 
 import { UI_H, UI_W } from '../../core/const';
-import { hud } from './state';
+import { ROSTER } from '../roster';
+import { getPilotArt } from './pilotArt';
+import { hud, sel } from './state';
 import { getTitleArt } from './titleArt';
 
 const CYAN = '#7ffbff';
@@ -72,6 +74,9 @@ export function drawUI(g: Ctx): void {
     case 'title':
       drawTitle(g);
       break;
+    case 'select':
+      drawSelect(g);
+      break;
     default:
       drawBattle(g);
   }
@@ -127,6 +132,266 @@ function drawTitle(g: Ctx): void {
   g.fillStyle = '#02050c';
   for (let y = 0; y < UI_H; y += 3) g.fillRect(0, y, UI_W, 1);
   g.globalAlpha = 1;
+}
+
+// ---- hangar select -------------------------------------------------------
+
+/** Roster strip geometry — shared with SelectScene for pointer hit-tests. */
+export function selectSlotRect(i: number): { x: number; y: number; w: number; h: number } {
+  return { x: 36 + i * 304, y: 648, w: 296, h: 52 };
+}
+
+function easeOutCubic(p: number): number {
+  return 1 - (1 - p) ** 3;
+}
+
+function drawSelect(g: Ctx): void {
+  const p = ROSTER[sel.ix];
+  const blink = Math.floor(hud.t * 1.5) % 2 === 0;
+
+  // Header + callsign block, top-center above the turntable.
+  tx(g, 'SELECT GEAR ── 機体選択', UI_W / 2, 36, 21, FG, 'center', 6);
+  rule(g, UI_W / 2 - 148, 54, 296, RED);
+  tx(g, `${p.unitNo} ── ${p.callsign}`, UI_W / 2, 98, 34, CYAN, 'center', 8);
+  tx(g, p.kana, UI_W / 2, 130, 14, DIM, 'center', 6);
+
+  drawPortraitPanel(g);
+  drawStatPanel(g);
+  drawRoster(g);
+
+  if (sel.confirmT < 0 && blink) {
+    tx(g, '◄ ► SELECT ── ENTER: LAUNCH 出撃', UI_W / 2, 626, 14, CYAN, 'center', 3);
+  }
+  tx(g, '© NEO-KYOTO GARRISON  1998', UI_W / 2, UI_H - 10, 11, DIM, 'center', 2);
+
+  // CRT scanlines, matching the title treatment.
+  g.globalAlpha = 0.055;
+  g.fillStyle = '#02050c';
+  for (let y = 0; y < UI_H; y += 3) g.fillRect(0, y, UI_W, 1);
+  g.globalAlpha = 1;
+
+  if (sel.confirmT >= 0) drawLaunch(g);
+}
+
+function drawPortraitPanel(g: Ctx): void {
+  const p = ROSTER[sel.ix];
+  const art = getPilotArt(p.id);
+  const x = 36;
+  const y = 92;
+  const w = 308;
+  const h = 470;
+  panel(g, x, y, w, h);
+  const px = x + 12;
+  const py = y + 12;
+  const pw = w - 24;
+  const ph = 388;
+
+  // CRT well behind the still.
+  g.fillStyle = 'rgba(8, 13, 24, 0.9)';
+  g.fillRect(px, py, pw, ph);
+  g.fillStyle = 'rgba(127, 251, 255, 0.05)';
+  g.fillRect(px, py, pw, ph);
+
+  if (art) {
+    const por = art.portrait;
+    const k = Math.min(pw / por.width, ph / por.height);
+    const dw = por.width * k;
+    const dh = por.height * k;
+    const dx = px + (pw - dw) / 2;
+    const dy = py + ph - dh; // pin to the bottom of the tube
+    g.save();
+    g.beginPath();
+    g.rect(px, py, pw, ph);
+    g.clip();
+    g.globalAlpha = Math.min(1, sel.swapT / 0.15);
+    g.drawImage(por, dx, dy, dw, dh);
+
+    // Channel-change glitch after a swap: sliced rows shoved sideways.
+    const gl = sel.swapT < 0.22 ? 1 - sel.swapT / 0.22 : 0;
+    if (gl > 0) {
+      for (let i = 0; i < 6; i++) {
+        const sy = Math.max(dy, py + Math.random() * (ph - 18));
+        const sh = 5 + Math.random() * 13;
+        const ox = (Math.random() - 0.5) * 30 * gl;
+        g.drawImage(por, 0, (sy - dy) / k, por.width, sh / k, dx + ox, sy, dw, sh);
+      }
+    }
+    g.restore();
+    g.globalAlpha = 1;
+  }
+
+  // Tube dressing: scanlines + a slow interference sweep.
+  g.globalAlpha = 0.1;
+  g.fillStyle = '#02050c';
+  for (let yy = py; yy < py + ph; yy += 3) g.fillRect(px, yy, pw, 1);
+  g.globalAlpha = 1;
+  const sweep = py + ((hud.t * 34) % ph);
+  g.fillStyle = 'rgba(200, 240, 255, 0.06)';
+  g.fillRect(px, sweep, pw, 3);
+
+  tx(g, 'PILOT ── 操縦士', px + 2, y + h - 48, 11, DIM, 'left', 3);
+  tx(g, p.pilot, px + 2, y + h - 26, 17, FG, 'left', 2);
+  tx(g, 'N-K GARRISON', px + pw - 2, y + h - 48, 10, DIM, 'right', 1);
+}
+
+function drawStatPanel(g: Ctx): void {
+  const p = ROSTER[sel.ix];
+  const x = 936;
+  const y = 92;
+  const w = 308;
+  const h = 470;
+  panel(g, x, y, w, h);
+  const lx = x + 16;
+  const rw = w - 32;
+  const off = 'rgba(127, 251, 255, 0.12)';
+
+  tx(g, 'ROLE ── 機種', lx, y + 26, 11, DIM, 'left', 3);
+  tx(g, p.role, lx, y + 50, 15, CYAN, 'left', 1);
+  tx(g, p.roleJa, lx, y + 70, 12, DIM, 'left', 2);
+  rule(g, lx, y + 86, rw, LINE);
+
+  tx(g, 'DOCTRINE ── 戦術', lx, y + 108, 11, DIM, 'left', 3);
+  p.doctrine.forEach((line, i) => tx(g, line, lx, y + 132 + i * 20, 12, FG, 'left', 1));
+  rule(g, lx, y + 196, rw, LINE);
+
+  tx(g, 'ARMOR ── 装甲', lx, y + 218, 11, DIM, 'left', 3);
+  for (let i = 0; i < 5; i++) {
+    const bx = lx + i * 38;
+    g.fillStyle = i < p.stats.armor ? CYAN : off;
+    g.fillRect(bx, y + 230, 30, 13);
+    g.strokeStyle = LINE;
+    g.lineWidth = 1;
+    g.strokeRect(bx + 0.5, y + 230.5, 29, 12);
+  }
+
+  tx(g, 'SPEED ── 速度', lx, y + 264, 11, DIM, 'left', 3);
+  const segs = Math.max(1, Math.min(10, Math.round(p.stats.speed / 4)));
+  for (let i = 0; i < 10; i++) {
+    g.fillStyle = i < segs ? AMBER : 'rgba(255, 181, 74, 0.12)';
+    g.fillRect(lx + i * 19, y + 276, 14, 10);
+  }
+
+  tx(g, 'BURST ── バースト', lx, y + 310, 11, DIM, 'left', 3);
+  for (let i = 0; i < 4; i++) {
+    const bx = lx + i * 40;
+    const cy = y + 332;
+    g.fillStyle = i < p.stats.burst ? CYAN : off;
+    g.beginPath();
+    g.moveTo(bx + 13, cy - 8);
+    g.lineTo(bx + 26, cy);
+    g.lineTo(bx + 13, cy + 8);
+    g.lineTo(bx, cy);
+    g.closePath();
+    g.fill();
+    g.strokeStyle = LINE;
+    g.lineWidth = 1;
+    g.stroke();
+  }
+
+  tx(g, p.trait, lx, y + 368, 12, AMBER, 'left', 1);
+  rule(g, lx, y + 386, rw, LINE);
+
+  // Pilot voice, typed on after the panel settles.
+  const chars = Math.max(0, Math.floor((sel.swapT - 0.25) * 46));
+  if (chars > 0) {
+    tx(g, `「${p.quote.slice(0, chars)}」`, lx, y + 414, 13, DIM, 'left', 1);
+  }
+}
+
+function drawRoster(g: Ctx): void {
+  for (let i = 0; i < ROSTER.length; i++) {
+    const p = ROSTER[i];
+    const r = selectSlotRect(i);
+    const on = i === sel.ix;
+    const hov = i === sel.hover;
+    g.fillStyle = on ? 'rgba(127, 251, 255, 0.12)' : PANEL;
+    g.fillRect(r.x, r.y, r.w, r.h);
+    g.strokeStyle = on ? CYAN : hov ? 'rgba(127, 251, 255, 0.55)' : LINE;
+    g.lineWidth = 1;
+    g.strokeRect(r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1);
+    if (on) {
+      // corner ticks, matching panel()
+      const t = 7;
+      g.strokeStyle = CYAN;
+      g.beginPath();
+      for (const [cx, cy, dx, dy] of [
+        [r.x, r.y, 1, 1],
+        [r.x + r.w, r.y, -1, 1],
+        [r.x, r.y + r.h, 1, -1],
+        [r.x + r.w, r.y + r.h, -1, -1],
+      ]) {
+        g.moveTo(cx + dx * t + 0.5, cy + 0.5);
+        g.lineTo(cx + 0.5, cy + 0.5);
+        g.lineTo(cx + 0.5, cy + dy * t + 0.5);
+      }
+      g.stroke();
+    }
+    tx(g, p.unitNo, r.x + 14, r.y + 21, 15, on ? AMBER : DIM, 'left', 2);
+    tx(g, p.callsign, r.x + 48, r.y + 21, 17, on ? FG : DIM, 'left', 3);
+    tx(g, p.pilot, r.x + 48, r.y + 39, 11, on ? CYAN : 'rgba(147, 160, 180, 0.7)', 'left', 1);
+    tx(g, p.kana, r.x + r.w - 12, r.y + 39, 10, DIM, 'right', 1);
+  }
+}
+
+function drawLaunch(g: Ctx): void {
+  const p = ROSTER[sel.ix];
+  const c = sel.confirmT;
+  const art = getPilotArt(p.id);
+
+  // Dim the briefing so the cut-in owns the frame.
+  g.fillStyle = `rgba(2, 5, 12, ${Math.min(0.55, c * 2.2)})`;
+  g.fillRect(0, 0, UI_W, UI_H);
+
+  // Speed lines streaking across — stepped jitter reads as motion.
+  if (c > 0.05) {
+    g.strokeStyle = 'rgba(200, 245, 255, 0.4)';
+    for (let i = 0; i < 24; i++) {
+      const yy = (i * 173 + Math.floor(c * 40) * 97) % UI_H;
+      const xx = ((i * 259) % (UI_W + 500)) - 250;
+      const len = 260 + ((i * 83) % 340);
+      g.lineWidth = 1 + (i % 3);
+      g.beginPath();
+      g.moveTo(xx, yy);
+      g.lineTo(xx + len, yy + len * 0.12);
+      g.stroke();
+    }
+  }
+
+  // Full-body gear plate slams in from the right, slightly canted.
+  if (art) {
+    const s = easeOutCubic(Math.min(1, c / 0.26));
+    const plate = art.plate;
+    const ph = 660;
+    const pw = (plate.width / plate.height) * ph;
+    g.save();
+    g.translate(UI_W + 360 - s * 770, 392);
+    g.rotate(-0.09);
+    g.globalAlpha = Math.min(1, c * 7);
+    g.drawImage(plate, -pw / 2, -ph / 2, pw, ph);
+    g.restore();
+    g.globalAlpha = 1;
+  }
+
+  // LAUNCH stamp with a settle pop over the left half.
+  if (c > 0.22) {
+    const pop = 1 + Math.max(0, 0.4 - (c - 0.22)) * 1.3;
+    const size = 58 * pop;
+    tx(g, 'LAUNCH', 316, 330, size, RED, 'center', 10);
+    tx(g, '出撃', 316, 330 + size * 0.85, size * 0.55, FG, 'center', 14);
+    tx(g, `${p.callsign} ── ${p.pilot}`, 316, 452, 16, CYAN, 'center', 3);
+  }
+
+  // Hard white hit on the tap, then a fade to black into the mission.
+  const flash = 0.7 - c * 2.6;
+  if (flash > 0) {
+    g.fillStyle = `rgba(232, 240, 255, ${flash})`;
+    g.fillRect(0, 0, UI_W, UI_H);
+  }
+  const out = (c - 0.85) / 0.3;
+  if (out > 0) {
+    g.fillStyle = `rgba(2, 5, 12, ${Math.min(1, out)})`;
+    g.fillRect(0, 0, UI_W, UI_H);
+  }
 }
 
 // ---- battle hud ----------------------------------------------------------

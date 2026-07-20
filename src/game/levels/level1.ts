@@ -6,6 +6,8 @@ export interface LevelApi {
   lancer(x: number, y?: number): void;
   say(text: string): void;
   wave(n: number): void;
+  /** Selected gear's display name, for operator chatter. */
+  callsign: string;
 }
 
 export interface LevelEvent {
@@ -18,7 +20,7 @@ function build(): LevelEvent[] {
   const add = (at: number, run: (g: LevelApi) => void) => ev.push({ at, run });
 
   add(0.8, (g) =>
-    g.say('OPERATOR // Hostile gears crossing the redline. Valkyr, weapons free.'),
+    g.say(`OPERATOR // Hostile gears crossing the redline. ${g.callsign}, weapons free.`),
   );
 
   // W1 — first contact: a line of husks.

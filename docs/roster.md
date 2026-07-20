@@ -124,14 +124,14 @@ Headset crushed into messy hair, solid presence. Approachable toughness — the 
 
 ---
 
-## Select-screen flow (intended)
+## Select-screen flow (implemented)
 
 **Title → Hangar Select → Mission**
 
-1. Gear plate or in-engine preview of the selected unit.
-2. Roster strip `01–04` with callsign + pilot name.
-3. CRT portrait panel (keyed still + scanlines).
-4. Doctrine line + armor / speed / Burst bars in existing HUD language.
+1. In-engine turntable of the selected unit on the title launch pad; the full-body gear plate is saved for the LAUNCH cut-in.
+2. Roster strip `01–04` with callsign + pilot name (`src/game/scenes/SelectScene.ts`, painted in `src/game/ui/overlay.ts`).
+3. CRT portrait panel (keyed still + scanlines + channel-change glitch). Portraits are mirrored at key time where needed so every pilot faces screen-right (`flipPortrait` in `src/game/roster.ts`).
+4. Doctrine line + armor / speed / Burst bars in existing HUD language; stats feed gameplay via `PilotStats`.
 
 ## Unlock notes
 

@@ -6,6 +6,7 @@ import { initInput } from './core/input';
 import { BootScene } from './game/scenes/BootScene';
 import { GameScene } from './game/scenes/GameScene';
 import { HudScene } from './game/scenes/HudScene';
+import { SelectScene } from './game/scenes/SelectScene';
 import { TitleScene } from './game/scenes/TitleScene';
 import './style.css';
 
@@ -38,7 +39,7 @@ const game = new Phaser.Game({
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH,
   },
-  scene: [BootScene, TitleScene, GameScene, HudScene],
+  scene: [BootScene, TitleScene, SelectScene, GameScene, HudScene],
 });
 
 window.addEventListener('resize', () => {

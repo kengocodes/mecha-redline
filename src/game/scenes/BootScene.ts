@@ -4,6 +4,7 @@
 import Phaser from 'phaser';
 import { HI_KEY } from '../../core/const';
 import { Stage3D } from '../../render/stage3d';
+import { loadPilotArt } from '../ui/pilotArt';
 import { loadTitleArt } from '../ui/titleArt';
 import { hud, setPhase } from '../ui/state';
 
@@ -34,7 +35,7 @@ export class BootScene extends Phaser.Scene {
     const stage = document.getElementById('stage');
     if (!stage) throw new Error('missing #stage');
     new Stage3D(stage);
-    await loadTitleArt();
+    await Promise.all([loadTitleArt(), loadPilotArt()]);
     document.getElementById('loading')?.remove();
 
     this.scene.launch('hud');

@@ -25,6 +25,8 @@ export interface GearOptions {
   shoulderCannons: boolean; // boss: twin over-shoulder barrels
   wings: boolean; // swept wing binders fanning off the backpack
   bulk: number; // 1 = standard frame; widens torso + shoulders
+  /** Focus-mode hitbox dot; defaults to rifle (player frames without one opt in). */
+  focusMarker?: boolean;
 }
 
 export interface Gear {
@@ -444,7 +446,7 @@ export function buildGear(o: GearOptions): Gear {
 
   // Focus-mode hitbox marker (player only; toggled from the scene).
   let focusDot: THREE.Mesh | null = null;
-  if (o.rifle) {
+  if (o.focusMarker ?? o.rifle) {
     focusDot = new THREE.Mesh(
       new THREE.OctahedronGeometry(0.28),
       new THREE.MeshBasicMaterial({ color: 0xffffff }),

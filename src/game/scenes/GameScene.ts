@@ -31,9 +31,9 @@ import {
   LANCER,
   muzzleArenaPos,
   setGearFlash,
-  VALKYR,
 } from '../../render/gearFactory';
 import { Stage3D } from '../../render/stage3d';
+import { type PilotStats, ROSTER, selectedPilot } from '../roster';
 import {
   type Enemy,
   type EnemyKind,
@@ -66,6 +66,8 @@ const HITSTOP = {
 export class GameScene extends Phaser.Scene {
   private p = { x: 0, y: 0, vx: 0, vy: 0, aim: -Math.PI / 2, inv: 0, fireCd: 0, alive: true };
   private pGear!: Gear;
+  private stats: PilotStats = ROSTER[0].stats;
+  private callsign = ROSTER[0].displayName;
   private enemies: Enemy[] = [];
   private eb: Bullet[] = []; // enemy bullets
   private pb: Bullet[] = []; // player bullets
@@ -109,14 +111,18 @@ export class GameScene extends Phaser.Scene {
     this.endT = 0;
     this.hitstop = 0;
     this.bossPhase = 1;
-    this.burst = createBurstState();
 
-    this.pGear = buildGear(VALKYR);
+    const pilot = selectedPilot();
+    this.stats = pilot.stats;
+    this.callsign = pilot.displayName;
+    this.burst = createBurstState(this.stats.burst);
+
+    this.pGear = buildGear(pilot.gear);
     s.battleGroup.add(this.pGear.root);
 
     hud.score = 0;
-    hud.armor = PLAYER.armor;
-    hud.maxArmor = PLAYER.armor;
+    hud.armor = this.stats.armor;
+    hud.maxArmor = this.stats.armor;
     hud.burst = this.burst.charges;
     hud.maxBurst = this.burst.maxCharges;
     hud.burstFlashT = 0;
@@ -155,6 +161,9 @@ export class GameScene extends Phaser.Scene {
     say,
     wave: (n: number) => {
       hud.wave = n;
+    },
+    get callsign() {
+      return selectedPilot().displayName;
     },
   };
 
@@ -252,7 +261,7 @@ export class GameScene extends Phaser.Scene {
     hud.burst = this.burst.charges;
 
     const ax = moveAxis();
-    const speed = focusing() ? PLAYER.focusSpeed : PLAYER.speed;
+    const speed = focusing() ? this.stats.focusSpeed : this.stats.speed;
     const len = Math.hypot(ax.x, ax.y) || 1;
     p.vx = (ax.x / len) * speed;
     p.vy = (ax.y / len) * speed;
@@ -271,8 +280,8 @@ export class GameScene extends Phaser.Scene {
     const canFire = hud.phase !== 'intro';
     if (canFire && firing() && p.fireCd <= 0) {
       const foc = focusing();
-      p.fireCd = 1 / (foc ? PLAYER.focusFireRate : PLAYER.fireRate);
-      const spread = ((foc ? PLAYER.focusSpreadDeg : PLAYER.spreadDeg) * Math.PI) / 180;
+      p.fireCd = 1 / (foc ? this.stats.focusFireRate : this.stats.fireRate);
+      const spread = ((foc ? this.stats.focusSpreadDeg : this.stats.spreadDeg) * Math.PI) / 180;
       // Pose the gear so the rifle tip's world position matches this frame.
       this.pGear.root.position.set(p.x, 0, p.y);
       this.pGear.root.rotation.y = Math.atan2(Math.cos(p.aim), Math.sin(p.aim));
@@ -346,7 +355,7 @@ export class GameScene extends Phaser.Scene {
     // Enemy bullets vs the player core.
     for (let i = this.eb.length - 1; i >= 0; i--) {
       const b = this.eb[i];
-      const rr = PLAYER.hitR + b.r;
+      const rr = this.stats.hitR + b.r;
       const dx = p.x - b.x;
       const dy = p.y - b.y;
       if (dx * dx + dy * dy < rr * rr) {
@@ -358,7 +367,7 @@ export class GameScene extends Phaser.Scene {
 
     // Ramming damage.
     for (const e of this.enemies) {
-      const rr = e.hitR + PLAYER.hitR + 0.4;
+      const rr = e.hitR + this.stats.hitR + 0.4;
       const dx = p.x - e.x;
       const dy = p.y - e.y;
       if (dx * dx + dy * dy < rr * rr) {
@@ -387,7 +396,7 @@ export class GameScene extends Phaser.Scene {
       }
       this.eb.length = 0; // mercy-clear the screen
       this.endT = 1.9;
-      say('OPERATOR // Confirmed kill. Sector 7 holds. Bring the Valkyr home.');
+      say(`OPERATOR // Confirmed kill. Sector 7 holds. Bring the ${this.callsign} home.`);
     } else {
       const lancer = e.kind === 'lancer';
       s.fx.explode(e.x, e.y, lancer ? 1.5 : 1);
@@ -455,7 +464,7 @@ export class GameScene extends Phaser.Scene {
       const lat = -p.vx * fy + p.vy * fx;
       const fwd = p.vx * fx + p.vy * fy;
       // Thrusters flare with speed (focus mode reads dimmer for free).
-      animateGear(this.pGear, dt, -lat * 0.011, -fwd * 0.006, Math.hypot(p.vx, p.vy) / PLAYER.speed);
+      animateGear(this.pGear, dt, -lat * 0.011, -fwd * 0.006, Math.hypot(p.vx, p.vy) / this.stats.speed);
       // i-frame blink
       this.pGear.att.visible = p.inv <= 0 || Math.floor(hud.t * 14) % 2 === 0;
       if (this.pGear.focusDot) this.pGear.focusDot.visible = focusing();

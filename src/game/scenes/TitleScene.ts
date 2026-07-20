@@ -33,7 +33,7 @@ export class TitleScene extends Phaser.Scene {
     Stage3D.I.update(dt);
 
     if (hud.t > 0.5 && takeTap()) {
-      this.scene.start('game');
+      this.scene.start('select');
     }
   }
 }

@@ -21,10 +21,10 @@ export interface BurstState {
   flashT: number;
 }
 
-export function createBurstState(): BurstState {
+export function createBurstState(maxCharges = BURST.maxCharges): BurstState {
   return {
-    charges: BURST.maxCharges,
-    maxCharges: BURST.maxCharges,
+    charges: maxCharges,
+    maxCharges,
     cd: 0,
     flashT: 0,
   };
