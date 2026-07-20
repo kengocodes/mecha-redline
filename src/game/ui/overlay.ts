@@ -145,7 +145,22 @@ function easeOutCubic(p: number): number {
   return 1 - (1 - p) ** 3;
 }
 
+/** Soft CRT scanlines over the whole frame (title/select treatment). */
+function crtScanlines(g: Ctx): void {
+  g.globalAlpha = 0.055;
+  g.fillStyle = '#02050c';
+  for (let y = 0; y < UI_H; y += 3) g.fillRect(0, y, UI_W, 1);
+  g.globalAlpha = 1;
+}
+
 function drawSelect(g: Ctx): void {
+  if (sel.confirmT >= 0) {
+    // Launch owns the whole frame — the briefing clears out under the flash.
+    drawLaunch(g);
+    crtScanlines(g);
+    return;
+  }
+
   const p = ROSTER[sel.ix];
   const blink = Math.floor(hud.t * 1.5) % 2 === 0;
 
@@ -159,18 +174,12 @@ function drawSelect(g: Ctx): void {
   drawStatPanel(g);
   drawRoster(g);
 
-  if (sel.confirmT < 0 && blink) {
+  if (blink) {
     tx(g, '◄ ► SELECT ── ENTER: LAUNCH 出撃', UI_W / 2, 626, 14, CYAN, 'center', 3);
   }
   tx(g, '© NEO-KYOTO GARRISON  1998', UI_W / 2, UI_H - 10, 11, DIM, 'center', 2);
 
-  // CRT scanlines, matching the title treatment.
-  g.globalAlpha = 0.055;
-  g.fillStyle = '#02050c';
-  for (let y = 0; y < UI_H; y += 3) g.fillRect(0, y, UI_W, 1);
-  g.globalAlpha = 1;
-
-  if (sel.confirmT >= 0) drawLaunch(g);
+  crtScanlines(g);
 }
 
 function drawPortraitPanel(g: Ctx): void {
@@ -338,11 +347,11 @@ function drawLaunch(g: Ctx): void {
   const c = sel.confirmT;
   const art = getPilotArt(p.id);
 
-  // Dim the briefing so the cut-in owns the frame.
-  g.fillStyle = `rgba(2, 5, 12, ${Math.min(0.55, c * 2.2)})`;
+  // Near-black card — the lifting gear's thrusters glow through early on.
+  g.fillStyle = `rgba(2, 5, 12, ${Math.min(0.86, c * 3)})`;
   g.fillRect(0, 0, UI_W, UI_H);
 
-  // Speed lines streaking across — stepped jitter reads as motion.
+  // Diagonal speed lines streaking across — stepped jitter reads as motion.
   if (c > 0.05) {
     g.strokeStyle = 'rgba(200, 245, 255, 0.4)';
     for (let i = 0; i < 24; i++) {
@@ -357,28 +366,33 @@ function drawLaunch(g: Ctx): void {
     }
   }
 
-  // Full-body gear plate slams in from the right, slightly canted.
+  // Full-body gear plate slides in from the right, settling nearly upright.
   if (art) {
-    const s = easeOutCubic(Math.min(1, c / 0.26));
+    const s = easeOutCubic(Math.min(1, c / 0.3));
     const plate = art.plate;
-    const ph = 660;
+    const ph = 640;
     const pw = (plate.width / plate.height) * ph;
     g.save();
-    g.translate(UI_W + 360 - s * 770, 392);
-    g.rotate(-0.09);
-    g.globalAlpha = Math.min(1, c * 7);
+    g.translate(UI_W + 340 - s * 750, 386);
+    g.rotate(-0.05);
+    g.globalAlpha = Math.min(1, c * 6);
     g.drawImage(plate, -pw / 2, -ph / 2, pw, ph);
     g.restore();
     g.globalAlpha = 1;
   }
 
-  // LAUNCH stamp with a settle pop over the left half.
-  if (c > 0.22) {
-    const pop = 1 + Math.max(0, 0.4 - (c - 0.22)) * 1.3;
-    const size = 58 * pop;
-    tx(g, 'LAUNCH', 316, 330, size, RED, 'center', 10);
-    tx(g, '出撃', 316, 330 + size * 0.85, size * 0.55, FG, 'center', 14);
-    tx(g, `${p.callsign} ── ${p.pilot}`, 316, 452, 16, CYAN, 'center', 3);
+  // Sortie order: one clean column beside the plate.
+  if (c > 0.18) {
+    g.globalAlpha = Math.min(1, (c - 0.18) / 0.18);
+    const cx = 320;
+    const pop = 1 + Math.max(0, 0.32 - (c - 0.18)) * 0.9;
+    tx(g, `SORTIE ORDER ── ${p.unitNo}`, cx, 252, 13, DIM, 'center', 4);
+    tx(g, 'LAUNCH', cx, 322, 60 * pop, RED, 'center', 12);
+    tx(g, '出撃', cx, 374, 26, FG, 'center', 16);
+    rule(g, cx - 150, 404, 300, RED);
+    tx(g, p.callsign, cx, 436, 22, FG, 'center', 6);
+    tx(g, p.pilot, cx, 464, 14, CYAN, 'center', 3);
+    g.globalAlpha = 1;
   }
 
   // Hard white hit on the tap, then a fade to black into the mission.

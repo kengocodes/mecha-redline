@@ -13,10 +13,13 @@ import { hud, sel, setPhase } from '../ui/state';
 /** Seconds from confirm tap to mission start (overlay animates against this). */
 const LAUNCH_T = 1.15;
 
+/** Arrival pose: a slight three-quarter turn (rifle side), not dead-on. */
+const ARRIVE_YAW = 0.42;
+
 export class SelectScene extends Phaser.Scene {
   private gear!: Gear;
   private baseScale = 1;
-  private yaw = 0; // shared across gear swaps so the turntable never snaps
+  private yaw = 0;
 
   constructor() {
     super('select');
@@ -32,7 +35,6 @@ export class SelectScene extends Phaser.Scene {
     sel.hover = -1;
     sel.swapT = 9; // no glitch-in on entry
     sel.confirmT = -1;
-    this.yaw = 0;
     this.spawnGear();
   }
 
@@ -43,6 +45,7 @@ export class SelectScene extends Phaser.Scene {
     // Same pad framing as the title attract (1.22 showcase blow-up, low hover).
     this.baseScale = def.gear.scale * 1.22;
     this.gear = buildGear({ ...def.gear, scale: this.baseScale, hover: 0.5 });
+    this.yaw = ARRIVE_YAW;
     this.gear.root.rotation.y = this.yaw;
     s.battleGroup.add(this.gear.root);
   }
