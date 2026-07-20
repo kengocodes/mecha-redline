@@ -11,8 +11,8 @@ import {
   PLAY_X,
   PLAY_Y,
   PLAYER,
-} from '../const';
-import { clearTap, firing, focusing, moveAxis, pointer, takeKey, takeTap } from '../input';
+} from '../../core/const';
+import { clearTap, firing, focusing, moveAxis, pointer, takeKey, takeTap } from '../../core/input';
 import {
   animateGear,
   buildGear,
@@ -21,12 +21,12 @@ import {
   HUSK,
   LANCER,
   VALKYR,
-} from '../three/gearFactory';
-import { Stage3D } from '../three/stage3d';
-import { type Enemy, type EnemyKind, makeEnemy, updateEnemy } from './enemies';
-import { BOSS_NAME, BOSS_TAG, LEVEL1 } from './level1';
-import { emit } from './patterns';
-import { hud, say, setPhase } from './state';
+} from '../../render/gearFactory';
+import { Stage3D } from '../../render/stage3d';
+import { type Enemy, type EnemyKind, makeEnemy, updateEnemy } from '../entities/enemies';
+import { BOSS_NAME, BOSS_TAG, LEVEL1 } from '../levels/level1';
+import { emit } from '../systems/patterns';
+import { hud, say, setPhase } from '../ui/state';
 
 export class GameScene extends Phaser.Scene {
   private p = { x: 0, y: 0, vx: 0, vy: 0, aim: -Math.PI / 2, inv: 0, fireCd: 0, alive: true };

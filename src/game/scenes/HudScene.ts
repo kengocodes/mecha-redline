@@ -2,8 +2,8 @@
 // itself sits above the three.js canvas. Runs for the whole session.
 
 import Phaser from 'phaser';
-import { UI_H, UI_W } from '../const';
-import { drawUI } from './overlay';
+import { UI_H, UI_W } from '../../core/const';
+import { drawUI } from '../ui/overlay';
 
 export class HudScene extends Phaser.Scene {
   private tex!: Phaser.Textures.CanvasTexture;

@@ -1,9 +1,9 @@
 // Enemy definitions + per-frame behaviours. Enemies live in arena coords;
 // their gear models are positioned by GameScene after each sim step.
 
-import { BK, type Bullet, SCORE } from '../const';
-import type { Gear } from '../three/gearFactory';
-import { aimAngle, emit, fan, ring } from './patterns';
+import { BK, type Bullet, SCORE } from '../../core/const';
+import type { Gear } from '../../render/gearFactory';
+import { aimAngle, emit, fan, ring } from '../systems/patterns';
 
 export type EnemyKind = 'husk' | 'lancer' | 'boss';
 

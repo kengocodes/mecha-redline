@@ -1,7 +1,7 @@
 // Bullet emission helpers. All angles are radians in arena space
 // (0 = +x/right, π/2 = +y/down-screen — toward the player start).
 
-import { BK, BULLET_R, type Bullet } from '../const';
+import { BK, BULLET_R, type Bullet } from '../../core/const';
 
 const ENEMY_CAP = 460;
 

@@ -3,7 +3,7 @@
 // that CSS stretches with nearest-neighbour sampling.
 
 import * as THREE from 'three';
-import { ARENA_X, ARENA_Y, CAM_ELEV, RES_H, RES_W, UI_H, UI_W, VIEW_HH, VIEW_HW } from '../const';
+import { ARENA_X, ARENA_Y, CAM_ELEV, RES_H, RES_W, UI_H, UI_W, VIEW_HH, VIEW_HW } from '../core/const';
 import { Bullets3D } from './bullets3d';
 import { Fx3D } from './fx3d';
 

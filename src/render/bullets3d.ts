@@ -2,7 +2,7 @@
 // amber orbs). The sim owns plain bullet arrays; this just writes matrices.
 
 import * as THREE from 'three';
-import { BK, BULLET_H, type Bullet } from '../const';
+import { BK, BULLET_H, type Bullet } from '../core/const';
 
 const CAPS: Record<BK, number> = { [BK.player]: 180, [BK.shot]: 450, [BK.orb]: 450 };
 

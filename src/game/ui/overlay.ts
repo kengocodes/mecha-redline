@@ -2,7 +2,7 @@
 // Design language: sharp corners only, 1px hairlines, corner ticks,
 // DotGothic16 with katakana accents. Clean over the low-res 3D world.
 
-import { UI_H, UI_W } from '../const';
+import { UI_H, UI_W } from '../../core/const';
 import { hud } from './state';
 
 const CYAN = '#7ffbff';

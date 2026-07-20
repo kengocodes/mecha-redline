@@ -2,9 +2,9 @@
 // stage, then hands off to the title (or straight to battle with ?debug).
 
 import Phaser from 'phaser';
-import { HI_KEY } from '../const';
-import { Stage3D } from '../three/stage3d';
-import { hud, setPhase } from './state';
+import { HI_KEY } from '../../core/const';
+import { Stage3D } from '../../render/stage3d';
+import { hud, setPhase } from '../ui/state';
 
 export class BootScene extends Phaser.Scene {
   constructor() {

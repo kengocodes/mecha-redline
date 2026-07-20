@@ -1,13 +1,13 @@
 // MECHA REDLINE — bootstrap: stage sizing, raw input, Phaser game.
 
 import Phaser from 'phaser';
-import { UI_H, UI_W } from './const';
-import { BootScene } from './game/BootScene';
-import { GameScene } from './game/GameScene';
-import { HudScene } from './game/HudScene';
-import { TitleScene } from './game/TitleScene';
-import { hud } from './game/state';
-import { initInput } from './input';
+import { UI_H, UI_W } from './core/const';
+import { initInput } from './core/input';
+import { BootScene } from './game/scenes/BootScene';
+import { GameScene } from './game/scenes/GameScene';
+import { HudScene } from './game/scenes/HudScene';
+import { TitleScene } from './game/scenes/TitleScene';
+import { hud } from './game/ui/state';
 import './style.css';
 
 const stage = document.getElementById('stage');

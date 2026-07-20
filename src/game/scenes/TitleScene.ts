@@ -2,7 +2,7 @@
 // zoomed-in showcase camera while the logo and prompt draw on the HUD layer.
 
 import Phaser from 'phaser';
-import { clearTap, takeTap } from '../input';
+import { clearTap, takeTap } from '../../core/input';
 import {
   animateGear,
   buildGear,
@@ -11,9 +11,9 @@ import {
   HUSK,
   LANCER,
   VALKYR,
-} from '../three/gearFactory';
-import { Stage3D } from '../three/stage3d';
-import { hud, setPhase } from './state';
+} from '../../render/gearFactory';
+import { Stage3D } from '../../render/stage3d';
+import { hud, setPhase } from '../ui/state';
 
 const SHOWCASE = {
   player: VALKYR,

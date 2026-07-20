@@ -2,7 +2,7 @@
 // ring) and small hit sparks. All additive, all cheap, all chunky.
 
 import * as THREE from 'three';
-import { BULLET_H } from '../const';
+import { BULLET_H } from '../core/const';
 
 const EXPL_SLOTS = 10;
 const SHARDS = 14;
