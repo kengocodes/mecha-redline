@@ -1,7 +1,7 @@
 # MECHA REDLINE
 
 A 2.5D bullet-hell mecha shooter for the browser. Pilot the **Valkyr** gear
-over a scrolling night city, sweep six waves of hostile gears crossing the
+over a plain enemy-base deck, sweep six waves of hostile gears crossing the
 redline, then duel the fortress-class boss **GOLGOTHA**. Low-poly flat-shaded
 models, a low internal render resolution stretched with nearest-neighbour
 sampling, and a sharp-cornered katakana HUD.
@@ -48,8 +48,8 @@ Two stacked canvases inside a letterboxed 16:9 `#stage`:
 
 Everything you see is generated at runtime — no external art assets. Mecha are
 built from flat-shaded boxes and tapered "frustum" prisms by one parametric
-humanoid factory (`src/render/gearFactory.ts`); the city ground, buildings,
-bullets and explosions are procedural too. Bullets and effects render through
+humanoid factory (`src/render/gearFactory.ts`); the plain base deck, bullets
+and explosions are procedural too. Bullets and effects render through
 `InstancedMesh` pools so a screen full of bullet-hell fire stays cheap.
 
 Fonts: [DotGothic16](https://fonts.google.com/specimen/DotGothic16) for the
@@ -65,7 +65,7 @@ src/
     const.ts              tuning, coordinate conventions, bullet kinds
     input.ts              raw keyboard/pointer, UI-space pointer mapping
   render/
-    stage3d.ts            camera, lights, scrolling city, arena border, aim raycast
+    stage3d.ts            camera, lights, plain base deck, arena border, aim raycast
     gearFactory.ts        procedural low-poly mecha + unit palettes
     bullets3d.ts          instanced bullet pools
     fx3d.ts               instanced explosions + hit sparks

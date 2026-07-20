@@ -1,6 +1,6 @@
-// The three.js layer: orthographic camera tilted 60° over a plain dark
-// ground plane with drifting low-rise blocks. Renders at a fixed low
-// resolution into a canvas that CSS stretches with nearest-neighbour sampling.
+// The three.js layer: orthographic camera tilted 60° over a plain enemy-base
+// deck. Renders at a fixed low resolution into a canvas that CSS stretches
+// with nearest-neighbour sampling.
 
 import * as THREE from 'three';
 import { ARENA_X, ARENA_Y, CAM_ELEV, RES_H, RES_W, UI_H, UI_W, VIEW_HH, VIEW_HW } from '../core/const';
@@ -8,7 +8,7 @@ import { Bullets3D } from './bullets3d';
 import { Fx3D } from './fx3d';
 
 const CAM_DIST = 100;
-const SCROLL_SPEED = 3.2; // arena units / s the city slides past
+const FOG = 0x080c14;
 
 export class Stage3D {
   static I: Stage3D;
@@ -22,8 +22,6 @@ export class Stage3D {
   readonly fx: Fx3D;
 
   private ground!: THREE.Mesh;
-  private blocks!: THREE.InstancedMesh;
-  private blockPos: { x: number; z: number; h: number }[] = [];
   private border: THREE.Mesh[] = [];
   private pedestal!: THREE.Group;
   private shake = 0;
@@ -39,7 +37,7 @@ export class Stage3D {
     this.renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
     this.renderer.setPixelRatio(1);
     this.renderer.setSize(RES_W, RES_H, false);
-    this.renderer.setClearColor(0x0a0e16);
+    this.renderer.setClearColor(FOG);
     this.renderer.domElement.classList.add('world');
     container.insertBefore(this.renderer.domElement, container.firstChild);
 
@@ -48,20 +46,26 @@ export class Stage3D {
     this.camera.position.set(0, CAM_DIST * Math.sin(el), CAM_DIST * Math.cos(el));
     this.camera.lookAt(this.lookTarget);
 
-    this.scene.fog = new THREE.Fog(0x0a0e16, 95, 150);
+    this.scene.fog = new THREE.Fog(FOG, 70, 130);
     this.scene.add(this.battleGroup);
 
-    // Lighting: cool ambient dusk, warm key, cold rim from the north.
-    this.scene.add(new THREE.HemisphereLight(0x55688f, 0x1a1e28, 1.6));
-    const key = new THREE.DirectionalLight(0xffe8d0, 1.9);
-    key.position.set(-35, 80, 45);
+    // Underlit base: dim cool ambient, steel key, cold rim, faint deck wash,
+    // weak red spill from the redline so the arena reads as the warm threat.
+    this.scene.add(new THREE.HemisphereLight(0x3a4a66, 0x0a0c12, 0.55));
+    const key = new THREE.DirectionalLight(0xb8c8e0, 1.15);
+    key.position.set(-30, 70, 40);
     this.scene.add(key);
-    const rim = new THREE.DirectionalLight(0x4466cc, 0.9);
-    rim.position.set(30, 40, -50);
+    const rim = new THREE.DirectionalLight(0x3a66aa, 1.1);
+    rim.position.set(35, 30, -55);
     this.scene.add(rim);
+    const deck = new THREE.DirectionalLight(0x6a7a96, 0.45);
+    deck.position.set(0, -20, 10);
+    this.scene.add(deck);
+    const redSpill = new THREE.PointLight(0xff3b53, 1.4, 55, 2);
+    redSpill.position.set(0, 2.5, 0);
+    this.scene.add(redSpill);
 
     this.buildGround();
-    this.buildBlocks();
     this.buildBorder();
     this.buildPedestal();
 
@@ -69,37 +73,14 @@ export class Stage3D {
     this.fx = new Fx3D(this.scene);
   }
 
-  /** Plain dark hangar floor: flat colour, no texture, so the fight reads clean. */
+  /** Plain steel deck: flat colour, no panels, seams, or masses. */
   private buildGround(): void {
     this.ground = new THREE.Mesh(
       new THREE.PlaneGeometry(500, 500),
-      new THREE.MeshLambertMaterial({ color: 0x0d1119 }),
+      new THREE.MeshLambertMaterial({ color: 0x10141c }),
     );
     this.ground.rotation.x = -Math.PI / 2;
     this.scene.add(this.ground);
-  }
-
-  /** A few low-rise instanced buildings drifting with the ground for parallax. */
-  private buildBlocks(): void {
-    const N = 14;
-    this.blocks = new THREE.InstancedMesh(
-      new THREE.BoxGeometry(1, 1, 1),
-      new THREE.MeshLambertMaterial({ color: 0xffffff, flatShading: true }),
-      N,
-    );
-    const col = new THREE.Color();
-    for (let i = 0; i < N; i++) {
-      this.blockPos.push({
-        x: -70 + Math.random() * 140,
-        z: -40 + Math.random() * 80,
-        h: 0.6 + Math.random() * 1.3,
-      });
-      col.setHSL(0.6, 0.25, 0.05 + Math.random() * 0.05);
-      this.blocks.setColorAt(i, col);
-    }
-    this.blocks.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-    this.blocks.frustumCulled = false;
-    this.scene.add(this.blocks);
   }
 
   /** The redline: a pulsing crimson frame marking the arena on the ground. */
@@ -118,7 +99,7 @@ export class Stage3D {
     mk(t, ARENA_Y * 2, ARENA_X, 0);
   }
 
-  /** Hangar pad for the title screen: dark disc + cyan ring, no city. */
+  /** Hangar pad for the title screen: dark disc + cyan ring. */
   private buildPedestal(): void {
     this.pedestal = new THREE.Group();
     const disc = new THREE.Mesh(
@@ -159,7 +140,6 @@ export class Stage3D {
     this.lookTarget.set(0, showcase ? 2.4 : 0, 0);
     this.camera.updateProjectionMatrix();
     for (const b of this.border) b.visible = !showcase;
-    this.blocks.visible = !showcase;
     this.ground.visible = !showcase;
     this.pedestal.visible = showcase;
     this.update(0); // snap the camera to the new pose immediately
@@ -189,22 +169,6 @@ export class Stage3D {
 
   update(dt: number): void {
     this.t += dt;
-
-    // Ground stays still; the low-rise buildings drift toward the bottom of
-    // the screen: the wing is holding position while the city slides beneath.
-    const m = new THREE.Matrix4();
-    for (let i = 0; i < this.blockPos.length; i++) {
-      const b = this.blockPos[i];
-      b.z += SCROLL_SPEED * dt;
-      if (b.z > 45) {
-        b.z -= 90;
-        b.x = -70 + Math.random() * 140;
-      }
-      m.makeScale(6 + (i % 4) * 3, b.h, 6 + ((i * 7) % 5) * 2.5);
-      m.setPosition(b.x, b.h / 2, b.z);
-      this.blocks.setMatrixAt(i, m);
-    }
-    this.blocks.instanceMatrix.needsUpdate = true;
 
     const pulse = 0.3 + 0.2 * (0.5 + 0.5 * Math.sin(this.t * 3));
     for (const b of this.border) {
