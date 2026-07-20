@@ -1,0 +1,72 @@
+<!doctype html>
+<!-- TEMP dev harness: multi-angle gear turntable for model sculpting. Not shipped. -->
+<html>
+<head>
+<meta charset="utf-8" />
+<style>
+  body { margin: 0; background: #10131c; }
+  canvas { display: block; }
+</style>
+</head>
+<body>
+<script type="module">
+import * as THREE from 'three';
+import { buildGear, animateGear, VALKYR, HUSK, LANCER, GOLGOTHA } from '/src/render/gearFactory';
+
+const GEARS = { valkyr: VALKYR, husk: HUSK, lancer: LANCER, golgotha: GOLGOTHA };
+const q = new URLSearchParams(location.search);
+const opts = GEARS[q.get('gear') ?? 'valkyr'] ?? VALKYR;
+
+const W = 640, H = 640; // per-view
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(W * 2, H * 2);
+renderer.setClearColor(0x10131c);
+document.body.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.add(new THREE.HemisphereLight(0x8a9ac0, 0x1a1c24, 0.9));
+const key = new THREE.DirectionalLight(0xd8e4f8, 1.6);
+key.position.set(-30, 70, 40);
+scene.add(key);
+const rim = new THREE.DirectionalLight(0x5a8ed2, 1.2);
+rim.position.set(35, 30, -55);
+scene.add(rim);
+const fill = new THREE.DirectionalLight(0xbcd4ff, 0.6);
+fill.position.set(4, 12, 40);
+scene.add(fill);
+
+const gear = buildGear({ ...opts, hover: 0.35 });
+scene.add(gear.root);
+animateGear(gear, 1 / 60, 0, 0, 0.5); // settle thrusters/flames once
+
+// Frame the whole model whatever its height.
+const bb = new THREE.Box3().setFromObject(gear.root);
+const midY = (bb.min.y + bb.max.y) / 2;
+const span = Math.max(bb.max.y - bb.min.y, bb.max.x - bb.min.x) * 0.62;
+
+const views = [
+  { yaw: 0 },                 // front (faces +z, camera on +z)
+  { yaw: Math.PI * 0.22 },    // 3/4
+  { yaw: Math.PI / 2 },       // side
+  { yaw: Math.PI },           // back
+];
+
+const cam = new THREE.OrthographicCamera(-span, span, span, -span, 1, 400);
+
+function shoot() {
+  renderer.setScissorTest(true);
+  views.forEach((v, i) => {
+    gear.root.rotation.y = v.yaw;
+    const x = (i % 2) * W, y = (1 - Math.floor(i / 2)) * H;
+    renderer.setViewport(x, y, W, H);
+    renderer.setScissor(x, y, W, H);
+    cam.position.set(0, midY + 18, 100); // slight downward tilt, mostly level
+    cam.lookAt(0, midY, 0);
+    renderer.render(scene, cam);
+  });
+  document.title = 'ready';
+}
+shoot();
+</script>
+</body>
+</html>

@@ -20,7 +20,8 @@ export class TitleScene extends Phaser.Scene {
     setPhase('title');
     clearTap();
 
-    this.gear = buildGear({ ...VALKYR, scale: 1.22 });
+    // Low hover: on the pad the gear idles just above the launch rings.
+    this.gear = buildGear({ ...VALKYR, scale: 1.22, hover: 0.5 });
     s.battleGroup.add(this.gear.root);
   }
 

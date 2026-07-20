@@ -22,14 +22,14 @@ npm run preview  # serve the built bundle
 
 ## Controls
 
-| Input | Action |
-| --- | --- |
-| WASD / arrows | Move |
-| Mouse | Aim |
-| Mouse / Space | Fire |
-| Shift | Focus (slow, tight spread, hitbox shown) |
-| Z / X | Burst (spend a charge to clear enemy fire) |
-| P / Esc | Pause |
+| Input         | Action                                     |
+| ------------- | ------------------------------------------ |
+| WASD / arrows | Move                                       |
+| Mouse         | Aim                                        |
+| Mouse / Space | Fire                                       |
+| Shift         | Focus (slow, tight spread, hitbox shown)   |
+| Z / X         | Burst (spend a charge to clear enemy fire) |
+| P / Esc       | Pause                                      |
 
 You have four armour segments and three **Burst** charges. Contact with an
 enemy bullet or a gear costs one armour and grants brief invulnerability
