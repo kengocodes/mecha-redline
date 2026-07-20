@@ -46,23 +46,27 @@ export class Stage3D {
     this.camera.position.set(0, CAM_DIST * Math.sin(el), CAM_DIST * Math.cos(el));
     this.camera.lookAt(this.lookTarget);
 
-    this.scene.fog = new THREE.Fog(FOG, 70, 130);
+    // Camera-to-arena distance is ~90-115, so fog must start beyond that or
+    // it swallows the units; this keeps only a whisper of depth gradient.
+    this.scene.fog = new THREE.Fog(FOG, 100, 190);
     this.scene.add(this.battleGroup);
 
     // Underlit base: dim cool ambient, steel key, cold rim, faint deck wash,
     // weak red spill from the redline so the arena reads as the warm threat.
+    // Key + rim run hot so the gears pop; the deck albedo below is darkened
+    // to compensate, keeping the backdrop as flat and dark as before.
     this.scene.add(new THREE.HemisphereLight(0x3a4a66, 0x0a0c12, 0.55));
-    const key = new THREE.DirectionalLight(0xb8c8e0, 1.15);
+    const key = new THREE.DirectionalLight(0xb8c8e0, 1.45);
     key.position.set(-30, 70, 40);
     this.scene.add(key);
-    const rim = new THREE.DirectionalLight(0x3a66aa, 1.1);
+    const rim = new THREE.DirectionalLight(0x4a7ec2, 1.55);
     rim.position.set(35, 30, -55);
     this.scene.add(rim);
     const deck = new THREE.DirectionalLight(0x6a7a96, 0.45);
     deck.position.set(0, -20, 10);
     this.scene.add(deck);
-    const redSpill = new THREE.PointLight(0xff3b53, 1.4, 55, 2);
-    redSpill.position.set(0, 2.5, 0);
+    const redSpill = new THREE.PointLight(0xff3b53, 1.05, 55, 2);
+    redSpill.position.set(0, 3.4, 0);
     this.scene.add(redSpill);
 
     this.buildGround();
@@ -75,9 +79,11 @@ export class Stage3D {
 
   /** Plain steel deck: flat colour, no panels, seams, or masses. */
   private buildGround(): void {
+    // Albedo compensates for the hot key/rim above; drop it further and the
+    // deck reads as void instead of steel.
     this.ground = new THREE.Mesh(
       new THREE.PlaneGeometry(500, 500),
-      new THREE.MeshLambertMaterial({ color: 0x10141c }),
+      new THREE.MeshLambertMaterial({ color: 0x0a0d13 }),
     );
     this.ground.rotation.x = -Math.PI / 2;
     this.scene.add(this.ground);
@@ -104,7 +110,7 @@ export class Stage3D {
     this.pedestal = new THREE.Group();
     const disc = new THREE.Mesh(
       new THREE.CircleGeometry(200, 24),
-      new THREE.MeshLambertMaterial({ color: 0x0e1220 }),
+      new THREE.MeshLambertMaterial({ color: 0x0b0e1a }),
     );
     disc.rotation.x = -Math.PI / 2;
     disc.position.y = 0.02;

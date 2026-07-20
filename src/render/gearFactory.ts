@@ -43,7 +43,14 @@ function lambert(color: number): THREE.MeshLambertMaterial {
   const key = `l${color}`;
   let m = matCache.get(key);
   if (!m) {
-    m = new THREE.MeshLambertMaterial({ color, flatShading: true });
+    // Slight self-emissive floor: shadowed faces keep their hue instead of
+    // sinking into the near-black deck. Only gears use these materials.
+    m = new THREE.MeshLambertMaterial({
+      color,
+      flatShading: true,
+      emissive: color,
+      emissiveIntensity: 0.16,
+    });
     matCache.set(key, m);
   }
   return m as THREE.MeshLambertMaterial;
@@ -165,7 +172,7 @@ export function buildGear(o: GearOptions): Gear {
   // Fake blob shadow pinned to the ground, unaffected by hover bob.
   const shadow = new THREE.Mesh(
     new THREE.CircleGeometry(1.55 * bulk, 12),
-    new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.34 }),
+    new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.46 }),
   );
   shadow.rotation.x = -Math.PI / 2;
   shadow.position.y = 0.05;
