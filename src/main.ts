@@ -7,16 +7,10 @@ import { BootScene } from './game/scenes/BootScene';
 import { GameScene } from './game/scenes/GameScene';
 import { HudScene } from './game/scenes/HudScene';
 import { TitleScene } from './game/scenes/TitleScene';
-import { hud } from './game/ui/state';
 import './style.css';
 
 const stage = document.getElementById('stage');
 if (!stage) throw new Error('missing #stage');
-
-// Debug hooks: ?debug=battle skips the title, ?gear=husk|lancer|boss swaps
-// the title-screen showcase model.
-const q = new URLSearchParams(location.search);
-hud.showcase = q.get('gear') ?? 'player';
 
 /** Keep #stage the largest centred 16:9 box the window allows. */
 function fitStage(): void {

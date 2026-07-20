@@ -49,11 +49,12 @@ Two stacked canvases inside a letterboxed 16:9 `#stage`:
   enemies, bullets, collisions, mission flow) and paints the entire HUD onto
   one transparent canvas above the 3D layer.
 
-Everything you see is generated at runtime — no external art assets. Mecha are
-built from flat-shaded boxes and tapered "frustum" prisms by one parametric
-humanoid factory (`src/render/gearFactory.ts`); the plain base deck, bullets
-and explosions are procedural too. Bullets and effects render through
-`InstancedMesh` pools so a screen full of bullet-hell fire stays cheap.
+Battle content is generated at runtime. Mecha are built from flat-shaded boxes
+and tapered "frustum" prisms by one parametric humanoid factory
+(`src/render/gearFactory.ts`); the plain base deck, bullets and explosions are
+procedural too. Bullets and effects render through `InstancedMesh` pools so a
+screen full of bullet-hell fire stays cheap. The title screen hybrids the
+rotating hangar gear with a chroma-keyed logo from `public/branding/`.
 
 Fonts: [DotGothic16](https://fonts.google.com/specimen/DotGothic16) for the
 pixel lettering (Latin + Japanese), loaded before first paint.
@@ -75,7 +76,7 @@ src/
   game/
     scenes/
       BootScene.ts        font load + stage init
-      TitleScene.ts       rotating gear showcase
+      TitleScene.ts       PS1 hangar attract + keyed logo
       GameScene.ts        the battle simulation
       HudScene.ts         composites the HUD canvas
     entities/
@@ -86,15 +87,17 @@ src/
     ui/
       state.ts            shared HUD state
       overlay.ts          all 2D HUD drawing
+      titleArt.ts         chroma-keyed title logo
     levels/
       level1.ts           Mission 01 spawn script
 ```
+
+Title art lives in `public/branding/` (galaxy plate + magenta-keyed logo).
 
 ### Debug URLs
 
 - `?debug=battle` — skip the title, start Mission 01.
 - `?debug=boss` — jump straight to the Golgotha fight.
-- `?gear=husk|lancer|boss` — swap the title-screen showcase model.
 
 ## Not yet in this MVP
 

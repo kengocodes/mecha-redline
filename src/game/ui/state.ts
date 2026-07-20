@@ -29,7 +29,6 @@ export interface HudState {
   bossName: string;
   msg: string; // operator comms line
   msgT: number;
-  showcase: string; // debug: which gear the title screen displays
 }
 
 export const hud: HudState = {
@@ -51,7 +50,6 @@ export const hud: HudState = {
   bossName: '',
   msg: '',
   msgT: 0,
-  showcase: 'player',
 };
 
 export function setPhase(p: Phase): void {

@@ -29,6 +29,10 @@ body {
   image-rendering: pixelated;
 }
 
+#stage canvas.world.hidden {
+  visibility: hidden;
+}
+
 /* Phaser canvas sits on top, transparent, crisp. */
 #stage canvas:not(.world) {
   position: absolute;

@@ -4,6 +4,7 @@
 
 import { UI_H, UI_W } from '../../core/const';
 import { hud } from './state';
+import { getTitleArt } from './titleArt';
 
 const CYAN = '#7ffbff';
 const RED = '#ff3b53';
@@ -80,34 +81,52 @@ export function drawUI(g: Ctx): void {
 
 function drawTitle(g: Ctx): void {
   const t = hud.t;
+  const art = getTitleArt();
+  const blink = Math.floor(t * 1.5) % 2 === 0;
 
-  tx(g, 'メカ・レッドライン', UI_W / 2, 96, 20, CYAN, 'center', 6);
-  tx(g, 'MECHA', UI_W / 2 - 22, 152, 84, FG, 'right', 10);
-  tx(g, 'REDLINE', UI_W / 2 + 22, 152, 84, RED, 'left', 10);
-  rule(g, UI_W / 2 - 280, 196, 560, RED);
-  tx(g, 'SECTOR 7 DEFENSE OPERATION', UI_W / 2, 224, 16, DIM, 'center', 5);
+  // Cabinet header — ranking left, free-play right.
+  tx(g, 'HI-SCORE', 36, 26, 11, DIM, 'left', 3);
+  tx(g, String(hud.hi).padStart(8, '0'), 36, 46, 18, AMBER, 'left', 2);
+  tx(g, 'フリープレイ', UI_W - 36, 26, 12, DIM, 'right', 2);
+  if (blink) tx(g, 'FREE PLAY', UI_W - 36, 46, 16, CYAN, 'right', 3);
 
-  if (Math.floor(t * 1.6) % 2 === 0) {
-    tx(g, 'CLICK TO ENGAGE ── クリックして出撃', UI_W / 2, 596, 24, CYAN, 'center', 3);
+  // Logo slam: overscale + white flash, then settle (OP title hit).
+  const slam = Math.min(1, t / 0.55);
+  const pop = 1 + (1 - slam) * (1 - slam) * 0.22;
+  const flash = slam < 1 ? (1 - slam) * 0.55 : 0;
+
+  if (art) {
+    const lw = art.logo.width;
+    const lh = art.logo.height;
+    const baseW = Math.min(UI_W * 0.28, 360);
+    const logoW = baseW * pop;
+    const logoH = logoW * (lh / lw);
+    const lx = (UI_W - logoW) / 2;
+    const ly = 52 - (logoH - baseW * (lh / lw)) / 2;
+    g.globalAlpha = Math.min(1, slam * 1.4);
+    g.drawImage(art.logo, lx, ly, logoW, logoH);
+    if (flash > 0.02) {
+      g.globalAlpha = flash;
+      g.globalCompositeOperation = 'lighter';
+      g.drawImage(art.logo, lx, ly, logoW, logoH);
+      g.globalCompositeOperation = 'source-over';
+    }
+    g.globalAlpha = 1;
+  } else {
+    tx(g, 'MECHA REDLINE', UI_W / 2, 96, 36, FG, 'center', 8);
   }
 
-  // controls
-  panel(g, 28, UI_H - 178, 320, 146);
-  tx(g, 'CONTROLS ── 操作', 44, UI_H - 156, 14, CYAN, 'left', 3);
-  const lines = [
-    'WASD / ARROWS ── MOVE',
-    'MOUSE ── AIM · FIRE',
-    'SHIFT ── FOCUS',
-    'Z / X ── BURST',
-    'P ── PAUSE',
-  ];
-  lines.forEach((s, i) => tx(g, s, 44, UI_H - 131 + i * 21, 14, DIM, 'left', 2));
+  if (t > 0.7 && blink) {
+    tx(g, 'PRESS START BUTTON', UI_W / 2, UI_H - 56, 20, CYAN, 'center', 5);
+  }
 
-  panel(g, UI_W - 268, 28, 240, 52);
-  tx(g, 'HI-SCORE', UI_W - 252, 46, 12, DIM, 'left', 3);
-  tx(g, String(hud.hi).padStart(8, '0'), UI_W - 252, 66, 20, AMBER, 'left', 2);
+  tx(g, '© NEO-KYOTO GARRISON  1998', UI_W / 2, UI_H - 16, 11, DIM, 'center', 2);
 
-  tx(g, 'PROTOTYPE BUILD 0.1 ── NEO-KYOTO GARRISON', UI_W - 28, UI_H - 40, 13, DIM, 'right', 2);
+  // Soft CRT scanlines — title only.
+  g.globalAlpha = 0.055;
+  g.fillStyle = '#02050c';
+  for (let y = 0; y < UI_H; y += 3) g.fillRect(0, y, UI_W, 1);
+  g.globalAlpha = 1;
 }
 
 // ---- battle hud ----------------------------------------------------------

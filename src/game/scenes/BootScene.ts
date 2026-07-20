@@ -4,6 +4,7 @@
 import Phaser from 'phaser';
 import { HI_KEY } from '../../core/const';
 import { Stage3D } from '../../render/stage3d';
+import { loadTitleArt } from '../ui/titleArt';
 import { hud, setPhase } from '../ui/state';
 
 export class BootScene extends Phaser.Scene {
@@ -19,7 +20,8 @@ export class BootScene extends Phaser.Scene {
     hud.hi = Number.parseInt(localStorage.getItem(HI_KEY) ?? '0', 10) || 0;
 
     // Load both the Latin and Japanese subsets before any canvas text.
-    const sample = 'MECHA REDLINE 0123456789 警告装甲第七区画任務完了失敗スコア操作出撃一時停止';
+    const sample =
+      'MECHA REDLINE 0123456789 警告装甲第七区画任務完了失敗スコア操作出撃一時停止フリープレイゲームスタートボタンを押せ';
     try {
       await Promise.race([
         document.fonts.load('32px DotGothic16', sample),
@@ -32,11 +34,12 @@ export class BootScene extends Phaser.Scene {
     const stage = document.getElementById('stage');
     if (!stage) throw new Error('missing #stage');
     new Stage3D(stage);
+    await loadTitleArt();
     document.getElementById('loading')?.remove();
 
     this.scene.launch('hud');
-    const q = new URLSearchParams(location.search);
-    const dbg = q.get('debug');
+    // Debug: ?debug=battle|boss skips the title.
+    const dbg = new URLSearchParams(location.search).get('debug');
     if (dbg === 'battle' || dbg === 'boss') {
       this.scene.start('game');
     } else {

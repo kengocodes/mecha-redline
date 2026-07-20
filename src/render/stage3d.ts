@@ -6,6 +6,7 @@ import * as THREE from 'three';
 import { CAM_ELEV, RES_H, RES_W, UI_H, UI_W, VIEW_HH, VIEW_HW } from '../core/const';
 import { Bullets3D } from './bullets3d';
 import { Fx3D } from './fx3d';
+import { HangarShowcase } from './hangarShowcase';
 import { SpaceBackdrop } from './spaceBackdrop';
 
 const CAM_DIST = 100;
@@ -23,12 +24,13 @@ export class Stage3D {
   readonly fx: Fx3D;
 
   private space!: SpaceBackdrop;
-  private pedestal!: THREE.Group;
+  private hangar!: HangarShowcase;
   private shake = 0;
   private elev = (CAM_ELEV * Math.PI) / 180;
   private lookTarget = new THREE.Vector3(0, 0, 0);
   private ray = new THREE.Raycaster();
   private aimPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -2.2);
+  private worldEl: HTMLCanvasElement;
 
   constructor(container: HTMLElement) {
     Stage3D.I = this;
@@ -38,7 +40,8 @@ export class Stage3D {
     this.renderer.setSize(RES_W, RES_H, false);
     this.renderer.setClearColor(VOID);
     this.renderer.domElement.classList.add('world');
-    container.insertBefore(this.renderer.domElement, container.firstChild);
+    this.worldEl = this.renderer.domElement;
+    container.insertBefore(this.worldEl, container.firstChild);
 
     const el = (CAM_ELEV * Math.PI) / 180;
     this.camera = new THREE.OrthographicCamera(-VIEW_HW, VIEW_HW, VIEW_HH, -VIEW_HH, 1, 400);
@@ -66,58 +69,34 @@ export class Stage3D {
     this.scene.add(redSpill);
 
     this.space = new SpaceBackdrop();
-    this.space.group.visible = false; // battle-only; title hangar stays clean
+    this.space.group.visible = false;
     this.scene.add(this.space.group);
-    this.buildPedestal();
+    this.hangar = new HangarShowcase();
+    this.scene.add(this.hangar.group);
 
     this.bullets = new Bullets3D(this.scene);
     this.fx = new Fx3D(this.scene);
   }
 
-  /** Hangar pad for the title screen: dark disc + cyan ring. */
-  private buildPedestal(): void {
-    this.pedestal = new THREE.Group();
-    const disc = new THREE.Mesh(
-      new THREE.CircleGeometry(12, 32),
-      new THREE.MeshLambertMaterial({ color: 0x0b0e1a, transparent: true, opacity: 0.85 }),
-    );
-    disc.rotation.x = -Math.PI / 2;
-    disc.position.y = 0.02;
-    this.pedestal.add(disc);
-    const ring = new THREE.Mesh(
-      new THREE.RingGeometry(2.6, 2.75, 40),
-      new THREE.MeshBasicMaterial({ color: 0x7ffbff, transparent: true, opacity: 0.5 }),
-    );
-    ring.rotation.x = -Math.PI / 2;
-    ring.position.y = 0.06;
-    this.pedestal.add(ring);
-    const ring2 = new THREE.Mesh(
-      new THREE.RingGeometry(3.3, 3.36, 40),
-      new THREE.MeshBasicMaterial({ color: 0xff3b53, transparent: true, opacity: 0.35 }),
-    );
-    ring2.rotation.x = -Math.PI / 2;
-    ring2.position.y = 0.06;
-    this.pedestal.add(ring2);
-    // Frontal fill so the showcase model isn't a silhouette (only lit while
-    // the pedestal group is visible).
-    const fill = new THREE.DirectionalLight(0xbcd4ff, 1.2);
-    fill.position.set(6, 18, 60);
-    this.pedestal.add(fill);
-    this.pedestal.visible = false;
-    this.scene.add(this.pedestal);
-  }
-
-  /** Battle view (full arena, steep tilt) vs showcase view (low close-up). */
+  /**
+   * Battle view vs hangar showcase. Showcase frames the gear in the lower
+   * two-thirds so the keyed title logo has clear headroom above.
+   */
   setMode(mode: 'battle' | 'showcase'): void {
     const showcase = mode === 'showcase';
-    this.elev = ((showcase ? 20 : CAM_ELEV) * Math.PI) / 180;
-    this.camera.zoom = showcase ? 5.0 : 1;
-    this.lookTarget.set(0, showcase ? 2.4 : 0, 0);
+    this.elev = ((showcase ? 16 : CAM_ELEV) * Math.PI) / 180;
+    this.camera.zoom = showcase ? 3.35 : 1;
+    // Aim high so the unit sits low in frame, nearer PRESS START.
+    this.lookTarget.set(0, showcase ? 5.4 : 0, showcase ? 2.6 : 0);
     this.camera.updateProjectionMatrix();
-    this.pedestal.visible = showcase;
-    // Stars are battle-only — hangar showcase stays a clean void.
-    this.space.group.visible = !showcase;
-    this.update(0); // snap the camera to the new pose immediately
+    this.hangar.group.visible = showcase;
+    // Stars stay up on title — deep void behind the hangar set.
+    this.space.group.visible = true;
+    // Camera sits ~CAM_DIST (100) from the gear — fog must start past that
+    // or the whole hangar washes to void (which is what hid the unit).
+    this.scene.fog = showcase ? new THREE.Fog(VOID, 110, 200) : new THREE.Fog(VOID, 140, 260);
+    this.worldEl.classList.remove('hidden');
+    this.update(0);
   }
 
   clearBattle(): void {
@@ -163,6 +142,7 @@ export class Stage3D {
     }
 
     this.space.update(dt);
+    this.hangar.update(dt);
     this.fx.update(dt);
     this.renderer.render(this.scene, this.camera);
   }
