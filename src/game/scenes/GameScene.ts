@@ -456,6 +456,9 @@ export class GameScene extends Phaser.Scene {
     const p = this.p;
 
     if (p.alive) {
+      const ui = s.uiPoint(p.x, p.y);
+      hud.px = ui.x;
+      hud.py = ui.y;
       this.pGear.root.position.set(p.x, 0, p.y);
       this.pGear.root.rotation.y = Math.atan2(Math.cos(p.aim), Math.sin(p.aim));
       // Bank into lateral motion, pitch into forward motion (aim-relative).

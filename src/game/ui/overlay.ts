@@ -3,7 +3,7 @@
 // DotGothic16 with katakana accents. Clean over the low-res 3D world.
 
 import { UI_H, UI_W } from '../../core/const';
-import { ROSTER } from '../roster';
+import { ROSTER, selectedPilot } from '../roster';
 import { getPilotArt } from './pilotArt';
 import { attract, hud, sel } from './state';
 import { getTitleArt } from './titleArt';
@@ -66,7 +66,14 @@ function rule(g: Ctx, x: number, y: number, w: number, color: string): void {
   g.fillRect(x, y, w, 2);
 }
 
+// Wall-clock frame delta for pure-UI animation (score pop decay).
+let frameNow = performance.now();
+let frameDt = 0.016;
+
 export function drawUI(g: Ctx): void {
+  const now = performance.now();
+  frameDt = Math.min(0.05, (now - frameNow) / 1000);
+  frameNow = now;
   g.clearRect(0, 0, UI_W, UI_H);
   switch (hud.phase) {
     case 'boot':
@@ -489,8 +496,7 @@ function drawBattle(g: Ctx): void {
   if (hud.phase !== 'intro') {
     drawScore(g);
     drawMission(g);
-    drawArmor(g);
-    drawBurst(g);
+    drawPilotCluster(g);
     drawMsg(g);
   }
   if (hud.phase === 'boss' && hud.bossMax > 0) drawBossBar(g);
@@ -521,6 +527,18 @@ function drawBattle(g: Ctx): void {
     g.strokeRect(18.5, 18.5, UI_W - 37, UI_H - 37);
   }
 
+  // Critical armor: a slow red heartbeat along the frame edges.
+  const inPlay = hud.phase === 'battle' || hud.phase === 'boss' || hud.phase === 'warning';
+  if (inPlay && hud.armor === 1 && hud.flashT <= 0) {
+    const a = 0.1 + 0.09 * Math.sin(t * 5.5);
+    g.fillStyle = `rgba(255, 59, 83, ${a})`;
+    const b = 10;
+    g.fillRect(0, 0, UI_W, b);
+    g.fillRect(0, UI_H - b, UI_W, b);
+    g.fillRect(0, 0, b, UI_H);
+    g.fillRect(UI_W - b, 0, b, UI_H);
+  }
+
   if (hud.paused) {
     g.fillStyle = 'rgba(5, 7, 13, 0.72)';
     g.fillRect(0, 0, UI_W, UI_H);
@@ -529,10 +547,19 @@ function drawBattle(g: Ctx): void {
   }
 }
 
+let scoreSeen = 0;
+let scorePop = 0;
+
 function drawScore(g: Ctx): void {
+  if (hud.score !== scoreSeen) {
+    if (hud.score > scoreSeen) scorePop = 1;
+    scoreSeen = hud.score;
+  }
+  scorePop = Math.max(0, scorePop - frameDt * 5);
   panel(g, 24, 20, 236, 64);
   tx(g, 'SCORE ── スコア', 40, 40, 13, DIM, 'left', 3);
-  tx(g, String(hud.score).padStart(8, '0'), 40, 66, 26, FG, 'left', 3);
+  const size = 26 * (1 + scorePop * 0.1);
+  tx(g, String(hud.score).padStart(8, '0'), 40, 66, size, scorePop > 0.55 ? '#ffffff' : FG, 'left', 3);
 }
 
 function drawMission(g: Ctx): void {
@@ -543,43 +570,103 @@ function drawMission(g: Ctx): void {
   tx(g, label, UI_W - 40, 66, 20, inBoss ? RED : CYAN, 'right', 2);
 }
 
-function drawArmor(g: Ctx): void {
-  panel(g, 24, UI_H - 88, 264, 64);
-  tx(g, 'ARMOR ── 装甲', 40, UI_H - 68, 13, DIM, 'left', 3);
-  for (let i = 0; i < hud.maxArmor; i++) {
-    const x = 40 + i * 42;
-    const on = i < hud.armor;
-    g.fillStyle = on ? (hud.armor === 1 ? RED : CYAN) : 'rgba(127, 251, 255, 0.12)';
-    g.fillRect(x, UI_H - 56, 34, 16);
-    g.strokeStyle = LINE;
-    g.strokeRect(x + 0.5, UI_H - 55.5, 33, 15);
-  }
-  if (hud.focus) {
-    tx(g, 'FOCUS', 232, UI_H - 47, 14, AMBER, 'left', 3);
-  }
+/** 1 far from the rect → 0.2 with the player gear on top of it. */
+function proxFade(x: number, y: number, w: number, h: number): number {
+  const dx = Math.max(0, Math.abs(hud.px - (x + w / 2)) - w / 2);
+  const dy = Math.max(0, Math.abs(hud.py - (y + h / 2)) - h / 2);
+  const d = Math.hypot(dx, dy);
+  return d >= 150 ? 1 : 0.2 + (0.8 * Math.max(0, d - 30)) / 120;
 }
 
-function drawBurst(g: Ctx): void {
+/**
+ * Bottom-left pilot cluster: CRT face cam (glitching on hits) beside the
+ * callsign, armor pips and BURST diamonds — one cockpit block. Ghosts out
+ * when the player flies into the corner so it never hides a dodge.
+ */
+function drawPilotCluster(g: Ctx): void {
+  const p = selectedPilot();
+  const art = getPilotArt(p.id);
+  const x = 24;
+  const y = UI_H - 140;
+  const w = 342;
+  const h = 116;
+  const fade = proxFade(x, y, w, h);
+  g.globalAlpha = fade;
+  panel(g, x, y, w, h);
+
+  // Face cam.
+  const cx = x + 10;
+  const cy = y + 10;
+  const cs = 96;
+  g.fillStyle = 'rgba(8, 13, 24, 0.9)';
+  g.fillRect(cx, cy, cs, cs);
+  if (art) {
+    const por = art.portrait;
+    const sw = por.width * 0.8;
+    const sx = por.width * 0.1;
+    const sy = por.height * 0.05;
+    const sh = Math.min(sw, por.height - sy);
+    g.save();
+    g.beginPath();
+    g.rect(cx, cy, cs, cs);
+    g.clip();
+    g.drawImage(por, sx, sy, sw, sh, cx, cy, cs, cs);
+    if (hud.flashT > 0) {
+      // Impact static: sliced rows shoved sideways + a red wash.
+      const k = Math.min(1, hud.flashT * 2.5);
+      for (let i = 0; i < 4; i++) {
+        const yy = cy + Math.random() * (cs - 12);
+        const hh = 3 + Math.random() * 9;
+        const ox = (Math.random() - 0.5) * 24 * k;
+        g.drawImage(por, sx, sy + ((yy - cy) / cs) * sh, sw, (hh / cs) * sh, cx + ox, yy, cs, hh);
+      }
+      g.fillStyle = `rgba(255, 59, 83, ${Math.min(0.4, hud.flashT)})`;
+      g.fillRect(cx, cy, cs, cs);
+    }
+    g.globalAlpha = 0.14 * fade;
+    g.fillStyle = '#02050c';
+    for (let yy = cy; yy < cy + cs; yy += 3) g.fillRect(cx, yy, cs, 1);
+    g.globalAlpha = fade;
+    g.restore();
+  }
+  g.strokeStyle = LINE;
+  g.lineWidth = 1;
+  g.strokeRect(cx + 0.5, cy + 0.5, cs - 1, cs - 1);
+
+  // Status column.
+  const ix = cx + cs + 14;
+  tx(g, `${p.unitNo} ── ${p.callsign}`, ix, y + 24, 14, FG, 'left', 2);
+  if (hud.focus) tx(g, 'FOCUS', x + w - 14, y + 24, 12, AMBER, 'right', 3);
+
+  tx(g, 'ARMOR ── 装甲', ix, y + 46, 10, DIM, 'left', 3);
+  for (let i = 0; i < hud.maxArmor; i++) {
+    const bx = ix + i * 36;
+    const on = i < hud.armor;
+    g.fillStyle = on ? (hud.armor === 1 ? RED : CYAN) : 'rgba(127, 251, 255, 0.12)';
+    g.fillRect(bx, y + 56, 30, 12);
+    g.strokeStyle = LINE;
+    g.strokeRect(bx + 0.5, y + 56.5, 29, 11);
+  }
+
   const lit = hud.burstFlashT > 0;
-  panel(g, 300, UI_H - 88, 236, 64);
-  tx(g, 'BURST', 316, UI_H - 68, 13, lit ? CYAN : DIM, 'left', 3);
-  tx(g, lit ? '解放' : 'バースト', 380, UI_H - 68, 13, lit ? CYAN : DIM, 'left', 2);
+  tx(g, 'BURST ── バースト', ix, y + 86, 10, lit ? CYAN : DIM, 'left', 3);
   for (let i = 0; i < hud.maxBurst; i++) {
-    const x = 316 + i * 52;
+    const bx = ix + i * 34;
     const on = i < hud.burst;
-    // Diamond pip — reads distinct from armor bars.
+    const my = y + 102;
     g.fillStyle = on ? (lit ? '#c8ffff' : CYAN) : 'rgba(127, 251, 255, 0.12)';
     g.beginPath();
-    g.moveTo(x + 14, UI_H - 56);
-    g.lineTo(x + 28, UI_H - 48);
-    g.lineTo(x + 14, UI_H - 40);
-    g.lineTo(x, UI_H - 48);
+    g.moveTo(bx + 12, my - 6);
+    g.lineTo(bx + 24, my);
+    g.lineTo(bx + 12, my + 6);
+    g.lineTo(bx, my);
     g.closePath();
     g.fill();
     g.strokeStyle = lit && on ? CYAN : LINE;
     g.lineWidth = 1;
     g.stroke();
   }
+  g.globalAlpha = 1;
 }
 
 function drawMsg(g: Ctx): void {
@@ -587,9 +674,10 @@ function drawMsg(g: Ctx): void {
   const chars = Math.floor(hud.msgT * 46);
   const shown = hud.msg.slice(0, chars);
   const fade = hud.msgT > 5.5 ? 1 - (hud.msgT - 5.5) : 1;
-  g.globalAlpha = Math.max(0, fade);
-  panel(g, UI_W / 2 - 380, UI_H - 92, 760, 40);
-  tx(g, shown, UI_W / 2 - 360, UI_H - 72, 15, FG, 'left', 1);
+  const mw = UI_W - 390 - 24;
+  g.globalAlpha = Math.max(0, fade) * proxFade(390, UI_H - 64, mw, 40);
+  panel(g, 390, UI_H - 64, mw, 40);
+  tx(g, shown, 410, UI_H - 44, 15, FG, 'left', 1);
   g.globalAlpha = 1;
 }
 
@@ -636,6 +724,8 @@ function drawIntro(g: Ctx, t: number): void {
   rule(g, UI_W / 2 - 250, 330, 500, RED);
   tx(g, 'SECTOR 7 PERIMETER ── 第七区画防衛線', UI_W / 2, 366, 22, CYAN, 'center', 4);
   tx(g, 'DESTROY ALL HOSTILE GEARS', UI_W / 2, 404, 15, DIM, 'center', 5);
+  const p = selectedPilot();
+  tx(g, `UNIT ${p.unitNo} ── ${p.callsign} // ${p.pilot}`, UI_W / 2, 442, 14, AMBER, 'center', 3);
   g.globalAlpha = 1;
 }
 

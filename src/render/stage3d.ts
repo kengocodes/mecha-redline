@@ -25,6 +25,9 @@ export class Stage3D {
 
   private space!: SpaceBackdrop;
   private hangar!: HangarShowcase;
+  private arena!: THREE.Group;
+  private redlineMat!: THREE.MeshBasicMaterial;
+  private arenaT = 0;
   private shake = 0;
   private elev = (CAM_ELEV * Math.PI) / 180;
   private lookTarget = new THREE.Vector3(0, 0, 0);
@@ -73,9 +76,67 @@ export class Stage3D {
     this.scene.add(this.space.group);
     this.hangar = new HangarShowcase();
     this.scene.add(this.hangar.group);
+    this.buildArena();
 
     this.bullets = new Bullets3D(this.scene);
     this.fx = new Fx3D(this.scene);
+  }
+
+  /**
+   * The battlefield floor: THE redline — a pulsing red perimeter marking the
+   * arena — over a whisper of nav grid so flight reads against the void.
+   */
+  private buildArena(): void {
+    this.arena = new THREE.Group();
+
+    const RL = 0xff3b53;
+    const X = 44.5; // just outside the player clamp (43 × 25)
+    const Y = 25.8;
+    this.redlineMat = new THREE.MeshBasicMaterial({ color: RL, transparent: true, opacity: 0.5 });
+    const dimMat = new THREE.MeshBasicMaterial({ color: RL, transparent: true, opacity: 0.16 });
+    const bar = (
+      mat: THREE.MeshBasicMaterial,
+      w: number,
+      d: number,
+      x: number,
+      z: number,
+    ): void => {
+      const m = new THREE.Mesh(new THREE.BoxGeometry(w, 0.04, d), mat);
+      m.position.set(x, 0.08, z);
+      this.arena.add(m);
+    };
+    // Inner frame (pulsing) + a still outer echo.
+    bar(this.redlineMat, X * 2, 0.2, 0, -Y);
+    bar(this.redlineMat, X * 2, 0.2, 0, Y);
+    bar(this.redlineMat, 0.2, Y * 2, -X, 0);
+    bar(this.redlineMat, 0.2, Y * 2, X, 0);
+    bar(dimMat, (X + 1) * 2, 0.14, 0, -Y - 1);
+    bar(dimMat, (X + 1) * 2, 0.14, 0, Y + 1);
+    bar(dimMat, 0.14, (Y + 1) * 2, -X - 1, 0);
+    bar(dimMat, 0.14, (Y + 1) * 2, X + 1, 0);
+    // Heavier corner ticks.
+    const cornerMat = new THREE.MeshBasicMaterial({ color: RL, transparent: true, opacity: 0.85 });
+    for (const sx of [-1, 1]) {
+      for (const sz of [-1, 1]) {
+        bar(cornerMat, 3.2, 0.34, sx * (X - 1.6), sz * Y);
+        bar(cornerMat, 0.34, 3.2, sx * X, sz * (Y - 1.6));
+      }
+    }
+
+    // Nav grid: sparse dim lines; 1px at the low internal resolution.
+    const pts: number[] = [];
+    for (let x = -40; x <= 40; x += 8) pts.push(x, 0.05, -Y, x, 0.05, Y);
+    for (let z = -24; z <= 24; z += 8) pts.push(-X, 0.05, z, X, 0.05, z);
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+    const grid = new THREE.LineSegments(
+      geo,
+      new THREE.LineBasicMaterial({ color: 0x27374e, transparent: true, opacity: 0.28, depthWrite: false }),
+    );
+    this.arena.add(grid);
+
+    this.arena.visible = false;
+    this.scene.add(this.arena);
   }
 
   /**
@@ -90,6 +151,7 @@ export class Stage3D {
     this.lookTarget.set(0, showcase ? 5.4 : 0, showcase ? 2.6 : 0);
     this.camera.updateProjectionMatrix();
     this.hangar.group.visible = showcase;
+    this.arena.visible = !showcase;
     // Stars stay up on title — deep void behind the hangar set.
     this.space.group.visible = true;
     // Camera sits ~CAM_DIST (100) from the gear — fog must start past that
@@ -108,6 +170,17 @@ export class Stage3D {
 
   addShake(mag: number): void {
     this.shake = Math.min(1.6, this.shake + mag);
+  }
+
+  private _proj = new THREE.Vector3();
+
+  /** Arena-plane point → UI-space coords (inverse of aimPoint). */
+  uiPoint(x: number, y: number, h = 2.2): { x: number; y: number } {
+    this._proj.set(x, h, y).project(this.camera);
+    return {
+      x: ((this._proj.x + 1) / 2) * UI_W,
+      y: ((1 - this._proj.y) / 2) * UI_H,
+    };
   }
 
   /** UI-space pointer position → arena-plane gameplay coords. */
@@ -143,6 +216,10 @@ export class Stage3D {
 
     this.space.update(dt);
     this.hangar.update(dt);
+    if (this.arena.visible) {
+      this.arenaT += dt;
+      this.redlineMat.opacity = 0.42 + 0.14 * Math.sin(this.arenaT * 2.2);
+    }
     this.fx.update(dt);
     this.renderer.render(this.scene, this.camera);
   }

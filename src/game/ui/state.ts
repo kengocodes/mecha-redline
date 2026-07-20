@@ -30,6 +30,8 @@ export interface HudState {
   bossName: string;
   msg: string; // operator comms line
   msgT: number;
+  px: number; // player position in UI space, for HUD proximity fades
+  py: number;
 }
 
 export const hud: HudState = {
@@ -51,6 +53,8 @@ export const hud: HudState = {
   bossName: '',
   msg: '',
   msgT: 0,
+  px: 640,
+  py: 500,
 };
 
 /** Hangar select UI state: SelectScene drives it, the overlay paints it. */
