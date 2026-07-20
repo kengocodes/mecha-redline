@@ -7,7 +7,7 @@ body {
   margin: 0;
   padding: 0;
   height: 100%;
-  background: #05070d;
+  background: #02050c;
   overflow: hidden;
   user-select: none;
   -webkit-user-select: none;
@@ -15,7 +15,7 @@ body {
 
 #stage {
   position: absolute;
-  background: #05070d;
+  background: #02050c;
   overflow: hidden;
 }
 

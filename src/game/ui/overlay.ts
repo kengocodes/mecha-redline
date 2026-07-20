@@ -218,10 +218,6 @@ function drawWarning(g: Ctx, t: number): void {
 }
 
 function drawIntro(g: Ctx, t: number): void {
-  g.fillStyle = '#05070d';
-  g.fillRect(0, 0, UI_W, 92);
-  g.fillRect(0, UI_H - 92, UI_W, 92);
-
   const a = Math.min(1, t / 0.4) * (t > 3.0 ? Math.max(0, 1 - (t - 3.0) / 0.6) : 1);
   g.globalAlpha = a;
   tx(g, 'MISSION 01', UI_W / 2, 292, 56, FG, 'center', 14);

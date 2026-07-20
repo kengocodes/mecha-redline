@@ -1,14 +1,15 @@
-// The three.js layer: orthographic camera tilted 60° over a plain enemy-base
-// deck. Renders at a fixed low resolution into a canvas that CSS stretches
-// with nearest-neighbour sampling.
+// The three.js layer: orthographic camera tilted 60° over deep space.
+// Renders at a fixed low resolution into a canvas that CSS stretches with
+// nearest-neighbour sampling.
 
 import * as THREE from 'three';
-import { ARENA_X, ARENA_Y, CAM_ELEV, RES_H, RES_W, UI_H, UI_W, VIEW_HH, VIEW_HW } from '../core/const';
+import { CAM_ELEV, RES_H, RES_W, UI_H, UI_W, VIEW_HH, VIEW_HW } from '../core/const';
 import { Bullets3D } from './bullets3d';
 import { Fx3D } from './fx3d';
+import { SpaceBackdrop } from './spaceBackdrop';
 
 const CAM_DIST = 100;
-const FOG = 0x080c14;
+const VOID = 0x02050c;
 
 export class Stage3D {
   static I: Stage3D;
@@ -21,11 +22,9 @@ export class Stage3D {
   readonly bullets: Bullets3D;
   readonly fx: Fx3D;
 
-  private ground!: THREE.Mesh;
-  private border: THREE.Mesh[] = [];
+  private space!: SpaceBackdrop;
   private pedestal!: THREE.Group;
   private shake = 0;
-  private t = 0;
   private elev = (CAM_ELEV * Math.PI) / 180;
   private lookTarget = new THREE.Vector3(0, 0, 0);
   private ray = new THREE.Raycaster();
@@ -37,7 +36,7 @@ export class Stage3D {
     this.renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
     this.renderer.setPixelRatio(1);
     this.renderer.setSize(RES_W, RES_H, false);
-    this.renderer.setClearColor(FOG);
+    this.renderer.setClearColor(VOID);
     this.renderer.domElement.classList.add('world');
     container.insertBefore(this.renderer.domElement, container.firstChild);
 
@@ -46,15 +45,12 @@ export class Stage3D {
     this.camera.position.set(0, CAM_DIST * Math.sin(el), CAM_DIST * Math.cos(el));
     this.camera.lookAt(this.lookTarget);
 
-    // Camera-to-arena distance is ~90-115, so fog must start beyond that or
-    // it swallows the units; this keeps only a whisper of depth gradient.
-    this.scene.fog = new THREE.Fog(FOG, 100, 190);
+    // Soft void falloff only — backdrop materials opt out of fog so stars stay sharp.
+    this.scene.fog = new THREE.Fog(VOID, 140, 260);
     this.scene.add(this.battleGroup);
 
-    // Underlit base: dim cool ambient, steel key, cold rim, faint deck wash,
-    // weak red spill from the redline so the arena reads as the warm threat.
-    // Key + rim run hot so the gears pop; the deck albedo below is darkened
-    // to compensate, keeping the backdrop as flat and dark as before.
+    // Underlit base: dim cool ambient, steel key, cold rim, faint under-wash,
+    // weak red spill so the arena reads as the warm threat.
     this.scene.add(new THREE.HemisphereLight(0x3a4a66, 0x0a0c12, 0.55));
     const key = new THREE.DirectionalLight(0xb8c8e0, 1.45);
     key.position.set(-30, 70, 40);
@@ -62,55 +58,27 @@ export class Stage3D {
     const rim = new THREE.DirectionalLight(0x4a7ec2, 1.55);
     rim.position.set(35, 30, -55);
     this.scene.add(rim);
-    const deck = new THREE.DirectionalLight(0x6a7a96, 0.45);
-    deck.position.set(0, -20, 10);
-    this.scene.add(deck);
+    const under = new THREE.DirectionalLight(0x6a7a96, 0.45);
+    under.position.set(0, -20, 10);
+    this.scene.add(under);
     const redSpill = new THREE.PointLight(0xff3b53, 1.05, 55, 2);
     redSpill.position.set(0, 3.4, 0);
     this.scene.add(redSpill);
 
-    this.buildGround();
-    this.buildBorder();
+    this.space = new SpaceBackdrop();
+    this.scene.add(this.space.group);
     this.buildPedestal();
 
     this.bullets = new Bullets3D(this.scene);
     this.fx = new Fx3D(this.scene);
   }
 
-  /** Plain steel deck: flat colour, no panels, seams, or masses. */
-  private buildGround(): void {
-    // Albedo compensates for the hot key/rim above; drop it further and the
-    // deck reads as void instead of steel.
-    this.ground = new THREE.Mesh(
-      new THREE.PlaneGeometry(500, 500),
-      new THREE.MeshLambertMaterial({ color: 0x0a0d13 }),
-    );
-    this.ground.rotation.x = -Math.PI / 2;
-    this.scene.add(this.ground);
-  }
-
-  /** The redline: a pulsing crimson frame marking the arena on the ground. */
-  private buildBorder(): void {
-    const mat = new THREE.MeshBasicMaterial({ color: 0xff3b53, transparent: true, opacity: 0.4 });
-    const mk = (w: number, d: number, x: number, z: number) => {
-      const m = new THREE.Mesh(new THREE.BoxGeometry(w, 0.06, d), mat);
-      m.position.set(x, 0.1, z);
-      this.scene.add(m);
-      this.border.push(m);
-    };
-    const t = 0.35;
-    mk(ARENA_X * 2 + t * 2, t, 0, -ARENA_Y);
-    mk(ARENA_X * 2 + t * 2, t, 0, ARENA_Y);
-    mk(t, ARENA_Y * 2, -ARENA_X, 0);
-    mk(t, ARENA_Y * 2, ARENA_X, 0);
-  }
-
   /** Hangar pad for the title screen: dark disc + cyan ring. */
   private buildPedestal(): void {
     this.pedestal = new THREE.Group();
     const disc = new THREE.Mesh(
-      new THREE.CircleGeometry(200, 24),
-      new THREE.MeshLambertMaterial({ color: 0x0b0e1a }),
+      new THREE.CircleGeometry(12, 32),
+      new THREE.MeshLambertMaterial({ color: 0x0b0e1a, transparent: true, opacity: 0.85 }),
     );
     disc.rotation.x = -Math.PI / 2;
     disc.position.y = 0.02;
@@ -145,8 +113,6 @@ export class Stage3D {
     this.camera.zoom = showcase ? 5.0 : 1;
     this.lookTarget.set(0, showcase ? 2.4 : 0, 0);
     this.camera.updateProjectionMatrix();
-    for (const b of this.border) b.visible = !showcase;
-    this.ground.visible = !showcase;
     this.pedestal.visible = showcase;
     this.update(0); // snap the camera to the new pose immediately
   }
@@ -174,13 +140,6 @@ export class Stage3D {
   }
 
   update(dt: number): void {
-    this.t += dt;
-
-    const pulse = 0.3 + 0.2 * (0.5 + 0.5 * Math.sin(this.t * 3));
-    for (const b of this.border) {
-      (b.material as THREE.MeshBasicMaterial).opacity = pulse;
-    }
-
     // Camera shake: pure screen-space translation (orthographic).
     const el = this.elev;
     const base = new THREE.Vector3(0, CAM_DIST * Math.sin(el), CAM_DIST * Math.cos(el));
@@ -200,6 +159,7 @@ export class Stage3D {
       this.camera.lookAt(this.lookTarget);
     }
 
+    this.space.update(dt);
     this.fx.update(dt);
     this.renderer.render(this.scene, this.camera);
   }
