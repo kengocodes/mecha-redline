@@ -22,6 +22,7 @@ export interface GearOptions {
   rifle: boolean; // right-hand rifle
   armCannon: boolean; // left forearm replaced by a cannon
   shoulderCannons: boolean; // boss: twin over-shoulder barrels
+  wings: boolean; // swept wing binders fanning off the backpack
   bulk: number; // 1 = standard frame; widens torso + shoulders
 }
 
@@ -31,6 +32,7 @@ export interface Gear {
   t: number;
   hover: number;
   thrusts: THREE.Mesh[];
+  wings: THREE.Group[];
   focusDot: THREE.Mesh | null;
 }
 
@@ -187,11 +189,15 @@ export function buildGear(o: GearOptions): Gear {
   put(att, boxGeo(1.1 * bulk, 0.5, 0.72), dark, 0, 2.72, 0);
   put(att, frustumBox(0.5, 0.4, 0.66, 0.5, 0.5), accent, 0, 2.62, 0.34, 0.25); // front plate
   put(att, frustumBox(1.15 * bulk, 0.42, 1.35 * bulk, 0.5, 0.45), armor, 0, 2.5, -0.18); // rear skirt
+  for (const s of [-1, 1]) {
+    put(att, frustumBox(0.34, 0.5, 0.42, 0.6, 0.8), armor, s * 0.78 * bulk, 2.48, 0.05, 0, 0, s * 0.18); // side skirt
+  }
 
   // ---- torso: wide chest tapering to the waist ----
   put(att, frustumBox(1.75 * bulk, 1.05, 0.85, 0.62, 1.05), armor, 0, 3.5, 0);
   put(att, frustumBox(1.1 * bulk, 0.3, 0.7, 0.26, 0.5), trim, 0, 3.62, 0.5, 0.2); // chest plate
   put(att, boxGeo(0.34, 0.3, 0.12), accent, 0, 3.34, 0.52); // cockpit hatch
+  put(att, boxGeo(0.16, 0.16, 0.06), glow, 0, 3.64, 0.6, 0, 0, Math.PI / 4); // core glow
   for (const s of [-1, 1]) {
     put(att, boxGeo(0.3, 0.42, 0.1), dark, s * 0.58 * bulk, 3.6, 0.51); // intake vents
   }
@@ -210,11 +216,11 @@ export function buildGear(o: GearOptions): Gear {
     eye.scale.setScalar(1.2); // single optic
   }
   if (o.fins) {
-    // Twin antenna fins on the head.
+    // Swept V-crest: twin blades angled out and back, anime-commander style.
     for (const s of [-1, 1]) {
-      put(head, boxGeo(0.5, 0.07, 0.05), accent, s * 0.26, 0.3, 0.16, 0, s * 0.35, s * 0.6);
+      put(head, frustumBox(0.05, 0.06, 0.1, 0.08, 0.66), accent, s * 0.3, 0.32, 0.08, -0.35, 0, s * -0.55);
     }
-    put(head, boxGeo(0.1, 0.12, 0.06), accent, 0, 0.26, 0.18); // fin base gem
+    put(head, boxGeo(0.1, 0.14, 0.06), glow, 0, 0.26, 0.19); // crest gem
   }
 
   // ---- shoulders + arms ----
@@ -293,6 +299,29 @@ export function buildGear(o: GearOptions): Gear {
     thrusts.push(flame);
   }
 
+  // ---- wing binders: tapered plates fanning up and out off the backpack,
+  // Xenogears-style. Glowing edge strip sells the energy-wing silhouette. ----
+  const wings: THREE.Group[] = [];
+  if (o.wings) {
+    for (const s of [-1, 1]) {
+      const wing = new THREE.Group();
+      wing.position.set(s * 0.55 * bulk, 4.0, -0.72);
+      wing.rotation.y = s * 0.3; // sweep back
+      wing.userData.baseZ = s * -0.45; // fan outward
+      wing.rotation.z = wing.userData.baseZ;
+      att.add(wing);
+
+      put(wing, boxGeo(0.26, 0.56, 0.34), dark, 0, 0, 0); // hinge block
+      // primary blade: tall, tapering, leaning further out than the hinge
+      put(wing, frustumBox(0.07, 0.28, 0.18, 0.52, 1.7), armor, s * 0.38, 0.85, -0.05, 0.1, 0, s * -0.3);
+      // shorter secondary vane tucked behind
+      put(wing, frustumBox(0.06, 0.2, 0.13, 0.38, 1.15), trim, s * 0.14, 0.55, -0.32, 0.25, 0, s * -0.5);
+      // energy edge along the primary blade
+      put(wing, boxGeo(0.04, 1.2, 0.09), glow, s * 0.78, 1.1, 0, 0.1, 0, s * -0.3);
+      wings.push(wing);
+    }
+  }
+
   // Focus-mode hitbox marker (player only; toggled from the scene).
   let focusDot: THREE.Mesh | null = null;
   if (o.rifle) {
@@ -306,7 +335,7 @@ export function buildGear(o: GearOptions): Gear {
   }
 
   root.scale.setScalar(o.scale);
-  return { root, att, t: Math.random() * 10, hover: o.hover, thrusts, focusDot };
+  return { root, att, t: Math.random() * 10, hover: o.hover, thrusts, wings, focusDot };
 }
 
 /** Per-frame idle: hover bob, banking, thruster flicker. */
@@ -320,6 +349,9 @@ export function animateGear(g: Gear, dt: number, bank = 0, pitch = 0): void {
     f.scale.y = 0.75 + Math.random() * 0.55;
     (f.material as THREE.MeshBasicMaterial).opacity = 0.5 + Math.random() * 0.4;
   }
+  for (const w of g.wings) {
+    w.rotation.z = w.userData.baseZ + Math.sin(g.t * 1.8) * 0.06; // gentle flex
+  }
   if (g.focusDot) g.focusDot.rotation.y += dt * 5;
 }
 
@@ -327,10 +359,10 @@ export function animateGear(g: Gear, dt: number, bank = 0, pitch = 0): void {
 
 export const VALKYR: GearOptions = {
   palette: {
-    armor: 0x44528c, // indigo
+    armor: 0x4a5aa0, // bright indigo
     dark: 0x232a40,
     accent: 0xc23c52, // crimson
-    trim: 0x9ba3b8, // steel
+    trim: 0xd4dae6, // silver-white
     glow: 0x7ffbff,
     thrust: 0x7fd4ff,
   },
@@ -341,6 +373,7 @@ export const VALKYR: GearOptions = {
   rifle: true,
   armCannon: false,
   shoulderCannons: false,
+  wings: true,
   bulk: 1,
 };
 
@@ -360,6 +393,7 @@ export const HUSK: GearOptions = {
   rifle: false,
   armCannon: true,
   shoulderCannons: false,
+  wings: false,
   bulk: 0.9,
 };
 
@@ -379,6 +413,7 @@ export const LANCER: GearOptions = {
   rifle: false,
   armCannon: true,
   shoulderCannons: false,
+  wings: false,
   bulk: 1.15,
 };
 
@@ -398,5 +433,6 @@ export const GOLGOTHA: GearOptions = {
   rifle: false,
   armCannon: false,
   shoulderCannons: true,
+  wings: true,
   bulk: 1.25,
 };

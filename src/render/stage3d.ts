@@ -1,6 +1,6 @@
-// The three.js layer: orthographic camera tilted 60° over a scrolling
-// night-city ground plane. Renders at a fixed low resolution into a canvas
-// that CSS stretches with nearest-neighbour sampling.
+// The three.js layer: orthographic camera tilted 60° over a plain dark
+// ground plane with drifting low-rise blocks. Renders at a fixed low
+// resolution into a canvas that CSS stretches with nearest-neighbour sampling.
 
 import * as THREE from 'three';
 import { ARENA_X, ARENA_Y, CAM_ELEV, RES_H, RES_W, UI_H, UI_W, VIEW_HH, VIEW_HW } from '../core/const';
@@ -9,7 +9,6 @@ import { Fx3D } from './fx3d';
 
 const CAM_DIST = 100;
 const SCROLL_SPEED = 3.2; // arena units / s the city slides past
-const GROUND_TILE = 500 / 3; // world units covered by one texture repeat
 
 export class Stage3D {
   static I: Stage3D;
@@ -23,7 +22,6 @@ export class Stage3D {
   readonly fx: Fx3D;
 
   private ground!: THREE.Mesh;
-  private groundTex!: THREE.CanvasTexture;
   private blocks!: THREE.InstancedMesh;
   private blockPos: { x: number; z: number; h: number }[] = [];
   private border: THREE.Mesh[] = [];
@@ -71,56 +69,11 @@ export class Stage3D {
     this.fx = new Fx3D(this.scene);
   }
 
-  /** Night-city texture: block grid, streets, sparse lit windows. */
+  /** Plain dark hangar floor: flat colour, no texture, so the fight reads clean. */
   private buildGround(): void {
-    const c = document.createElement('canvas');
-    c.width = 512;
-    c.height = 512;
-    const g = c.getContext('2d')!;
-    g.fillStyle = '#0d1119';
-    g.fillRect(0, 0, 512, 512);
-
-    const cell = 64;
-    const street = 10;
-    for (let by = 0; by < 8; by++) {
-      for (let bx = 0; bx < 8; bx++) {
-        const x = bx * cell + street / 2;
-        const y = by * cell + street / 2;
-        const w = cell - street;
-        const shade = 18 + Math.floor(Math.random() * 14);
-        g.fillStyle = `rgb(${shade},${shade + 4},${shade + 12})`;
-        g.fillRect(x, y, w, w);
-        // sub-lots
-        g.strokeStyle = 'rgba(0,0,0,0.5)';
-        g.lineWidth = 1;
-        g.strokeRect(x + 0.5, y + 0.5, w / 2, w / 2);
-        g.strokeRect(x + w / 2 + 0.5, y + w / 2 + 0.5, w / 2 - 1, w / 2 - 1);
-        // lit windows
-        const n = 3 + Math.floor(Math.random() * 9);
-        for (let i = 0; i < n; i++) {
-          const r = Math.random();
-          g.fillStyle = r < 0.55 ? '#5a86a8' : r < 0.8 ? '#c8935a' : '#7ffbff';
-          g.globalAlpha = 0.5 + Math.random() * 0.5;
-          g.fillRect(x + 2 + Math.random() * (w - 5), y + 2 + Math.random() * (w - 5), 2, 2);
-          g.globalAlpha = 1;
-        }
-      }
-    }
-    // arterial glow lines along some streets
-    g.fillStyle = 'rgba(127, 200, 255, 0.16)';
-    for (let i = 0; i < 8; i += 2) g.fillRect(0, i * cell - 2, 512, 3);
-    g.fillStyle = 'rgba(255, 170, 90, 0.12)';
-    for (let i = 1; i < 8; i += 3) g.fillRect(i * cell - 2, 0, 3, 512);
-
-    this.groundTex = new THREE.CanvasTexture(c);
-    this.groundTex.wrapS = this.groundTex.wrapT = THREE.RepeatWrapping;
-    this.groundTex.magFilter = THREE.NearestFilter;
-    this.groundTex.minFilter = THREE.NearestFilter;
-    this.groundTex.repeat.set(3, 3);
-
     this.ground = new THREE.Mesh(
       new THREE.PlaneGeometry(500, 500),
-      new THREE.MeshLambertMaterial({ map: this.groundTex }),
+      new THREE.MeshLambertMaterial({ color: 0x0d1119 }),
     );
     this.ground.rotation.x = -Math.PI / 2;
     this.scene.add(this.ground);
@@ -237,9 +190,8 @@ export class Stage3D {
   update(dt: number): void {
     this.t += dt;
 
-    // Ground + buildings drift toward the bottom of the screen: the wing
-    // is holding position while the city slides beneath.
-    this.groundTex.offset.y -= (SCROLL_SPEED * dt) / GROUND_TILE;
+    // Ground stays still; the low-rise buildings drift toward the bottom of
+    // the screen: the wing is holding position while the city slides beneath.
     const m = new THREE.Matrix4();
     for (let i = 0; i < this.blockPos.length; i++) {
       const b = this.blockPos[i];
