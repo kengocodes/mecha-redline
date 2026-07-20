@@ -330,7 +330,9 @@ export function buildGear(o: GearOptions): Gear {
       put(rifle, boxGeo(0.16, 0.22, 2.3), dark, 0, 0.06, 0.7); // barrel
       put(rifle, boxGeo(0.2, 0.3, 0.6), trim, 0, 0.04, -0.35); // stock
       put(rifle, boxGeo(0.06, 0.14, 0.5), trim, 0, 0.28, 0.9); // sight rail
-      put(rifle, boxGeo(0.1, 0.1, 0.14), glowMat(p.thrust), 0, 0.06, 1.9); // muzzle
+      put(rifle, boxGeo(0.1, 0.1, 0.14), glowMat(p.thrust), 0, 0.06, 1.9); // muzzle tip
+      // Flash + spawn anchor sit just past the barrel end (local +Z).
+      muzzles.push(muzzleFlash(rifle, 0, 0.06, 2.05, 0xc8ffff));
       rifleGrp = rifle;
     }
   }
@@ -350,26 +352,51 @@ export function buildGear(o: GearOptions): Gear {
   }
 
   // ---- backpack + thrusters ----
+  // Jets fire rearward (−Z), not down — from the 60° top-down camera a
+  // vertical plume foreshortens to nothing under the torso.
   put(att, boxGeo(1.0 * bulk, 0.95, 0.4), dark, 0, 3.55, -0.62);
   const thrusts: THREE.Mesh[] = [];
   const nThrust = o.shoulderCannons ? 4 : 2;
-  for (let i = 0; i < nThrust; i++) {
-    const s = i % 2 === 0 ? -1 : 1;
-    const off = i < 2 ? 0.32 : 0.62;
-    put(att, cylGeo(0.17, 0.22, 0.5, 6), trim, s * off * bulk, 3.05, -0.62);
+  const mkFlame = (
+    color: number,
+    geoH: number,
+    rt: number,
+    rb: number,
+    lenMul: number,
+    fatMul: number,
+    opMul: number,
+  ): THREE.Mesh => {
     const flame = new THREE.Mesh(
-      cylGeo(0.16, 0.02, 0.85, 6),
+      cylGeo(rt, rb, geoH, 6),
       new THREE.MeshBasicMaterial({
-        color: p.thrust,
+        color,
         transparent: true,
-        opacity: 0.75,
+        opacity: 0.85,
         blending: THREE.AdditiveBlending,
         depthWrite: false,
       }),
     );
-    flame.position.set(s * off * bulk, 2.45, -0.62);
-    att.add(flame);
-    thrusts.push(flame);
+    // Local +Y (wide) → +Z, tip (−Y) → −Z so the plume trails behind.
+    flame.rotation.x = Math.PI / 2;
+    flame.renderOrder = 18;
+    flame.userData.thrust = { geoH, nozZ: -0.78, lenMul, fatMul, opMul };
+    return flame;
+  };
+  for (let i = 0; i < nThrust; i++) {
+    const s = i % 2 === 0 ? -1 : 1;
+    const off = i < 2 ? 0.32 : 0.62;
+    const x = s * off * bulk;
+    const y = 3.1;
+    put(att, cylGeo(0.17, 0.22, 0.5, 6), trim, x, y, -0.62);
+    // Hot core + soft bloom — short rear plumes that still read top-down.
+    const core = mkFlame(0xfff0d0, 0.85, 0.14, 0.02, 1, 0.65, 0.95);
+    core.position.set(x, y, -0.78);
+    att.add(core);
+    thrusts.push(core);
+    const bloom = mkFlame(p.thrust, 1.05, 0.26, 0.04, 1.1, 1.1, 0.55);
+    bloom.position.set(x, y, -0.78);
+    att.add(bloom);
+    thrusts.push(bloom);
   }
 
   // ---- wing binders: tapered plates fanning up and out off the backpack,
@@ -436,9 +463,23 @@ export function buildGear(o: GearOptions): Gear {
   };
 }
 
+const _muzzleWorld = new THREE.Vector3();
+
+/**
+ * Arena-plane spawn point for the first weapon muzzle (gameplay x/y).
+ * Caller should pose `g.root` (position + yaw) before calling.
+ */
+export function muzzleArenaPos(g: Gear): { x: number; y: number } | null {
+  const tip = g.muzzles[0];
+  if (!tip) return null;
+  tip.getWorldPosition(_muzzleWorld);
+  return { x: _muzzleWorld.x, y: _muzzleWorld.z };
+}
+
 /**
  * Per-frame idle: hover bob, banking, thruster flicker, weapon flash, recoil.
- * boost scales the thruster flames with speed; 0.5 = the neutral idle look.
+ * boost scales the thruster flames with speed; 0 = cold, 1 = full burn,
+ * values above 1 overdrive (enemies in a hard burn).
  */
 export function animateGear(g: Gear, dt: number, bank = 0, pitch = 0, boost = 0.5): void {
   g.t += dt;
@@ -446,11 +487,28 @@ export function animateGear(g: Gear, dt: number, bank = 0, pitch = 0, boost = 0.
   const k = Math.min(1, dt * 10);
   g.att.rotation.z += (bank - g.att.rotation.z) * k;
   g.att.rotation.x += (pitch - g.recoil * 0.05 - g.att.rotation.x) * k;
-  const bk = 0.6 + boost * 0.8;
+  const b = Math.max(0, boost);
+  // Pilot light at rest; speed stretches a modest rear plume.
+  const len = 0.45 + b * 1.1;
+  const fat = 0.75 + Math.min(1.2, b) * 0.35;
   for (const f of g.thrusts) {
-    f.scale.y = (0.75 + Math.random() * 0.55) * bk;
-    (f.material as THREE.MeshBasicMaterial).opacity =
-      (0.5 + Math.random() * 0.4) * Math.min(1, 0.55 + boost * 0.9);
+    const meta = f.userData.thrust as {
+      geoH: number;
+      nozZ: number;
+      lenMul: number;
+      fatMul: number;
+      opMul: number;
+    };
+    const flicker = 0.9 + Math.random() * 0.18;
+    const sy = len * meta.lenMul * flicker;
+    const sxz = fat * meta.fatMul * (0.92 + Math.random() * 0.14);
+    f.scale.set(sxz, sy, sxz);
+    // Pin the wide end to the nozzle so length only grows rearward (−Z).
+    f.position.z = meta.nozZ - (meta.geoH * 0.5) * sy;
+    (f.material as THREE.MeshBasicMaterial).opacity = Math.min(
+      0.85,
+      (0.35 + Math.random() * 0.2) * (0.35 + b * 0.7) * meta.opMul,
+    );
   }
   for (const w of g.wings) {
     w.rotation.z = w.userData.baseZ + Math.sin(g.t * 1.8) * 0.06; // gentle flex
@@ -502,7 +560,7 @@ export const HUSK: GearOptions = {
     accent: 0x8a5a2a, // rust
     trim: 0x7d7660,
     glow: 0xff5544,
-    thrust: 0xffaa66,
+    thrust: 0xffc45c, // hot amber — must punch through olive plating top-down
   },
   scale: 0.85,
   hover: 1.7,
@@ -522,7 +580,7 @@ export const LANCER: GearOptions = {
     accent: 0xc8a04a, // brass
     trim: 0x74938f,
     glow: 0xffcc55,
-    thrust: 0xaaddff,
+    thrust: 0xd8f2ff,
   },
   scale: 1.2,
   hover: 1.7,
@@ -542,7 +600,7 @@ export const GOLGOTHA: GearOptions = {
     accent: 0xc8c0ae, // bone
     trim: 0x8f5a62,
     glow: 0xff6655,
-    thrust: 0xff8866,
+    thrust: 0xffb080,
   },
   scale: 2.5,
   hover: 1.1,

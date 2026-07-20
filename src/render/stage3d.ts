@@ -66,6 +66,7 @@ export class Stage3D {
     this.scene.add(redSpill);
 
     this.space = new SpaceBackdrop();
+    this.space.group.visible = false; // battle-only; title hangar stays clean
     this.scene.add(this.space.group);
     this.buildPedestal();
 
@@ -114,6 +115,8 @@ export class Stage3D {
     this.lookTarget.set(0, showcase ? 2.4 : 0, 0);
     this.camera.updateProjectionMatrix();
     this.pedestal.visible = showcase;
+    // Stars are battle-only — hangar showcase stays a clean void.
+    this.space.group.visible = !showcase;
     this.update(0); // snap the camera to the new pose immediately
   }
 

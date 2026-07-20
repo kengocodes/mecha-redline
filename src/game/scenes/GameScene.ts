@@ -20,6 +20,7 @@ import {
   GOLGOTHA,
   HUSK,
   LANCER,
+  muzzleArenaPos,
   setGearFlash,
   VALKYR,
 } from '../../render/gearFactory';
@@ -234,12 +235,16 @@ export class GameScene extends Phaser.Scene {
       const foc = focusing();
       p.fireCd = 1 / (foc ? PLAYER.focusFireRate : PLAYER.fireRate);
       const spread = ((foc ? PLAYER.focusSpreadDeg : PLAYER.spreadDeg) * Math.PI) / 180;
-      // Muzzle sits ahead and slightly to the rifle side.
-      const mx = p.x + Math.cos(p.aim) * 2.0 - Math.sin(p.aim) * 0.55;
-      const my = p.y + Math.sin(p.aim) * 2.0 + Math.cos(p.aim) * 0.55;
+      // Pose the gear so the rifle tip's world position matches this frame.
+      this.pGear.root.position.set(p.x, 0, p.y);
+      this.pGear.root.rotation.y = Math.atan2(Math.cos(p.aim), Math.sin(p.aim));
+      const muzzle = muzzleArenaPos(this.pGear);
+      const mx = muzzle?.x ?? p.x + Math.cos(p.aim) * 2.0;
+      const my = muzzle?.y ?? p.y + Math.sin(p.aim) * 2.0;
       for (const o of [-spread, 0, spread]) {
         emit(this.pb, mx, my, p.aim + o, PLAYER.bulletSpeed, BK.player);
       }
+      this.pGear.muzzleT = 0.07;
       this.pGear.recoil = Math.min(1, this.pGear.recoil + 0.7);
     }
   }
@@ -404,7 +409,8 @@ export class GameScene extends Phaser.Scene {
         e.gear.muzzleT = e.muzzleT; // consume the pending-flash message
         e.muzzleT = 0;
       }
-      animateGear(e.gear, dt, -e.vx * 0.006, 0, Math.min(1, Math.hypot(e.vx, e.vy) / 12));
+      const spd = Math.hypot(e.vx, e.vy);
+      animateGear(e.gear, dt, -e.vx * 0.01, -e.vy * 0.004, Math.min(1.15, 0.25 + spd / 9));
     }
 
     s.bullets.sync([this.eb, this.pb], dt);
