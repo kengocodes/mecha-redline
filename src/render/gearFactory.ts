@@ -34,6 +34,12 @@ export interface Gear {
   thrusts: THREE.Mesh[];
   wings: THREE.Group[];
   focusDot: THREE.Mesh | null;
+  lit: THREE.Mesh[]; // lambert-shaded meshes, swappable to FLASH_MAT
+  flashing: boolean;
+  muzzles: THREE.Mesh[]; // weapon flash meshes, driven by muzzleT
+  muzzleT: number;
+  recoil: number;
+  rifleGrp: THREE.Group | null;
 }
 
 const geoCache = new Map<string, THREE.BufferGeometry>();
@@ -64,6 +70,59 @@ function glowMat(color: number): THREE.MeshBasicMaterial {
     matCache.set(key, m);
   }
   return m as THREE.MeshBasicMaterial;
+}
+
+/** Shared hit-flash material — never mutated, only swapped in and out. */
+const FLASH_MAT = new THREE.MeshBasicMaterial({ color: 0xffffff });
+
+/** Swap every armor mesh to solid white (and back) for hit feedback. */
+export function setGearFlash(g: Gear, on: boolean): void {
+  if (on === g.flashing) return;
+  g.flashing = on;
+  for (const m of g.lit) {
+    if (on) {
+      m.userData.mat = m.material;
+      m.material = FLASH_MAT;
+    } else if (m.userData.mat) {
+      m.material = m.userData.mat;
+    }
+  }
+}
+
+/**
+ * Weapon flash: an additive octahedron at a muzzle, hidden until muzzleT is
+ * set. Own material per mesh because animateGear mutates it per-frame.
+ * rx orients the local z (stretch axis) along the barrel.
+ */
+function muzzleFlash(
+  parent: THREE.Object3D,
+  x: number,
+  y: number,
+  z: number,
+  color: number,
+  rx = 0,
+): THREE.Mesh {
+  const key = 'o0.55';
+  let g = geoCache.get(key);
+  if (!g) {
+    g = new THREE.OctahedronGeometry(0.55);
+    geoCache.set(key, g);
+  }
+  const m = new THREE.Mesh(
+    g,
+    new THREE.MeshBasicMaterial({
+      color,
+      transparent: true,
+      opacity: 0.9,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    }),
+  );
+  m.position.set(x, y, z);
+  m.rotation.x = rx;
+  m.visible = false;
+  parent.add(m);
+  return m;
 }
 
 /**
@@ -169,6 +228,9 @@ export function buildGear(o: GearOptions): Gear {
   att.position.y = o.hover;
   root.add(att);
 
+  const muzzles: THREE.Mesh[] = [];
+  let rifleGrp: THREE.Group | null = null;
+
   // Fake blob shadow pinned to the ground, unaffected by hover bob.
   const shadow = new THREE.Mesh(
     new THREE.CircleGeometry(1.55 * bulk, 12),
@@ -252,6 +314,7 @@ export function buildGear(o: GearOptions): Gear {
       put(arm, cylGeo(0.26, 0.3, 0.9, 6), dark, 0, -1.32, 0);
       put(arm, cylGeo(0.14, 0.14, 0.5, 6), trim, 0, -1.68, 0.08, 0.2, 0, 0);
       put(arm, cylGeo(0.09, 0.09, 0.12, 6), glowMat(p.thrust), 0, -1.9, 0.12, 0.2, 0, 0);
+      muzzles.push(muzzleFlash(arm, 0, -1.98, 0.14, 0xffd9aa, Math.PI / 2 + 0.2));
     } else {
       put(arm, frustumBox(0.38, 0.42, 0.56, 0.6, 0.85), armor, 0, -1.28, 0); // flared forearm
       put(arm, boxGeo(0.4, 0.36, 0.42), dark, 0, -1.85, 0.02); // fist
@@ -261,12 +324,14 @@ export function buildGear(o: GearOptions): Gear {
       // Rifle held level (counter-rotate the arm pose).
       const rifle = new THREE.Group();
       rifle.position.set(0.06, -1.9, 0.1);
+      rifle.userData.baseZ = 0.1; // recoil slides the whole rifle back
       rifle.rotation.x = -pose;
       arm.add(rifle);
       put(rifle, boxGeo(0.16, 0.22, 2.3), dark, 0, 0.06, 0.7); // barrel
       put(rifle, boxGeo(0.2, 0.3, 0.6), trim, 0, 0.04, -0.35); // stock
       put(rifle, boxGeo(0.06, 0.14, 0.5), trim, 0, 0.28, 0.9); // sight rail
       put(rifle, boxGeo(0.1, 0.1, 0.14), glowMat(p.thrust), 0, 0.06, 1.9); // muzzle
+      rifleGrp = rifle;
     }
   }
 
@@ -280,6 +345,7 @@ export function buildGear(o: GearOptions): Gear {
       put(gun, boxGeo(0.44, 0.5, 1.1), dark, 0, 0, -0.2);
       put(gun, cylGeo(0.16, 0.19, 1.7, 6), trim, 0, 0.06, 0.9, Math.PI / 2, 0, 0);
       put(gun, cylGeo(0.1, 0.1, 0.16, 6), glowMat(p.glow), 0, 0.06, 1.78, Math.PI / 2, 0, 0);
+      muzzles.push(muzzleFlash(gun, 0, 0.06, 1.9, 0xffd9aa));
     }
   }
 
@@ -342,24 +408,69 @@ export function buildGear(o: GearOptions): Gear {
   }
 
   root.scale.setScalar(o.scale);
-  return { root, att, t: Math.random() * 10, hover: o.hover, thrusts, wings, focusDot };
+
+  // Armor meshes for the hit flash — lamberts only, so glows, thruster
+  // flames, and the blob shadow keep their materials.
+  const lit: THREE.Mesh[] = [];
+  root.traverse((obj) => {
+    const m = obj as THREE.Mesh;
+    if (m.isMesh && (m.material as THREE.Material & { isMeshLambertMaterial?: boolean }).isMeshLambertMaterial) {
+      lit.push(m);
+    }
+  });
+
+  return {
+    root,
+    att,
+    t: Math.random() * 10,
+    hover: o.hover,
+    thrusts,
+    wings,
+    focusDot,
+    lit,
+    flashing: false,
+    muzzles,
+    muzzleT: 0,
+    recoil: 0,
+    rifleGrp,
+  };
 }
 
-/** Per-frame idle: hover bob, banking, thruster flicker. */
-export function animateGear(g: Gear, dt: number, bank = 0, pitch = 0): void {
+/**
+ * Per-frame idle: hover bob, banking, thruster flicker, weapon flash, recoil.
+ * boost scales the thruster flames with speed; 0.5 = the neutral idle look.
+ */
+export function animateGear(g: Gear, dt: number, bank = 0, pitch = 0, boost = 0.5): void {
   g.t += dt;
   g.att.position.y = g.hover + Math.sin(g.t * 2.4) * 0.09;
   const k = Math.min(1, dt * 10);
   g.att.rotation.z += (bank - g.att.rotation.z) * k;
-  g.att.rotation.x += (pitch - g.att.rotation.x) * k;
+  g.att.rotation.x += (pitch - g.recoil * 0.05 - g.att.rotation.x) * k;
+  const bk = 0.6 + boost * 0.8;
   for (const f of g.thrusts) {
-    f.scale.y = 0.75 + Math.random() * 0.55;
-    (f.material as THREE.MeshBasicMaterial).opacity = 0.5 + Math.random() * 0.4;
+    f.scale.y = (0.75 + Math.random() * 0.55) * bk;
+    (f.material as THREE.MeshBasicMaterial).opacity =
+      (0.5 + Math.random() * 0.4) * Math.min(1, 0.55 + boost * 0.9);
   }
   for (const w of g.wings) {
     w.rotation.z = w.userData.baseZ + Math.sin(g.t * 1.8) * 0.06; // gentle flex
   }
   if (g.focusDot) g.focusDot.rotation.y += dt * 5;
+
+  g.muzzleT = Math.max(0, g.muzzleT - dt);
+  const firing = g.muzzleT > 0;
+  for (const m of g.muzzles) {
+    m.visible = firing;
+    if (firing) {
+      // Fresh roll + size every frame so the strobe never reads as a
+      // glued-on sprite at 10-13 shots per second.
+      m.rotation.z = Math.random() * Math.PI;
+      m.scale.setScalar(0.6 + Math.random() * 0.8);
+      m.scale.z *= 1.6; // stretch along the barrel
+    }
+  }
+  g.recoil = Math.max(0, g.recoil - dt * 9);
+  if (g.rifleGrp) g.rifleGrp.position.z = g.rifleGrp.userData.baseZ - g.recoil * 0.28;
 }
 
 // ---- unit palettes -------------------------------------------------------

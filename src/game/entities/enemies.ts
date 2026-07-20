@@ -7,6 +7,11 @@ import { aimAngle, emit, fan, ring } from '../systems/patterns';
 
 export type EnemyKind = 'husk' | 'lancer' | 'boss';
 
+/** Hit-flash timing. The refractory gap keeps sustained fire (~30 hits/s on
+ * the boss) from pinning the flash on — worst case is a ~8Hz strobe. */
+export const FLASH_DUR = 0.06;
+export const FLASH_GAP = 0.06;
+
 export interface Enemy {
   kind: EnemyKind;
   x: number;
@@ -21,6 +26,8 @@ export interface Enemy {
   seed: number;
   fireT: number;
   life: number; // seconds before an un-killed enemy flies off
+  flashT: number; // hit flash: >0 flashing, cools to -FLASH_GAP before re-arm
+  muzzleT: number; // pending muzzle-flash message, consumed by syncStage
   ai: Record<string, number>;
   gear: Gear;
 }
@@ -39,7 +46,19 @@ export function makeEnemy(
   gear: Gear,
   seed = Math.random() * 10,
 ): Enemy {
-  const base = { x, y, vx: 0, vy: 0, t: 0, seed, fireT: 0, ai: {}, gear };
+  const base = {
+    x,
+    y,
+    vx: 0,
+    vy: 0,
+    t: 0,
+    seed,
+    fireT: 0,
+    flashT: -FLASH_GAP,
+    muzzleT: 0,
+    ai: {},
+    gear,
+  };
   switch (kind) {
     case 'husk':
       return { ...base, kind, hp: 3, maxHp: 3, hitR: 1.5, score: SCORE.husk, life: 18 };
@@ -53,6 +72,7 @@ export function makeEnemy(
 export function updateEnemy(e: Enemy, c: SimCtx, dt: number): void {
   e.t += dt;
   e.fireT += dt;
+  e.flashT = Math.max(-FLASH_GAP, e.flashT - dt);
   if (e.kind === 'husk') updateHusk(e, c, dt);
   else if (e.kind === 'lancer') updateLancer(e, c, dt);
   else updateBoss(e, c, dt);
@@ -67,6 +87,7 @@ function updateHusk(e: Enemy, c: SimCtx, _dt: number): void {
   e.vx = Math.sin(e.t * 1.4 + e.seed) * 6;
   if (c.playerAlive && e.fireT > 2.1 && e.t > 1.2 && e.y > -26 && e.y < 12) {
     e.fireT = 0;
+    e.muzzleT = 0.07;
     emit(c.eb, e.x, e.y, aimAngle(e.x, e.y, c.px, c.py), 20, BK.shot);
   }
 }
@@ -89,10 +110,12 @@ function updateLancer(e: Enemy, c: SimCtx, dt: number): void {
   if (!c.playerAlive) return;
   if (e.fireT > 2.7 && e.t > 2) {
     e.fireT = 0;
+    e.muzzleT = 0.07;
     fan(c.eb, e.x, e.y + 1, aimAngle(e.x, e.y, c.px, c.py), 5, 0.65, 17, BK.shot);
   }
   if (e.ai.ringT > 4.6 && e.t > 3.2) {
     e.ai.ringT = 0;
+    e.muzzleT = 0.07;
     ring(c.eb, e.x, e.y, 16, 12.5, BK.orb, e.seed);
   }
 }
@@ -122,6 +145,7 @@ function updateBoss(e: Enemy, c: SimCtx, dt: number): void {
 
   const frac = e.hp / e.maxHp;
   const phase = frac < 0.28 ? 3 : frac < 0.6 ? 2 : 1;
+  a.phase = phase; // read by GameScene for phase-transition hitstop
   const rate = phase === 3 ? 1.2 : 1;
 
   e.vx = Math.sin(e.t * (phase === 1 ? 0.55 : 0.8)) * (phase === 1 ? 10 : 14);
@@ -137,15 +161,19 @@ function updateBoss(e: Enemy, c: SimCtx, dt: number): void {
   }
   if (a.burst < 3 && a.cycle > 0.4 + a.burst * 0.55) {
     a.burst++;
+    e.muzzleT = 0.07;
     const n = phase === 1 ? 5 : 7;
     fan(c.eb, e.x, e.y + 2.5, aimAngle(e.x, e.y, c.px, c.py), n, 0.8, 19 * rate, BK.shot);
   }
   if (a.burst === 3 && a.cycle > 2.6) {
     a.burst = 4;
+    e.muzzleT = 0.07;
     const n = phase === 3 ? 30 : 24;
     ring(c.eb, e.x, e.y, n, 13 * rate, BK.orb, a.cycle + e.t);
     if (phase >= 2) ring(c.eb, e.x, e.y, n, 10 * rate, BK.orb, a.cycle + e.t + Math.PI / n);
   }
+  // The continuous spiral below gets no muzzle flash — at its 70-90ms cadence
+  // it would read as a constant glow, not a tell.
 
   // Continuous spiral arms from phase 2 on.
   if (phase >= 2) {
