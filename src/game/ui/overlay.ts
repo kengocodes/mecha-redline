@@ -100,7 +100,9 @@ function drawTitle(g: Ctx): void {
     g.save();
     g.translate(956 + Math.sin(t * 0.26) * 6, 402 + Math.sin(t * 0.4) * 9);
     g.rotate(-0.04);
-    g.globalAlpha = Math.min(0.15, attract.swapT * 0.4);
+    // Equal apparent brightness for every unit: dark plates draw stronger.
+    const ghostA = Math.max(0.1, Math.min(0.38, 0.045 / gearArt.plateLuma));
+    g.globalAlpha = Math.min(ghostA, attract.swapT * 0.4);
     g.drawImage(plate, -pw / 2, -ph / 2, pw, ph);
     g.restore();
     g.globalAlpha = 1;
