@@ -69,6 +69,10 @@ export interface Bullet {
   vy: number;
   r: number; // collision radius
   t: number;
+  /** Visual scale override (BURST purge fade). */
+  scale?: number;
+  /** Countdown life for non-colliding purge trails. */
+  life?: number;
 }
 
 export const BULLET_R: Record<BK, number> = {

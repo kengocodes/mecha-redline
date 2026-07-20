@@ -12,7 +12,16 @@ import {
   PLAY_Y,
   PLAYER,
 } from '../../core/const';
-import { clearTap, firing, focusing, moveAxis, pointer, takeKey, takeTap } from '../../core/input';
+import {
+  clearTap,
+  firing,
+  focusing,
+  moveAxis,
+  pointer,
+  takeBurst,
+  takeKey,
+  takeTap,
+} from '../../core/input';
 import {
   animateGear,
   buildGear,
@@ -34,11 +43,25 @@ import {
   updateEnemy,
 } from '../entities/enemies';
 import { BOSS_NAME, BOSS_TAG, LEVEL1 } from '../levels/level1';
+import {
+  BURST,
+  createBurstState,
+  takeBulletsForPurge,
+  tickBurst,
+  tickPurge,
+  tryBurst,
+} from '../systems/burst';
 import { emit } from '../systems/patterns';
 import { hud, say, setPhase } from '../ui/state';
 
 /** Real-time freeze frames on impact moments, seconds. */
-const HITSTOP = { husk: 0.035, lancer: 0.06, playerHit: 0.09, bossPhase: 0.12 };
+const HITSTOP = {
+  husk: 0.035,
+  lancer: 0.06,
+  playerHit: 0.09,
+  bossPhase: 0.12,
+  burst: 0.08,
+};
 
 export class GameScene extends Phaser.Scene {
   private p = { x: 0, y: 0, vx: 0, vy: 0, aim: -Math.PI / 2, inv: 0, fireCd: 0, alive: true };
@@ -46,6 +69,7 @@ export class GameScene extends Phaser.Scene {
   private enemies: Enemy[] = [];
   private eb: Bullet[] = []; // enemy bullets
   private pb: Bullet[] = []; // player bullets
+  private purge: Bullet[] = []; // harmless shatter trails from BURST
   private levelT = 0;
   private scriptIx = 0;
   private boss: Enemy | null = null;
@@ -53,6 +77,7 @@ export class GameScene extends Phaser.Scene {
   private endT = 0;
   private hitstop = 0;
   private bossPhase = 1;
+  private burst = createBurstState();
 
   constructor() {
     super('game');
@@ -76,6 +101,7 @@ export class GameScene extends Phaser.Scene {
     this.enemies = [];
     this.eb = [];
     this.pb = [];
+    this.purge = [];
     this.levelT = 0;
     this.scriptIx = 0;
     this.boss = null;
@@ -83,6 +109,7 @@ export class GameScene extends Phaser.Scene {
     this.endT = 0;
     this.hitstop = 0;
     this.bossPhase = 1;
+    this.burst = createBurstState();
 
     this.pGear = buildGear(VALKYR);
     s.battleGroup.add(this.pGear.root);
@@ -90,6 +117,9 @@ export class GameScene extends Phaser.Scene {
     hud.score = 0;
     hud.armor = PLAYER.armor;
     hud.maxArmor = PLAYER.armor;
+    hud.burst = this.burst.charges;
+    hud.maxBurst = this.burst.maxCharges;
+    hud.burstFlashT = 0;
     hud.wave = 0;
     hud.bossMax = 0;
     hud.msg = '';
@@ -141,6 +171,7 @@ export class GameScene extends Phaser.Scene {
     hud.t += raw;
     hud.msgT += raw;
     hud.flashT = Math.max(0, hud.flashT - raw);
+    hud.burstFlashT = Math.max(0, hud.burstFlashT - raw);
 
     // End-state input.
     if (hud.phase === 'failed' && hud.t > 1 && takeTap()) {
@@ -217,6 +248,8 @@ export class GameScene extends Phaser.Scene {
     const p = this.p;
     if (!p.alive) return;
     p.inv = Math.max(0, p.inv - dt);
+    tickBurst(this.burst, dt);
+    hud.burst = this.burst.charges;
 
     const ax = moveAxis();
     const speed = focusing() ? PLAYER.focusSpeed : PLAYER.speed;
@@ -228,6 +261,11 @@ export class GameScene extends Phaser.Scene {
 
     const aim = Stage3D.I.aimPoint(pointer.x, pointer.y);
     p.aim = Math.atan2(aim.y - p.y, aim.x - p.x);
+
+    const phaseOk = hud.phase === 'battle' || hud.phase === 'boss' || hud.phase === 'warning';
+    if (takeBurst() && tryBurst(this.burst, p.alive, phaseOk)) {
+      this.fireBurst();
+    }
 
     p.fireCd -= dt;
     const canFire = hud.phase !== 'intro';
@@ -277,6 +315,7 @@ export class GameScene extends Phaser.Scene {
         if (Math.abs(b.x) > CULL_X || Math.abs(b.y) > CULL_Y) list.splice(i, 1);
       }
     }
+    tickPurge(this.purge, dt);
   }
 
   private collide(): void {
@@ -357,6 +396,28 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  private fireBurst(): void {
+    const p = this.p;
+    const purged = takeBulletsForPurge(this.eb, p.x, p.y);
+    this.purge.push(...purged);
+    p.inv = Math.max(p.inv, BURST.invTime);
+    hud.burst = this.burst.charges;
+    hud.burstFlashT = BURST.flashTime;
+    const s = Stage3D.I;
+    this.stop(HITSTOP.burst);
+    s.addShake(0.55);
+    s.fx.burst(p.x, p.y);
+    // Sparks on a stride so a full screen of fire still reads as shatter, not noise.
+    const stride = Math.max(1, Math.ceil(purged.length / 36));
+    for (let i = 0; i < purged.length; i += stride) {
+      s.fx.spark(purged[i].x, purged[i].y);
+    }
+    setGearFlash(this.pGear, true);
+    this.time.delayedCall(120, () => {
+      if (this.p.alive) setGearFlash(this.pGear, false);
+    });
+  }
+
   private hitPlayer(): void {
     const p = this.p;
     hud.armor -= 1;
@@ -413,6 +474,6 @@ export class GameScene extends Phaser.Scene {
       animateGear(e.gear, dt, -e.vx * 0.01, -e.vy * 0.004, Math.min(1.15, 0.25 + spd / 9));
     }
 
-    s.bullets.sync([this.eb, this.pb], dt);
+    s.bullets.sync([this.eb, this.pb, this.purge], dt);
   }
 }

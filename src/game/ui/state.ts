@@ -17,10 +17,13 @@ export interface HudState {
   hi: number;
   armor: number;
   maxArmor: number;
+  burst: number;
+  maxBurst: number;
   wave: number;
   focus: boolean;
   paused: boolean;
   flashT: number; // red damage vignette timer
+  burstFlashT: number; // cyan burst vignette timer
   bossHp: number;
   bossMax: number;
   bossName: string;
@@ -36,10 +39,13 @@ export const hud: HudState = {
   hi: 0,
   armor: 4,
   maxArmor: 4,
+  burst: 3,
+  maxBurst: 3,
   wave: 0,
   focus: false,
   paused: false,
   flashT: 0,
+  burstFlashT: 0,
   bossHp: 0,
   bossMax: 0,
   bossName: '',

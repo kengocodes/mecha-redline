@@ -92,10 +92,16 @@ function drawTitle(g: Ctx): void {
   }
 
   // controls
-  panel(g, 28, UI_H - 158, 320, 126);
-  tx(g, 'CONTROLS ── 操作', 44, UI_H - 136, 14, CYAN, 'left', 3);
-  const lines = ['WASD / ARROWS ── MOVE', 'MOUSE ── AIM · FIRE', 'SHIFT ── FOCUS', 'P ── PAUSE'];
-  lines.forEach((s, i) => tx(g, s, 44, UI_H - 111 + i * 21, 14, DIM, 'left', 2));
+  panel(g, 28, UI_H - 178, 320, 146);
+  tx(g, 'CONTROLS ── 操作', 44, UI_H - 156, 14, CYAN, 'left', 3);
+  const lines = [
+    'WASD / ARROWS ── MOVE',
+    'MOUSE ── AIM · FIRE',
+    'SHIFT ── FOCUS',
+    'Z / X ── BURST',
+    'P ── PAUSE',
+  ];
+  lines.forEach((s, i) => tx(g, s, 44, UI_H - 131 + i * 21, 14, DIM, 'left', 2));
 
   panel(g, UI_W - 268, 28, 240, 52);
   tx(g, 'HI-SCORE', UI_W - 252, 46, 12, DIM, 'left', 3);
@@ -113,6 +119,7 @@ function drawBattle(g: Ctx): void {
     drawScore(g);
     drawMission(g);
     drawArmor(g);
+    drawBurst(g);
     drawMsg(g);
   }
   if (hud.phase === 'boss' && hud.bossMax > 0) drawBossBar(g);
@@ -130,6 +137,17 @@ function drawBattle(g: Ctx): void {
     g.fillRect(0, UI_H - b, UI_W, b);
     g.fillRect(0, 0, b, UI_H);
     g.fillRect(UI_W - b, 0, b, UI_H);
+  }
+
+  // burst vignette — thin cyan frame pulse
+  if (hud.burstFlashT > 0) {
+    const a = Math.min(0.5, hud.burstFlashT * 1.1);
+    g.strokeStyle = `rgba(127, 251, 255, ${a})`;
+    g.lineWidth = 3;
+    g.strokeRect(10.5, 10.5, UI_W - 21, UI_H - 21);
+    g.strokeStyle = `rgba(127, 251, 255, ${a * 0.35})`;
+    g.lineWidth = 1;
+    g.strokeRect(18.5, 18.5, UI_W - 37, UI_H - 37);
   }
 
   if (hud.paused) {
@@ -167,6 +185,29 @@ function drawArmor(g: Ctx): void {
   }
   if (hud.focus) {
     tx(g, 'FOCUS', 232, UI_H - 47, 14, AMBER, 'left', 3);
+  }
+}
+
+function drawBurst(g: Ctx): void {
+  const lit = hud.burstFlashT > 0;
+  panel(g, 300, UI_H - 88, 236, 64);
+  tx(g, 'BURST', 316, UI_H - 68, 13, lit ? CYAN : DIM, 'left', 3);
+  tx(g, lit ? '解放' : 'バースト', 380, UI_H - 68, 13, lit ? CYAN : DIM, 'left', 2);
+  for (let i = 0; i < hud.maxBurst; i++) {
+    const x = 316 + i * 52;
+    const on = i < hud.burst;
+    // Diamond pip — reads distinct from armor bars.
+    g.fillStyle = on ? (lit ? '#c8ffff' : CYAN) : 'rgba(127, 251, 255, 0.12)';
+    g.beginPath();
+    g.moveTo(x + 14, UI_H - 56);
+    g.lineTo(x + 28, UI_H - 48);
+    g.lineTo(x + 14, UI_H - 40);
+    g.lineTo(x, UI_H - 48);
+    g.closePath();
+    g.fill();
+    g.strokeStyle = lit && on ? CYAN : LINE;
+    g.lineWidth = 1;
+    g.stroke();
   }
 }
 

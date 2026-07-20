@@ -18,6 +18,8 @@ const CAPTURE = new Set([
   'ArrowLeft',
   'ArrowRight',
   'KeyP',
+  'KeyZ',
+  'KeyX',
   'Escape',
 ]);
 
@@ -101,4 +103,9 @@ export function firing(): boolean {
 
 export function focusing(): boolean {
   return isDown('ShiftLeft') || isDown('ShiftRight');
+}
+
+/** One-shot BURST special press (Z or X). */
+export function takeBurst(): boolean {
+  return takeKey('KeyZ') || takeKey('KeyX');
 }

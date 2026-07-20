@@ -89,7 +89,7 @@ export class Bullets3D {
 
         this.dummy.position.set(b.x, BULLET_H, b.y);
 
-        let pulse = 1;
+        let pulse = b.scale ?? 1;
         if (b.kind === BK.player) {
           this.dummy.rotation.set(0, Math.atan2(b.vx, b.vy), 0);
         } else if (b.kind === BK.shot) {
@@ -97,7 +97,7 @@ export class Bullets3D {
           this.dummy.rotation.set(0, Math.atan2(b.vx, b.vy), this.t * 5 + b.t * 4);
         } else {
           this.dummy.rotation.set(this.t * 2.4 + b.t, this.t * 3.6 + b.t * 1.8, 0);
-          pulse = 1 + 0.12 * Math.sin(this.t * 9 + b.t * 5);
+          pulse *= 1 + 0.12 * Math.sin(this.t * 9 + b.t * 5);
         }
 
         this.write(pool.core, i, pulse);
