@@ -63,6 +63,9 @@ export interface SelectState {
 
 export const sel: SelectState = { ix: 0, hover: -1, swapT: 9, confirmT: -1 };
 
+/** Title attract carousel: TitleScene advances it, the overlay paints it. */
+export const attract = { ix: 0, swapT: 9 };
+
 export function setPhase(p: Phase): void {
   hud.phase = p;
   hud.t = 0;

@@ -5,7 +5,7 @@
 import { UI_H, UI_W } from '../../core/const';
 import { ROSTER } from '../roster';
 import { getPilotArt } from './pilotArt';
-import { hud, sel } from './state';
+import { attract, hud, sel } from './state';
 import { getTitleArt } from './titleArt';
 
 const CYAN = '#7ffbff';
@@ -88,6 +88,23 @@ function drawTitle(g: Ctx): void {
   const t = hud.t;
   const art = getTitleArt();
   const blink = Math.floor(t * 1.5) % 2 === 0;
+  const def = ROSTER[attract.ix];
+  const gearArt = getPilotArt(def.id);
+
+  // Ghosted gear plate drifting behind the right side of the hangar —
+  // poster-art depth for the unit currently holding the pad.
+  if (gearArt) {
+    const plate = gearArt.plate;
+    const ph = 680;
+    const pw = (plate.width / plate.height) * ph;
+    g.save();
+    g.translate(956 + Math.sin(t * 0.26) * 6, 402 + Math.sin(t * 0.4) * 9);
+    g.rotate(-0.04);
+    g.globalAlpha = Math.min(0.15, attract.swapT * 0.4);
+    g.drawImage(plate, -pw / 2, -ph / 2, pw, ph);
+    g.restore();
+    g.globalAlpha = 1;
+  }
 
   // Cabinet header — ranking left, free-play right.
   tx(g, 'HI-SCORE', 36, 26, 11, DIM, 'left', 3);
@@ -117,21 +134,75 @@ function drawTitle(g: Ctx): void {
       g.globalCompositeOperation = 'source-over';
     }
     g.globalAlpha = 1;
+    if (t > 1.2) drawLogoSheen(g, art.logo, lx, ly, logoW, logoH, t);
   } else {
     tx(g, 'MECHA REDLINE', UI_W / 2, 96, 36, FG, 'center', 8);
   }
 
-  if (t > 0.7 && blink) {
-    tx(g, 'PRESS START BUTTON', UI_W / 2, UI_H - 56, 20, CYAN, 'center', 5);
+  // Attract spec card: the unit holding the pad, typed in on each swap.
+  const ca = Math.min(1, Math.max(0, (attract.swapT - 0.08) * 3.5));
+  g.globalAlpha = ca;
+  tx(g, `UNIT ${def.unitNo}`, 84, 396, 12, DIM, 'left', 4);
+  tx(g, def.callsign, 84, 428, 30, FG, 'left', 6);
+  tx(g, def.kana, 84, 458, 13, CYAN, 'left', 4);
+  tx(g, def.role, 84, 482, 12, DIM, 'left', 2);
+  rule(g, 84, 500, 190, RED);
+  tx(g, `PILOT ── ${def.pilot}`, 84, 522, 11, DIM, 'left', 2);
+  g.globalAlpha = 1;
+
+  if (t > 0.7) {
+    rule(g, UI_W / 2 - 190, 640, 380, LINE);
+    if (blink) tx(g, 'PRESS START BUTTON', UI_W / 2, 664, 20, CYAN, 'center', 5);
+    tx(g, 'ゲームスタート ── ボタンを押せ', UI_W / 2, 688, 11, DIM, 'center', 3);
   }
 
-  tx(g, '© NEO-KYOTO GARRISON  1998', UI_W / 2, UI_H - 16, 11, DIM, 'center', 2);
+  // Scrolling cabinet ticker along the very bottom.
+  g.font = '11px DotGothic16, monospace';
+  const tick =
+    '© NEO-KYOTO GARRISON 1998 ── SECTOR 7 PERIMETER STATUS: RED ── 第七区画防衛線 ── ALL GEAR PILOTS REPORT TO HANGAR BAY 03 ── FREE PLAY ── フリープレイ ── INSERT CREDIT // ';
+  const tw = g.measureText(tick).width;
+  tx(g, tick, UI_W - ((t * 55) % (tw + UI_W)), 708, 11, DIM, 'left', 1);
 
-  // Soft CRT scanlines — title only.
-  g.globalAlpha = 0.055;
-  g.fillStyle = '#02050c';
-  for (let y = 0; y < UI_H; y += 3) g.fillRect(0, y, UI_W, 1);
-  g.globalAlpha = 1;
+  crtScanlines(g);
+}
+
+let sheenBuf: HTMLCanvasElement | null = null;
+
+/** Periodic light sweep across the logo, masked to its glyphs. */
+function drawLogoSheen(
+  g: Ctx,
+  logo: HTMLCanvasElement,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  t: number,
+): void {
+  const u = ((t % 6) / 6) / 0.2; // sweep runs the first 20% of each 6s cycle
+  if (u > 1) return;
+  if (!sheenBuf) sheenBuf = document.createElement('canvas');
+  const bw = Math.ceil(w);
+  const bh = Math.ceil(h);
+  if (sheenBuf.width !== bw || sheenBuf.height !== bh) {
+    sheenBuf.width = bw;
+    sheenBuf.height = bh;
+  }
+  const sc = sheenBuf.getContext('2d');
+  if (!sc) return;
+  sc.globalCompositeOperation = 'source-over';
+  sc.clearRect(0, 0, bw, bh);
+  sc.drawImage(logo, 0, 0, bw, bh);
+  const bx = (u * 1.5 - 0.25) * bw;
+  const grad = sc.createLinearGradient(bx - bw * 0.16, 0, bx + bw * 0.16, 0);
+  grad.addColorStop(0, 'rgba(255, 255, 255, 0)');
+  grad.addColorStop(0.5, 'rgba(255, 255, 255, 0.6)');
+  grad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+  sc.globalCompositeOperation = 'source-in';
+  sc.fillStyle = grad;
+  sc.fillRect(0, 0, bw, bh);
+  g.globalCompositeOperation = 'lighter';
+  g.drawImage(sheenBuf, x, y);
+  g.globalCompositeOperation = 'source-over';
 }
 
 // ---- hangar select -------------------------------------------------------
