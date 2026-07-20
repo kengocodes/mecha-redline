@@ -58,6 +58,7 @@ const RAVEN_GEAR: GearOptions = {
   shoulderCannons: false,
   wings: false,
   bulk: 0.85,
+  flashColor: 0xffd9a0, // gold tracer wash
 };
 
 const IVORY_GEAR: GearOptions = {
@@ -78,6 +79,7 @@ const IVORY_GEAR: GearOptions = {
   shoulderCannons: false,
   wings: true,
   bulk: 0.92,
+  flashColor: 0xe6ffff, // icy lance flare
 };
 
 const BASALT_GEAR: GearOptions = {
@@ -99,6 +101,7 @@ const BASALT_GEAR: GearOptions = {
   wings: false,
   bulk: 1.22,
   focusMarker: true,
+  flashColor: 0xffc27a, // furnace-orange cannon blast
 };
 
 // ---- roster --------------------------------------------------------------

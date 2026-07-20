@@ -2,7 +2,7 @@
 // their gear models are positioned by GameScene after each sim step.
 
 import { BK, type Bullet, SCORE } from '../../core/const';
-import type { Gear } from '../../render/gearFactory';
+import { type Gear, muzzleArenaPos } from '../../render/gearFactory';
 import { aimAngle, emit, fan, ring } from '../systems/patterns';
 
 export type EnemyKind = 'husk' | 'lancer' | 'boss';
@@ -80,15 +80,32 @@ export function updateEnemy(e: Enemy, c: SimCtx, dt: number): void {
   e.y += e.vy * dt;
 }
 
+/**
+ * Aimed-fire spawn point: pose the gear to this sim step (GameScene will do
+ * the same before render) and read the barrel tip so shots visibly leave
+ * the weapon instead of the chest.
+ */
+function armMuzzle(e: Enemy, c: SimCtx, ix = 0): { x: number; y: number } {
+  const g = e.gear;
+  g.root.position.set(e.x, 0, e.y);
+  const a = aimAngle(e.x, e.y, c.px, c.py);
+  g.root.rotation.y = Math.atan2(Math.cos(a), Math.sin(a));
+  return muzzleArenaPos(g, ix) ?? { x: e.x, y: e.y };
+}
+
 /** Grunt: drifts down with a sine weave, lobs aimed single shots. */
 function updateHusk(e: Enemy, c: SimCtx, _dt: number): void {
   const settle = Math.min(1, e.t / 2.5);
   e.vy = e.t > e.life ? 16 : 9 - 6 * settle;
   e.vx = Math.sin(e.t * 1.4 + e.seed) * 6;
-  if (c.playerAlive && e.fireT > 2.1 && e.t > 1.2 && e.y > -26 && e.y < 12) {
+  const inBand = e.y > -26 && e.y < 12;
+  // Raise the arm cannon ~0.7s before the shot — a readable tell.
+  e.gear.aimTarget = c.playerAlive && e.t < e.life && e.t > 0.9 && e.fireT > 1.4 && inBand ? 1 : 0;
+  if (c.playerAlive && e.fireT > 2.1 && e.t > 1.2 && inBand) {
     e.fireT = 0;
     e.muzzleT = 0.07;
-    emit(c.eb, e.x, e.y, aimAngle(e.x, e.y, c.px, c.py), 20, BK.shot);
+    const m = armMuzzle(e, c);
+    emit(c.eb, m.x, m.y, aimAngle(e.x, e.y, c.px, c.py), 20, BK.shot);
   }
 }
 
@@ -100,6 +117,7 @@ function updateLancer(e: Enemy, c: SimCtx, dt: number): void {
     e.ai.ringT = 0;
   }
   if (e.t > e.life) {
+    e.gear.aimTarget = 0;
     e.vy = -14; // leave the way it came
     return;
   }
@@ -107,11 +125,14 @@ function updateLancer(e: Enemy, c: SimCtx, dt: number): void {
   e.vy = (holdY - e.y) * 1.4;
   e.vx = Math.cos(e.t * 0.7 + e.seed) * 5;
   e.ai.ringT += dt;
+  // Cannon comes up ahead of the fan volley (rings fire from the frame).
+  e.gear.aimTarget = c.playerAlive && e.fireT > 2.0 && e.t > 1.4 ? 1 : 0;
   if (!c.playerAlive) return;
   if (e.fireT > 2.7 && e.t > 2) {
     e.fireT = 0;
     e.muzzleT = 0.07;
-    fan(c.eb, e.x, e.y + 1, aimAngle(e.x, e.y, c.px, c.py), 5, 0.65, 17, BK.shot);
+    const m = armMuzzle(e, c);
+    fan(c.eb, m.x, m.y, aimAngle(e.x, e.y, c.px, c.py), 5, 0.65, 17, BK.shot);
   }
   if (e.ai.ringT > 4.6 && e.t > 3.2) {
     e.ai.ringT = 0;
@@ -163,7 +184,9 @@ function updateBoss(e: Enemy, c: SimCtx, dt: number): void {
     a.burst++;
     e.muzzleT = 0.07;
     const n = phase === 1 ? 5 : 7;
-    fan(c.eb, e.x, e.y + 2.5, aimAngle(e.x, e.y, c.px, c.py), n, 0.8, 19 * rate, BK.shot);
+    // Volleys alternate between the two over-shoulder barrels.
+    const m = armMuzzle(e, c, a.burst % 2);
+    fan(c.eb, m.x, m.y, aimAngle(e.x, e.y, c.px, c.py), n, 0.8, 19 * rate, BK.shot);
   }
   if (a.burst === 3 && a.cycle > 2.6) {
     a.burst = 4;

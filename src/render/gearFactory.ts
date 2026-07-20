@@ -4,6 +4,7 @@
 // wing binders. One parametric humanoid builder feeds every unit type.
 
 import * as THREE from 'three';
+import { BULLET_H, CAM_ELEV } from '../core/const';
 
 export interface GearPalette {
   armor: number; // main plating
@@ -27,6 +28,8 @@ export interface GearOptions {
   bulk: number; // 1 = standard frame; widens torso + shoulders
   /** Focus-mode hitbox dot; defaults to rifle (player frames without one opt in). */
   focusMarker?: boolean;
+  /** Muzzle flash tint; defaults per weapon (cyan rifle, amber cannon). */
+  flashColor?: number;
 }
 
 export interface Gear {
@@ -43,6 +46,17 @@ export interface Gear {
   muzzleT: number;
   recoil: number;
   rifleGrp: THREE.Group | null;
+  head: THREE.Group;
+  legs: THREE.Group[];
+  /** Weapon arm that levels to fire: rifle right arm or cannon left arm. */
+  aimArm: THREE.Group | null;
+  aimRest: number; // arm x-rotation, weapon lowered
+  aimRaise: number; // arm x-rotation, weapon levelled
+  aimSide: number; // +1 right-hand weapon, -1 left; torso recoil twist direction
+  swingArms: THREE.Group[]; // free arms, idle pendulum sway
+  guns: THREE.Group[]; // boss over-shoulder mounts, pitch with recoil
+  aim: number; // 0 lowered → 1 levelled (eased toward aimTarget)
+  aimTarget: number;
 }
 
 const geoCache = new Map<string, THREE.BufferGeometry>();
@@ -244,11 +258,13 @@ export function buildGear(o: GearOptions): Gear {
   root.add(shadow);
 
   // ---- legs: long, calf-flared shins, trim shin guards ----
+  const legs: THREE.Group[] = [];
   for (const s of [-1, 1]) {
     const leg = new THREE.Group();
     leg.position.set(s * 0.52 * bulk, 2.95, 0);
     leg.rotation.x = 0.14; // trail slightly behind while hovering
     att.add(leg);
+    legs.push(leg);
 
     put(leg, frustumBox(0.46, 0.5, 0.38, 0.44, 1.0), armor, 0, -0.5, 0); // thigh
     put(leg, boxGeo(0.32, 0.32, 0.34), dark, 0, -1.05, 0.02); // knee joint
@@ -309,6 +325,11 @@ export function buildGear(o: GearOptions): Gear {
   }
 
   // ---- shoulders + arms: angular pauldrons, silver cuffs ----
+  let aimArm: THREE.Group | null = null;
+  let aimRest = -0.12;
+  let aimRaise = -0.62;
+  let aimSide = 0;
+  const swingArms: THREE.Group[] = [];
   for (const s of [-1, 1]) {
     const sx = s * 0.9 * bulk;
 
@@ -318,19 +339,22 @@ export function buildGear(o: GearOptions): Gear {
 
     const arm = new THREE.Group();
     arm.position.set(sx, 4.15, 0);
-    // Right arm (s=1) levels the rifle; left arm hangs relaxed.
-    const pose = s === 1 && o.rifle ? -0.62 : -0.12;
-    arm.rotation.x = pose;
+    arm.rotation.x = -0.12; // hangs relaxed; animateGear drives weapon arms
     att.add(arm);
 
     put(arm, boxGeo(0.3, 0.58, 0.32), dark, 0, -0.36, 0); // upper arm
     put(arm, cylGeo(0.18, 0.18, 0.36, 6), trim, 0, -0.7, 0, 0, 0, Math.PI / 2); // elbow
-    if (s === -1 && o.armCannon) {
-      // Grunt left forearm is a stubby cannon.
+    const cannon = s === -1 && o.armCannon;
+    if (cannon) {
+      // Left forearm is a stubby cannon; the whole arm swings up to fire.
       put(arm, cylGeo(0.26, 0.3, 0.85, 6), dark, 0, -1.15, 0);
       put(arm, cylGeo(0.13, 0.13, 0.5, 6), trim, 0, -1.52, 0.08, 0.2, 0, 0);
       put(arm, cylGeo(0.09, 0.09, 0.12, 6), glowMat(p.thrust), 0, -1.74, 0.12, 0.2, 0, 0);
-      muzzles.push(muzzleFlash(arm, 0, -1.82, 0.14, 0xffd9aa, Math.PI / 2 + 0.2));
+      muzzles.push(muzzleFlash(arm, 0, -1.82, 0.14, o.flashColor ?? 0xffd9aa, Math.PI / 2 + 0.2));
+      aimArm = arm;
+      aimRest = -0.12;
+      aimRaise = -1.38; // barrel level with its 0.2 forward cant
+      aimSide = -1;
     } else {
       put(arm, frustumBox(0.34, 0.36, 0.46, 0.48, 0.75), armor, 0, -1.1, 0); // flared forearm
       put(arm, boxGeo(0.42, 0.12, 0.44), trim, 0, -1.46, 0); // wrist cuff
@@ -338,11 +362,12 @@ export function buildGear(o: GearOptions): Gear {
     }
 
     if (s === 1 && o.rifle) {
-      // Rifle held level (counter-rotate the arm pose).
+      // Rifle rides fixed at the raised counter-angle: level when the arm is
+      // up at aimRaise, tipped down in the rest pose between fights.
       const rifle = new THREE.Group();
       rifle.position.set(0.05, -1.74, 0.1);
       rifle.userData.baseZ = 0.1; // recoil slides the whole rifle back
-      rifle.rotation.x = -pose;
+      rifle.rotation.x = 0.62;
       arm.add(rifle);
       put(rifle, boxGeo(0.18, 0.32, 1.0), dark, 0, 0.04, 0.1); // receiver
       put(rifle, cylGeo(0.09, 0.09, 1.5, 6), dark, 0, 0.08, 1.15, Math.PI / 2, 0, 0); // barrel
@@ -351,12 +376,20 @@ export function buildGear(o: GearOptions): Gear {
       put(rifle, boxGeo(0.07, 0.1, 0.6), trim, 0, 0.28, 0.35); // sight rail
       put(rifle, cylGeo(0.105, 0.105, 0.16, 6), glowMat(p.thrust), 0, 0.08, 1.92, Math.PI / 2, 0, 0); // muzzle ring
       // Flash + spawn anchor sit just past the barrel end (local +Z).
-      muzzles.push(muzzleFlash(rifle, 0, 0.08, 2.08, 0xc8ffff));
+      muzzles.push(muzzleFlash(rifle, 0, 0.08, 2.08, o.flashColor ?? 0xc8ffff));
       rifleGrp = rifle;
+      aimArm = arm;
+      aimRest = -0.34;
+      aimRaise = -0.62;
+      aimSide = 1;
+      arm.rotation.x = aimRest;
+    } else if (!cannon) {
+      swingArms.push(arm);
     }
   }
 
   // ---- over-shoulder cannons (boss) ----
+  const guns: THREE.Group[] = [];
   if (o.shoulderCannons) {
     for (const s of [-1, 1]) {
       const gun = new THREE.Group();
@@ -366,7 +399,8 @@ export function buildGear(o: GearOptions): Gear {
       put(gun, boxGeo(0.4, 0.46, 1.0), dark, 0, 0, -0.2);
       put(gun, cylGeo(0.15, 0.18, 1.7, 6), trim, 0, 0.06, 0.9, Math.PI / 2, 0, 0);
       put(gun, cylGeo(0.1, 0.1, 0.16, 6), glowMat(p.glow), 0, 0.06, 1.78, Math.PI / 2, 0, 0);
-      muzzles.push(muzzleFlash(gun, 0, 0.06, 1.9, 0xffd9aa));
+      muzzles.push(muzzleFlash(gun, 0, 0.06, 1.9, o.flashColor ?? 0xffd9aa));
+      guns.push(gun);
     }
   }
 
@@ -482,20 +516,37 @@ export function buildGear(o: GearOptions): Gear {
     muzzleT: 0,
     recoil: 0,
     rifleGrp,
+    head,
+    legs,
+    aimArm,
+    aimRest,
+    aimRaise,
+    aimSide,
+    swingArms,
+    guns,
+    aim: 0,
+    aimTarget: 0,
   };
 }
 
 const _muzzleWorld = new THREE.Vector3();
+/** Screen-vertical arena drift per unit of height above the bullet plane. */
+const CAM_DROP = 1 / Math.tan((CAM_ELEV * Math.PI) / 180);
 
 /**
- * Arena-plane spawn point for the first weapon muzzle (gameplay x/y).
+ * Arena-plane spawn point for a weapon muzzle (gameplay x/y).
  * Caller should pose `g.root` (position + yaw) before calling.
+ *
+ * The muzzle sits ~2u above the plane bullets render on, so we project it
+ * along the camera's view line rather than straight down — a plain ground
+ * drop lands ~1.3u down-screen of the barrel tip, which reads fine firing
+ * up/down (along the tracer) but visibly misses the rifle firing sideways.
  */
-export function muzzleArenaPos(g: Gear): { x: number; y: number } | null {
-  const tip = g.muzzles[0];
+export function muzzleArenaPos(g: Gear, ix = 0): { x: number; y: number } | null {
+  const tip = g.muzzles[ix];
   if (!tip) return null;
   tip.getWorldPosition(_muzzleWorld);
-  return { x: _muzzleWorld.x, y: _muzzleWorld.z };
+  return { x: _muzzleWorld.x, y: _muzzleWorld.z - (_muzzleWorld.y - BULLET_H) * CAM_DROP };
 }
 
 /**
@@ -505,11 +556,33 @@ export function muzzleArenaPos(g: Gear): { x: number; y: number } | null {
  */
 export function animateGear(g: Gear, dt: number, bank = 0, pitch = 0, boost = 0.5): void {
   g.t += dt;
-  g.att.position.y = g.hover + Math.sin(g.t * 2.4) * 0.09;
+  const b = Math.max(0, boost);
+  const b1 = Math.min(1, b);
+  // Bob settles as speed rises — floaty at rest, planted in a hard burn.
+  g.att.position.y = g.hover + Math.sin(g.t * 2.4) * 0.09 * (1 - 0.45 * b1);
   const k = Math.min(1, dt * 10);
   g.att.rotation.z += (bank - g.att.rotation.z) * k;
   g.att.rotation.x += (pitch - g.recoil * 0.05 - g.att.rotation.x) * k;
-  const b = Math.max(0, boost);
+  // Torso counter-twists against the weapon-side kick.
+  g.att.rotation.y = g.aimSide * g.recoil * 0.05;
+
+  // Weapon arm eases between lowered and levelled; recoil jolts it upward.
+  g.aim += (g.aimTarget - g.aim) * Math.min(1, dt * (g.aimTarget > g.aim ? 12 : 3.2));
+  if (g.aimArm) {
+    const a = g.aim * g.aim * (3 - 2 * g.aim);
+    g.aimArm.rotation.x = g.aimRest + (g.aimRaise - g.aimRest) * a - g.recoil * 0.12 * a;
+  }
+  // Free arms pendulum with the bob and tuck back at speed.
+  for (let i = 0; i < g.swingArms.length; i++) {
+    g.swingArms[i].rotation.x = -0.12 + Math.sin(g.t * 2.4 + 1.9 + i * Math.PI) * 0.055 - b1 * 0.16;
+  }
+  // Legs trail harder in a burn, scissoring gently out of phase.
+  for (let i = 0; i < g.legs.length; i++) {
+    g.legs[i].rotation.x = 0.14 + Math.min(1.2, b) * 0.3 + Math.sin(g.t * 2.4 + i * Math.PI) * 0.05;
+  }
+  // Head leads into the turn, with a slow idle scan on top.
+  g.head.rotation.y = bank * 0.7 + Math.sin(g.t * 0.6) * 0.08;
+  for (const gun of g.guns) gun.rotation.x = -0.08 - g.recoil * 0.22;
   // Pilot light at rest; speed stretches a modest rear plume.
   const len = 0.45 + b * 1.1;
   const fat = 0.75 + Math.min(1.2, b) * 0.35;
@@ -533,7 +606,8 @@ export function animateGear(g: Gear, dt: number, bank = 0, pitch = 0, boost = 0.
     );
   }
   for (const w of g.wings) {
-    w.rotation.z = w.userData.baseZ + Math.sin(g.t * 1.8) * 0.06; // gentle flex
+    // Gentle flex, fanning wider under boost.
+    w.rotation.z = w.userData.baseZ * (1 + Math.min(1.2, b) * 0.22) + Math.sin(g.t * 1.8) * 0.06;
   }
   if (g.focusDot) g.focusDot.rotation.y += dt * 5;
 
@@ -573,6 +647,7 @@ export const VALKYR: GearOptions = {
   shoulderCannons: false,
   wings: true,
   bulk: 1,
+  flashColor: 0xc8ffff,
 };
 
 export const HUSK: GearOptions = {

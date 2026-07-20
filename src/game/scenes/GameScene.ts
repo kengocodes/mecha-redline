@@ -119,6 +119,7 @@ export class GameScene extends Phaser.Scene {
 
     this.pGear = buildGear(pilot.gear);
     s.battleGroup.add(this.pGear.root);
+    s.bullets.setPlayerStyle(pilot.id);
 
     hud.score = 0;
     hud.armor = this.stats.armor;
@@ -278,7 +279,15 @@ export class GameScene extends Phaser.Scene {
 
     p.fireCd -= dt;
     const canFire = hud.phase !== 'intro';
-    if (canFire && firing() && p.fireCd <= 0) {
+    const wantFire = canFire && firing();
+    // Weapon arm levels while the trigger is held, eases down after.
+    this.pGear.aimTarget = wantFire ? 1 : 0;
+    // Cannon frames (Basalt) hold the first shot until the arm is most of
+    // the way up (~0.1s) so the raise reads; the arm stays up mid-fight,
+    // so sustained combat pays this only once.
+    const cannonGate = this.pGear.aimArm !== null && this.pGear.rifleGrp === null;
+    const armReady = !cannonGate || this.pGear.aim > 0.55;
+    if (wantFire && armReady && p.fireCd <= 0) {
       const foc = focusing();
       p.fireCd = 1 / (foc ? this.stats.focusFireRate : this.stats.fireRate);
       const spread = ((foc ? this.stats.focusSpreadDeg : this.stats.spreadDeg) * Math.PI) / 180;
@@ -480,6 +489,7 @@ export class GameScene extends Phaser.Scene {
       setGearFlash(e.gear, e.flashT > 0);
       if (e.muzzleT > 0) {
         e.gear.muzzleT = e.muzzleT; // consume the pending-flash message
+        e.gear.recoil = Math.min(1, e.gear.recoil + 0.8); // arm/gun kick
         e.muzzleT = 0;
       }
       const spd = Math.hypot(e.vx, e.vy);

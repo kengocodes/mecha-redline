@@ -1,6 +1,7 @@
 // Instanced bullet rendering: dual-layer additive pools (hot core + soft
 // halo) so tracers, needles and orbs read as plasma against the void.
-// The sim owns plain bullet arrays; this just writes matrices.
+// The sim owns plain bullet arrays; this just writes matrices. The player
+// pool is restyled per pilot so each gear's fire has its own signature.
 
 import * as THREE from 'three';
 import { BK, BULLET_H, type Bullet } from '../core/const';
@@ -21,6 +22,48 @@ interface Pool {
   cap: number;
 }
 
+/** How a player bullet moves visually — spawn/collision stays identical. */
+type PlayerAnim = 'bolt' | 'tracer' | 'needle' | 'slug';
+
+interface StyleLayer {
+  geo: () => THREE.BufferGeometry;
+  color: number;
+  opacity: number;
+  s: [number, number, number];
+}
+
+interface PlayerStyle {
+  anim: PlayerAnim;
+  core: StyleLayer;
+  glow: StyleLayer;
+}
+
+// One signature per pilot: VALKYR's clean cyan bolt is the baseline; RAVEN
+// sprays short gold tracers, IVORY throws a long pale lance, BASALT lobs
+// fat tumbling furnace slugs. Keyed by pilot id, valkyr is the fallback.
+const PLAYER_STYLES: Record<string, PlayerStyle> = {
+  valkyr: {
+    anim: 'bolt',
+    core: { geo: () => new THREE.BoxGeometry(0.14, 0.14, 1.75), color: 0xeaffff, opacity: 1, s: [1, 1, 1] },
+    glow: { geo: () => new THREE.BoxGeometry(0.48, 0.48, 2.05), color: 0x3ad8ff, opacity: 0.42, s: [1, 1, 1] },
+  },
+  raven: {
+    anim: 'tracer',
+    core: { geo: () => new THREE.BoxGeometry(0.17, 0.17, 1.05), color: 0xfff2d0, opacity: 1, s: [1, 1, 1] },
+    glow: { geo: () => new THREE.BoxGeometry(0.46, 0.46, 1.4), color: 0xffa640, opacity: 0.5, s: [1, 1, 1] },
+  },
+  ivory: {
+    anim: 'needle',
+    core: { geo: () => new THREE.BoxGeometry(0.09, 0.09, 2.7), color: 0xf4ffff, opacity: 1, s: [1, 1, 1] },
+    glow: { geo: () => new THREE.BoxGeometry(0.27, 0.27, 3.15), color: 0x9fe8ff, opacity: 0.36, s: [1, 1, 1] },
+  },
+  basalt: {
+    anim: 'slug',
+    core: { geo: () => new THREE.IcosahedronGeometry(0.32, 0), color: 0xfff0d0, opacity: 1, s: [1, 1, 1.4] },
+    glow: { geo: () => new THREE.IcosahedronGeometry(0.55, 0), color: 0xff8a3c, opacity: 0.48, s: [1, 1, 1.45] },
+  },
+};
+
 function plasmaMat(color: number, opacity: number): THREE.MeshBasicMaterial {
   return new THREE.MeshBasicMaterial({
     color,
@@ -35,47 +78,74 @@ export class Bullets3D {
   private pools: Record<BK, Pool>;
   private dummy = new THREE.Object3D();
   private t = 0;
+  private scene: THREE.Scene;
+  private playerStyle: PlayerStyle;
+  private playerAnim: PlayerAnim;
 
   constructor(scene: THREE.Scene) {
-    const mk = (
-      geo: THREE.BufferGeometry,
-      color: number,
-      opacity: number,
-      cap: number,
-      sx: number,
-      sy: number,
-      sz: number,
-      order: number,
-    ): Layer => {
-      const mesh = new THREE.InstancedMesh(geo, plasmaMat(color, opacity), cap);
-      mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-      mesh.frustumCulled = false;
-      mesh.count = 0;
-      mesh.renderOrder = order;
-      scene.add(mesh);
-      return { mesh, sx, sy, sz };
-    };
+    this.scene = scene;
+    this.playerStyle = PLAYER_STYLES.valkyr;
+    this.playerAnim = this.playerStyle.anim;
 
-    // Player: long cyan bolt — white-hot core, soft cyan bloom.
     // Shot: red diamond needle flying point-first with a rolling facet catch.
     // Orb: amber low-poly gem with a fat halo that breathes.
     this.pools = {
       [BK.player]: {
         cap: CAPS[BK.player],
-        core: mk(new THREE.BoxGeometry(0.14, 0.14, 1.75), 0xeaffff, 1, CAPS[BK.player], 1, 1, 1, 21),
-        glow: mk(new THREE.BoxGeometry(0.48, 0.48, 2.05), 0x3ad8ff, 0.42, CAPS[BK.player], 1, 1, 1, 20),
+        core: this.mkLayer(this.playerStyle.core, CAPS[BK.player], 21),
+        glow: this.mkLayer(this.playerStyle.glow, CAPS[BK.player], 20),
       },
       [BK.shot]: {
         cap: CAPS[BK.shot],
-        core: mk(new THREE.OctahedronGeometry(0.36), 0xffe8ee, 1, CAPS[BK.shot], 0.42, 0.42, 1.65, 21),
-        glow: mk(new THREE.OctahedronGeometry(0.52), 0xff4560, 0.48, CAPS[BK.shot], 0.72, 0.72, 1.85, 20),
+        core: this.mk(new THREE.OctahedronGeometry(0.36), 0xffe8ee, 1, CAPS[BK.shot], 0.42, 0.42, 1.65, 21),
+        glow: this.mk(new THREE.OctahedronGeometry(0.52), 0xff4560, 0.48, CAPS[BK.shot], 0.72, 0.72, 1.85, 20),
       },
       [BK.orb]: {
         cap: CAPS[BK.orb],
-        core: mk(new THREE.IcosahedronGeometry(0.4, 0), 0xfff2cc, 1, CAPS[BK.orb], 1, 1, 1, 21),
-        glow: mk(new THREE.IcosahedronGeometry(0.7, 0), 0xffb347, 0.38, CAPS[BK.orb], 1, 1, 1, 20),
+        core: this.mk(new THREE.IcosahedronGeometry(0.4, 0), 0xfff2cc, 1, CAPS[BK.orb], 1, 1, 1, 21),
+        glow: this.mk(new THREE.IcosahedronGeometry(0.7, 0), 0xffb347, 0.38, CAPS[BK.orb], 1, 1, 1, 20),
       },
     };
+  }
+
+  private mk(
+    geo: THREE.BufferGeometry,
+    color: number,
+    opacity: number,
+    cap: number,
+    sx: number,
+    sy: number,
+    sz: number,
+    order: number,
+  ): Layer {
+    const mesh = new THREE.InstancedMesh(geo, plasmaMat(color, opacity), cap);
+    mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    mesh.frustumCulled = false;
+    mesh.count = 0;
+    mesh.renderOrder = order;
+    this.scene.add(mesh);
+    return { mesh, sx, sy, sz };
+  }
+
+  private mkLayer(l: StyleLayer, cap: number, order: number): Layer {
+    return this.mk(l.geo(), l.color, l.opacity, cap, l.s[0], l.s[1], l.s[2], order);
+  }
+
+  /** Swap the player pool to a pilot's signature round. Call at battle start. */
+  setPlayerStyle(pilotId: string): void {
+    const style = PLAYER_STYLES[pilotId] ?? PLAYER_STYLES.valkyr;
+    if (style === this.playerStyle) return;
+    this.playerStyle = style;
+    this.playerAnim = style.anim;
+    const pool = this.pools[BK.player];
+    for (const layer of [pool.core, pool.glow]) {
+      this.scene.remove(layer.mesh);
+      layer.mesh.geometry.dispose();
+      (layer.mesh.material as THREE.Material).dispose();
+      layer.mesh.dispose();
+    }
+    pool.core = this.mkLayer(style.core, pool.cap, 21);
+    pool.glow = this.mkLayer(style.glow, pool.cap, 20);
   }
 
   sync(lists: Bullet[][], dt: number): void {
@@ -91,7 +161,17 @@ export class Bullets3D {
 
         let pulse = b.scale ?? 1;
         if (b.kind === BK.player) {
-          this.dummy.rotation.set(0, Math.atan2(b.vx, b.vy), 0);
+          const yaw = Math.atan2(b.vx, b.vy);
+          if (this.playerAnim === 'tracer') {
+            // Roll so the box facets flicker down the stream.
+            this.dummy.rotation.set(0, yaw, this.t * 9 + b.t * 3);
+          } else if (this.playerAnim === 'slug') {
+            // Heavy shell: slow tumble + a throb in the halo.
+            this.dummy.rotation.set(0, yaw, this.t * 6 + b.t * 4);
+            pulse *= 1 + 0.1 * Math.sin(this.t * 10 + b.t * 6);
+          } else {
+            this.dummy.rotation.set(0, yaw, 0); // bolt / needle fly clean
+          }
         } else if (b.kind === BK.shot) {
           // Point along velocity; roll so facets flash as it flies.
           this.dummy.rotation.set(0, Math.atan2(b.vx, b.vy), this.t * 5 + b.t * 4);
