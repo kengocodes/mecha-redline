@@ -1,0 +1,65 @@
+/* MECHA REDLINE — stage chrome. The game itself renders on two stacked
+   canvases inside #stage: three.js (low-res, pixelated) below, Phaser
+   (HUD, full-res, transparent) on top. Everything is sharp-cornered. */
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: #05070d;
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+#stage {
+  position: absolute;
+  background: #05070d;
+  overflow: hidden;
+}
+
+/* three.js world canvas: fixed low internal resolution, stretched with
+   nearest-neighbour sampling. */
+#stage canvas.world {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  image-rendering: pixelated;
+}
+
+/* Phaser canvas sits on top, transparent, crisp. */
+#stage canvas:not(.world) {
+  position: absolute;
+  z-index: 2;
+}
+
+#loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  color: #e8ecf4;
+  font-family: 'DotGothic16', monospace;
+  font-size: 34px;
+  letter-spacing: 0.35em;
+  z-index: 3;
+  border: 1px solid rgba(127, 251, 255, 0.18);
+}
+
+#loading .sub {
+  font-size: 14px;
+  letter-spacing: 0.5em;
+  color: #9aa4b8;
+  animation: blink 1.1s steps(2) infinite;
+}
+
+@keyframes blink {
+  50% {
+    opacity: 0.25;
+  }
+}

@@ -1,0 +1,59 @@
+// Shared mutable HUD state: gameplay scenes write it, the HUD scene draws it.
+
+export type Phase =
+  | 'boot'
+  | 'title'
+  | 'intro'
+  | 'battle'
+  | 'warning'
+  | 'boss'
+  | 'complete'
+  | 'failed';
+
+export interface HudState {
+  phase: Phase;
+  t: number; // seconds since phase change
+  score: number;
+  hi: number;
+  armor: number;
+  maxArmor: number;
+  wave: number;
+  focus: boolean;
+  paused: boolean;
+  flashT: number; // red damage vignette timer
+  bossHp: number;
+  bossMax: number;
+  bossName: string;
+  msg: string; // operator comms line
+  msgT: number;
+  showcase: string; // debug: which gear the title screen displays
+}
+
+export const hud: HudState = {
+  phase: 'boot',
+  t: 0,
+  score: 0,
+  hi: 0,
+  armor: 4,
+  maxArmor: 4,
+  wave: 0,
+  focus: false,
+  paused: false,
+  flashT: 0,
+  bossHp: 0,
+  bossMax: 0,
+  bossName: '',
+  msg: '',
+  msgT: 0,
+  showcase: 'player',
+};
+
+export function setPhase(p: Phase): void {
+  hud.phase = p;
+  hud.t = 0;
+}
+
+export function say(text: string): void {
+  hud.msg = text;
+  hud.msgT = 0;
+}

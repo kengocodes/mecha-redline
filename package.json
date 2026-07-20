@@ -1,0 +1,21 @@
+{
+  "name": "mecha-redline",
+  "version": "0.1.0",
+  "description": "MECHA REDLINE — a 2.5D bullet hell mecha shooter for the browser",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -p tsconfig.json && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "phaser": "^4.2.1",
+    "three": "^0.182.0"
+  },
+  "devDependencies": {
+    "@types/three": "^0.182.0",
+    "typescript": "~5.9.2",
+    "vite": "^8.1.5"
+  }
+}
