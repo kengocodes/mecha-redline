@@ -647,7 +647,7 @@ export class GameScene extends Phaser.Scene {
       s.addShake(0.9);
       s.addPunch(0.5);
       s.impact(0.008, 0.2, 0xff6a7a);
-      s.fx.burst(this.boss.x, this.boss.y, 0xff3b53, 0xffd0d8);
+      s.fx.nova(this.boss.x, this.boss.y, 0xff3b53, 0xffd0d8);
       sfx('gear-arrive', { gain: 0.7 });
     }
 
@@ -660,7 +660,7 @@ export class GameScene extends Phaser.Scene {
       s.addShake(0.5);
       s.addPunch(0.5);
       s.impact(0.01, 0.22, 0xff6a7a);
-      s.fx.burst(this.boss.x, this.boss.y, 0xff3b53, 0xffd0d8);
+      s.fx.nova(this.boss.x, this.boss.y, 0xff3b53, 0xffd0d8);
       this.boss.flashT = 0.3;
       hud.phaseBanner =
         this.bossPhase >= 3 ? 'FINAL PHASE ── 最終形態' : `PHASE ${this.bossPhase} ── 第二形態`;

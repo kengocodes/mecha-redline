@@ -70,7 +70,7 @@ const MUSIC = [
     id: 'boss',
     ms: 100_000,
     prompt:
-      'Late-90s console fortress-boss confrontation: darker industrial electronic pulse, heavy but measured kick pattern, ominous low drones, metallic percussion hits, a stark repeating synth motif. Dread with momentum — atmospheric and oppressive but clearly rhythmic, not a static drone bed. Instrumental, seamless loop.',
+      'Late-90s Japanese console fortress-boss theme: heavy measured four-on-the-floor kick with crunchy gated snare, grinding distorted synth-bass ostinato, stark minor-key lead motif that repeats and escalates, metallic anvil hits and industrial percussion fills, thick dark pads under a clear midrange hook. Golgotha-class confrontation — oppressive dread with undeniable groove and melodic identity, loud and propulsive, never a static drone. Instrumental, seamless loop.',
   },
   {
     id: 'battle2',
