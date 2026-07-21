@@ -856,6 +856,111 @@ export function dressAshHusk(g: Gear): void {
   }
 }
 
+/** Husk: feral scavenger — rust spikes, an ember chest grill, a jagged brow
+ * flaring over the mono optic. Grunt menace without changing the frame. */
+export function dressHusk(g: Gear): void {
+  const ember = glowMat(0xff6a3c);
+  const rust = lambert(0x8a5a2a);
+  for (let i = -1; i <= 1; i++) {
+    put(g.att, boxGeo(0.08, 0.3, 0.06), ember, i * 0.22, 4.0, 0.42, 0.12); // chest grill
+  }
+  for (const s of [-1, 1]) {
+    put(g.att, frustumBox(0.14, 0.2, 0.3, 0.34, 0.8), rust, s * 1.15, 4.78, 0, -0.3, 0, s * -0.5); // pauldron spike
+    put(g.head, frustumBox(0.1, 0.14, 0.2, 0.26, 0.5), rust, s * 0.2, 0.28, 0.05, -0.5, 0, s * -0.35); // brow horn
+  }
+  put(g.head, boxGeo(0.4, 0.07, 0.07), ember, 0, 0.16, 0.24); // optic flare
+}
+
+/** Lancer: teal knight — tall brass crest, burning chest gem, lance spike
+ * past the cannon muzzle, brass knee guards. */
+export function dressLancer(g: Gear): void {
+  const brass = lambert(0xc8a04a);
+  const gem = glowMat(0xffcc55);
+  put(g.head, frustumBox(0.07, 0.3, 0.16, 0.34, 0.9), brass, 0, 0.45, -0.05, -0.25);
+  put(g.head, boxGeo(0.05, 0.7, 0.05), gem, 0, 0.42, 0.02, -0.25);
+  put(g.att, boxGeo(0.18, 0.18, 0.07), gem, 0, 4.05, 0.45, 0, 0, Math.PI / 4);
+  if (g.aimArm) {
+    put(g.aimArm, cylGeo(0.02, 0.14, 1.1, 6), brass, 0, -2.2, 0.14, 0.2); // lance tip
+    put(g.aimArm, boxGeo(0.06, 0.5, 0.06), gem, 0, -1.9, 0.2, 0.2); // hot seam
+  }
+  for (const leg of g.legs) {
+    put(leg, frustumBox(0.4, 0.24, 0.44, 0.2, 0.42), brass, 0, -1.05, 0.22, 0.12);
+  }
+}
+
+/** Dart: signal-orange wing edges + canards + a tail fin — the fastest unit
+ * gets the loudest lighting. */
+export function dressDart(g: Gear): void {
+  const hot = glowMat(0xff8a4a);
+  const plate = lambert(0x6a6580);
+  for (let i = 0; i < g.wings.length; i++) {
+    const s = i === 0 ? -1 : 1;
+    put(g.wings[i], boxGeo(0.09, 1.7, 0.09), hot, s * 0.62, 1.25, 0.18, 0.06, 0, s * -0.35);
+  }
+  for (const s of [-1, 1]) {
+    put(g.att, frustumBox(0.05, 0.24, 0.1, 0.4, 0.6), plate, s * 0.5, 4.1, 0.35, 0.3, 0, s * -0.5);
+  }
+  put(g.att, frustumBox(0.06, 0.3, 0.14, 0.5, 0.9), plate, 0, 4.6, -0.6, -0.5);
+  put(g.att, boxGeo(0.05, 0.6, 0.05), hot, 0, 4.6, -0.62, -0.5);
+}
+
+/** Mortar: siege frame — hazard rings on the lob tubes, a reinforced belly
+ * band, and a deck-painter antenna with a hot tip. */
+export function dressMortar(g: Gear): void {
+  const hazard = glowMat(0xffb060);
+  const darkBand = lambert(0x241f19);
+  for (const gun of g.guns) {
+    for (let i = 0; i < 3; i++) {
+      put(gun, cylGeo(0.2, 0.2, 0.12, 6), i % 2 ? darkBand : hazard, 0, 0.06, 0.6 + i * 0.5, Math.PI / 2, 0, 0);
+    }
+  }
+  put(g.att, boxGeo(1.5, 0.22, 0.9), lambert(0x7a6a52), 0, 3.3, 0);
+  put(g.att, cylGeo(0.03, 0.05, 1.2, 4), darkBand, -0.5, 5.3, -0.5);
+  put(g.att, boxGeo(0.12, 0.12, 0.12), hazard, -0.5, 5.9, -0.5);
+}
+
+/** Lancer-Kai: redline elite — crimson light seams, twin crest blades, and
+ * the spiral-coil rings it tore off the L1 boss's arm. */
+export function dressKai(g: Gear): void {
+  const line = glowMat(0xff3b53);
+  const plate = lambert(0x18262a);
+  for (const s of [-1, 1]) {
+    put(g.att, boxGeo(0.07, 0.75, 0.06), line, s * 0.3, 3.95, 0.4, 0.1, 0, s * -0.2);
+    put(g.att, boxGeo(0.5, 0.07, 0.07), line, s * 0.9, 4.66, 0.1, 0, 0, s * -0.16);
+  }
+  for (const leg of g.legs) {
+    put(leg, boxGeo(0.07, 1.0, 0.06), line, 0, -1.85, 0.34);
+  }
+  for (const s of [-1, 1]) {
+    put(g.head, frustumBox(0.05, 0.12, 0.1, 0.2, 1.1), plate, s * 0.14, 0.8, -0.06, -0.2, 0, s * -0.15);
+    put(g.head, boxGeo(0.04, 0.9, 0.04), line, s * 0.14, 0.78, -0.02, -0.2, 0, s * -0.15);
+  }
+  if (g.aimArm) {
+    for (let i = 0; i < 3; i++) {
+      put(g.aimArm, cylGeo(0.3, 0.3, 0.07, 6), line, 0, -1.0 - i * 0.28, 0);
+    }
+  }
+}
+
+/** GOLGOTHA: the Mission 01 warlord — a bone crown over the visor, a raging
+ * war core, bone lance binders fanning off the backpack, forearm blades. */
+export function dressGolgotha(g: Gear): void {
+  const bone = lambert(0xc8c0ae);
+  const rage = glowMat(0xff6655);
+  put(g.head, frustumBox(0.16, 0.2, 0.3, 0.36, 1.1), bone, 0, 0.5, -0.05, -0.35);
+  for (const s of [-1, 1]) {
+    put(g.head, frustumBox(0.12, 0.16, 0.24, 0.3, 0.9), bone, s * 0.28, 0.35, -0.02, -0.2, 0, s * -0.55);
+  }
+  put(g.att, boxGeo(0.3, 0.3, 0.1), rage, 0, 4.05, 0.42, 0.14, 0, Math.PI / 4);
+  for (const s of [-1, 1]) {
+    put(g.att, frustumBox(0.14, 0.2, 0.3, 0.4, 2.2), bone, s * 0.5, 5.2, -0.7, -0.5, 0, s * -0.35);
+    put(g.att, frustumBox(0.1, 0.16, 0.22, 0.32, 1.6), bone, s * 1.0, 4.9, -0.65, -0.4, 0, s * -0.8);
+  }
+  for (const arm of g.swingArms) {
+    put(arm, frustumBox(0.08, 0.3, 0.16, 0.5, 1.0), bone, 0, -1.6, 0.3, 0.35);
+  }
+}
+
 /**
  * Give a gear a per-instance cloak: every material is cloned so opacity can
  * fade without touching the shared caches, and `root.userData.setCloak(v)`

@@ -95,8 +95,10 @@ export class Bullets3D {
     this.playerStyle = PLAYER_STYLES.valkyr;
     this.playerAnim = this.playerStyle.anim;
 
-    // Shot: red diamond needle flying point-first with a rolling facet catch.
-    // Orb: amber low-poly gem with a fat halo that breathes.
+    // Shot: crimson kunai — a hot diamond core inside a flat star blade that
+    // spins around the flight axis, so aimed fire reads as thrown blades.
+    // Orb: ringed gem — an amber core inside a Saturn halo that tumbles with
+    // it; nothing like the shot's silhouette at a glance.
     this.pools = {
       [BK.player]: {
         cap: CAPS[BK.player],
@@ -106,18 +108,19 @@ export class Bullets3D {
       [BK.shot]: {
         cap: CAPS[BK.shot],
         core: this.mk(new THREE.OctahedronGeometry(0.36), 0xffe8ee, 1, CAPS[BK.shot], 0.42, 0.42, 1.65, 21),
-        glow: this.mk(new THREE.OctahedronGeometry(0.52), 0xff4560, 0.48, CAPS[BK.shot], 0.72, 0.72, 1.85, 20),
+        glow: this.mk(new THREE.OctahedronGeometry(0.55), 0xff4560, 0.5, CAPS[BK.shot], 1.3, 1.3, 0.32, 20),
       },
       [BK.orb]: {
         cap: CAPS[BK.orb],
-        core: this.mk(new THREE.IcosahedronGeometry(0.4, 0), 0xfff2cc, 1, CAPS[BK.orb], 1, 1, 1, 21),
-        glow: this.mk(new THREE.IcosahedronGeometry(0.7, 0), 0xffb347, 0.38, CAPS[BK.orb], 1, 1, 1, 20),
+        core: this.mk(new THREE.IcosahedronGeometry(0.38, 0), 0xfff2cc, 1, CAPS[BK.orb], 1, 1, 1, 21),
+        glow: this.mk(new THREE.TorusGeometry(0.58, 0.15, 6, 14), 0xffb347, 0.42, CAPS[BK.orb], 1, 1, 1, 20),
       },
-      // Needle: SERAPH's pale lance — long, cold, flies point-first.
+      // Needle: SERAPH's pale lance — long, cold, flies point-first. The
+      // flattened cross-section catches a slow corkscrew roll.
       [BK.needle]: {
         cap: CAPS[BK.needle],
-        core: this.mk(new THREE.BoxGeometry(0.1, 0.1, 2.3), 0xf4ffff, 1, CAPS[BK.needle], 1, 1, 1, 21),
-        glow: this.mk(new THREE.BoxGeometry(0.3, 0.3, 2.7), 0x9ffcff, 0.4, CAPS[BK.needle], 1, 1, 1, 20),
+        core: this.mk(new THREE.BoxGeometry(0.16, 0.06, 2.3), 0xf4ffff, 1, CAPS[BK.needle], 1, 1, 1, 21),
+        glow: this.mk(new THREE.BoxGeometry(0.34, 0.18, 2.7), 0x9ffcff, 0.4, CAPS[BK.needle], 1, 1, 1, 20),
       },
     };
   }
@@ -192,13 +195,22 @@ export class Bullets3D {
             this.dummy.rotation.set(0, yaw, 0); // bolt / needle fly clean
           }
         } else if (b.kind === BK.shot) {
-          // Point along velocity; roll so facets flash as it flies.
-          this.dummy.rotation.set(0, Math.atan2(b.vx, b.vy), this.t * 5 + b.t * 4);
+          // Point along velocity; spin the star blade hard around it.
+          this.dummy.rotation.set(0, Math.atan2(b.vx, b.vy), this.t * 8 + b.t * 4);
         } else if (b.kind === BK.needle) {
-          this.dummy.rotation.set(0, Math.atan2(b.vx, b.vy), 0); // clean lance
+          // Clean lance with a slow corkscrew catch on the flat facet.
+          this.dummy.rotation.set(0, Math.atan2(b.vx, b.vy), this.t * 1.8 + b.t);
         } else {
-          this.dummy.rotation.set(this.t * 2.4 + b.t, this.t * 3.6 + b.t * 1.8, 0);
-          pulse *= 1 + 0.12 * Math.sin(this.t * 9 + b.t * 5);
+          if (b.fuse !== undefined) {
+            // Mortar shell: heavy tumble + an urgency strobe as the fuse
+            // burns down — reads as ordnance, not as another ring orb.
+            const urgency = 1 - Math.max(0, b.fuse) / (b.fuse0 ?? 1);
+            this.dummy.rotation.set(this.t * 5 + b.t, this.t * 7 + b.t * 2, b.t);
+            pulse *= 1 + urgency * 0.28 * (0.5 + 0.5 * Math.sin(this.t * (9 + urgency * 16)));
+          } else {
+            this.dummy.rotation.set(this.t * 2.4 + b.t, this.t * 3.6 + b.t * 1.8, 0);
+            pulse *= 1 + 0.12 * Math.sin(this.t * 9 + b.t * 5);
+          }
         }
 
         this.write(pool.core, i, pulse);

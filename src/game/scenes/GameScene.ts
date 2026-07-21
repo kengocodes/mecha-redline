@@ -48,6 +48,12 @@ import {
   DART,
   disposeGear,
   dressAshHusk,
+  dressDart,
+  dressGolgotha,
+  dressHusk,
+  dressKai,
+  dressLancer,
+  dressMortar,
   dressShade,
   type Gear,
   type GearOptions,
@@ -290,7 +296,15 @@ export class GameScene extends Phaser.Scene {
         kai: LANCER_KAI,
       };
       gear = buildGear(OPTS[kind] ?? HUSK);
-      if (kind === 'mortar') gear.root.userData.gunPitch = -0.62; // tubes at lob angle
+      if (kind === 'husk') dressHusk(gear);
+      else if (kind === 'lancer') dressLancer(gear);
+      else if (kind === 'dart') dressDart(gear);
+      else if (kind === 'kai') dressKai(gear);
+      else if (kind === 'boss') dressGolgotha(gear);
+      else if (kind === 'mortar') {
+        dressMortar(gear);
+        gear.root.userData.gunPitch = -0.62; // tubes at lob angle
+      }
     }
     Stage3D.I.battleGroup.add(gear.root);
     const e = makeEnemy(kind, x, y, gear, seed);
