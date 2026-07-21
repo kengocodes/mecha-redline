@@ -10,7 +10,8 @@ const keys = new Set<string>();
  * later the moment some phase starts polling it. */
 const just = new Map<string, number>();
 /** Max age of a one-shot latch — generous for slow frames, far shorter
- * than any phase transition. */
+ * than any phase transition. Applies to taps (click / Enter / Space)
+ * exactly as to key presses. */
 const JUST_TTL_MS = 350;
 
 export const pointer = { x: uiW / 2, y: uiH / 4, down: false };
@@ -37,6 +38,7 @@ export function resetAimMode(): void {
 }
 
 let tapped = false;
+let tapAt = 0;
 let stage: HTMLElement | null = null;
 /** Shift held on the Tab that was just latched. */
 let tabShifted = false;
@@ -52,7 +54,10 @@ export function initInput(stageEl: HTMLElement): void {
       if (e.code === 'Tab') tabShifted = e.shiftKey;
     }
     keys.add(e.code);
-    if (fresh && (e.code === 'Enter' || e.code === 'Space')) tapped = true;
+    if (fresh && (e.code === 'Enter' || e.code === 'Space')) {
+      tapped = true;
+      tapAt = performance.now();
+    }
   });
   window.addEventListener('keyup', (e) => keys.delete(e.code));
   window.addEventListener('blur', () => {
@@ -81,6 +86,7 @@ export function initInput(stageEl: HTMLElement): void {
     aimWithPointer = true;
     pointer.down = true;
     tapped = true;
+    tapAt = performance.now();
   });
   window.addEventListener('pointerup', (e) => {
     if (e.button === 0) pointer.down = false;
@@ -114,11 +120,9 @@ export function takeKey(code: string): boolean {
 
 /** One-shot "click or enter/space" latch for menu flow. */
 export function takeTap(): boolean {
-  if (tapped) {
-    tapped = false;
-    return true;
-  }
-  return false;
+  if (!tapped) return false;
+  tapped = false;
+  return performance.now() - tapAt <= JUST_TTL_MS;
 }
 
 /** One-shot Tab: +1 forward, −1 Shift+Tab, 0 if none. */

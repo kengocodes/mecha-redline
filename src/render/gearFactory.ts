@@ -560,9 +560,16 @@ export function buildGear(o: GearOptions): Gear {
 
 const _muzzleWorld = new THREE.Vector3();
 /** Screen-vertical arena drift per unit of height above the bullet plane.
- * Uses the battle camera's base pitch; the perspective ray direction varies
- * a little across the frame, but centre-frame is the right average. */
-const CAM_DROP = 1 / Math.tan((PCAM.elev * Math.PI) / 180);
+ * Tracks the battle camera's *current* pitch — boss cinematics blend the
+ * elevation (GameScene updateCinematics → Stage3D.setCine), and the hit
+ * zones must follow where the player actually sees the geometry. */
+let camDrop = 1 / Math.tan((PCAM.elev * Math.PI) / 180);
+
+/** Stage3D calls this each frame with the camera's effective elevation
+ * (radians) so arena-plane projections match the live view line. */
+export function setArenaCamElev(elevRad: number): void {
+  camDrop = 1 / Math.tan(elevRad);
+}
 
 /**
  * Arena-plane position of any scene object (gameplay x/y). The object may
@@ -572,7 +579,7 @@ const CAM_DROP = 1 / Math.tan((PCAM.elev * Math.PI) / 180);
  */
 export function objectArenaPos(obj: THREE.Object3D): { x: number; y: number } {
   obj.getWorldPosition(_muzzleWorld);
-  return { x: _muzzleWorld.x, y: _muzzleWorld.z - (_muzzleWorld.y - BULLET_H) * CAM_DROP };
+  return { x: _muzzleWorld.x, y: _muzzleWorld.z - (_muzzleWorld.y - BULLET_H) * camDrop };
 }
 
 /**

@@ -158,7 +158,7 @@ function updateHusk(e: Enemy, c: SimCtx, _dt: number): void {
   const inBand = Math.abs(e.x) < PLAY_X + 2 && Math.abs(e.y) < PLAY_Y + 2;
   // Raise the arm cannon ~0.7s before the shot — a readable tell.
   e.gear.aimTarget = c.playerAlive && e.t < e.life && e.t > 0.9 && e.fireT > 1.2 && inBand ? 1 : 0;
-  if (c.playerAlive && e.fireT > 1.9 && e.t > 1.2 && inBand) {
+  if (c.playerAlive && e.t < e.life && e.fireT > 1.9 && e.t > 1.2 && inBand) {
     e.fireT = 0;
     e.muzzleT = 0.07;
     const m = armMuzzle(e, c);

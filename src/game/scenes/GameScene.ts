@@ -683,7 +683,11 @@ export class GameScene extends Phaser.Scene {
         }
         clearTap(); // require a fresh click, not a leftover firing press
         hud.hi = Math.max(hud.hi, hud.score);
-        localStorage.setItem(HI_KEY, String(hud.hi));
+        try {
+          localStorage.setItem(HI_KEY, String(hud.hi));
+        } catch {
+          // storage blocked (private mode etc.) — the run still counts
+        }
         this.timescale = 1;
       }
     }

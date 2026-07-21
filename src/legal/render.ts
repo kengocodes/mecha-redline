@@ -4,7 +4,9 @@ import type { LegalDocument, LegalPageId } from "./types";
 
 export const LEGAL_PATHS: Record<string, LegalPageId> = {
   "/privacy": "privacy",
+  "/privacy/": "privacy",
   "/terms": "terms",
+  "/terms/": "terms",
 };
 
 export function legalDocument(id: LegalPageId): LegalDocument {

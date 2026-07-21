@@ -26,6 +26,7 @@ import {
   setMenuFocus,
 } from '../ui/menuFocus';
 import { selectBackRect, selectSlotRect } from '../ui/overlay';
+import { isLegalOpen } from '../../legal/overlay';
 import { hud, LAUNCH_T, LOAD_T, sel, setPhase } from '../ui/state';
 import { startWipe, wipeActive } from '../ui/wipe';
 
@@ -134,7 +135,11 @@ export class SelectScene extends Phaser.Scene {
     sel.swapT += dt;
 
     let boost = 0.5;
-    if (sel.confirmT >= 0) {
+    // Privacy/terms overlay owns input — freeze the countdown and the
+    // launch sequence while it is open (same guard as Title/Game scenes).
+    if (isLegalOpen()) {
+      clearTap();
+    } else if (sel.confirmT >= 0) {
       // Launch: throttle up, then climb off the pad and out of frame.
       setStageCursor('aim');
       sel.confirmT += dt;
