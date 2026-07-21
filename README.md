@@ -1,12 +1,11 @@
 # MECHA REDLINE
 
-A 2.5D bullet-hell mecha shooter for the browser. Pilot the **Valkyr** gear
-over a plain enemy-base deck, sweep six waves of hostile gears crossing the
-redline, then duel the fortress-class boss **GOLGOTHA**. Low-poly flat-shaded
-models, a low internal render resolution stretched with nearest-neighbour
-sampling, and a sharp-cornered katakana HUD.
-
-This is the Level 1 MVP.
+A 2.5D bullet-hell mecha shooter for the browser. Two-mission campaign:
+sweep six waves over the Sector 7 perimeter and break the fortress-class
+**GOLGOTHA**, then fly into its burning debris ring — **Golgotha's Wake** —
+to cut off the retreat and duel the white duel-class **SERAPH**. Low-poly
+flat-shaded models, a low internal render resolution stretched with
+nearest-neighbour sampling, and a sharp-cornered katakana HUD.
 
 ## Run it
 
@@ -86,9 +85,11 @@ src/
     const.ts              tuning, coordinate conventions, bullet kinds
     input.ts              raw keyboard/pointer, UI-space pointer mapping
   render/
-    stage3d.ts            camera, lights, plain base deck, arena border, aim raycast
-    backdrops/            per-level environments (space.ts — layered starfield)
+    stage3d.ts            camera, lights, backdrop switching, aim raycast
+    backdrops/            per-mission environments (space.ts starfield, wake.ts debris field)
     gearFactory.ts        procedural low-poly mecha + unit palettes
+    seraph.ts             the SERAPH boss — robed frame, wing fans, halo
+    sentinel.ts           the sentinel proximity mine
     bullets3d.ts          instanced bullet pools
     fx3d.ts               instanced explosions + hit sparks
   game/
@@ -98,7 +99,7 @@ src/
       GameScene.ts        the battle simulation
       HudScene.ts         composites the HUD canvas
     entities/
-      enemies.ts          husk / lancer / boss definitions + AI
+      enemies.ts          all enemy definitions + AI (grunts, elites, bosses)
     systems/
       burst.ts            player BURST special (charges + clear)
       patterns.ts         bullet emission helpers (ring / fan / aimed)
@@ -110,6 +111,7 @@ src/
       types.ts            LevelDef contract — script, boss card, mission copy
       index.ts            mission registry + current-level selection
       level1.ts           Mission 01 — Sector 7 Perimeter
+      level2.ts           Mission 02 — Golgotha's Wake
 ```
 
 Title art lives in `public/branding/` (galaxy plate + magenta-keyed logo).
@@ -118,9 +120,9 @@ Title art lives in `public/branding/` (galaxy plate + magenta-keyed logo).
 
 Available with `npm run dev`. Production builds ignore these.
 
-- `?debug=battle` — skip the title, start Mission 01.
-- `?debug=boss` — jump straight to the Golgotha fight.
+- `?debug=battle` / `?debug=battle2` — skip the title, start Mission 01 / 02.
+- `?debug=boss` / `?debug=boss2` — jump straight to Golgotha / SERAPH.
 
 ## Not yet in this MVP
 
-Additional levels, weapon/upgrade systems, and touch / gamepad combat controls.
+Weapon/upgrade systems, mission select, and touch / gamepad combat controls.

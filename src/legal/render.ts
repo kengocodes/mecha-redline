@@ -1,20 +1,20 @@
-import { privacyPolicy } from './privacy';
-import { termsOfService } from './terms';
-import type { LegalDocument, LegalPageId } from './types';
+import { privacyPolicy } from "./privacy";
+import { termsOfService } from "./terms";
+import type { LegalDocument, LegalPageId } from "./types";
 
 export const LEGAL_PATHS: Record<string, LegalPageId> = {
-  '/privacy': 'privacy',
-  '/terms': 'terms',
+  "/privacy": "privacy",
+  "/terms": "terms",
 };
 
 export function legalDocument(id: LegalPageId): LegalDocument {
-  return id === 'privacy' ? privacyPolicy : termsOfService;
+  return id === "privacy" ? privacyPolicy : termsOfService;
 }
 
 /** Turn configured link substrings into anchors (first match per text node). */
 function linkify(
   text: string,
-  links: LegalDocument['sections'][number]['links'],
+  links: LegalDocument["sections"][number]["links"],
 ): DocumentFragment {
   const frag = document.createDocumentFragment();
   if (!links?.length) {
@@ -28,14 +28,14 @@ function linkify(
     if (index === -1) continue;
     const before = remaining.slice(0, index);
     if (before) frag.append(before);
-    const a = document.createElement('a');
+    const a = document.createElement("a");
     a.href = link.href;
     a.textContent = link.text;
     if (/^https?:\/\//i.test(link.href)) {
-      a.target = '_blank';
-      a.rel = 'noopener noreferrer';
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
     } else {
-      a.dataset.legal = link.href.replace(/^\//, '');
+      a.dataset.legal = link.href.replace(/^\//, "");
     }
     frag.append(a);
     remaining = remaining.slice(index + link.text.length);
@@ -47,54 +47,57 @@ function linkify(
 function appendParagraphs(
   parent: HTMLElement,
   paragraphs: string[],
-  links: LegalDocument['sections'][number]['links'],
+  links: LegalDocument["sections"][number]["links"],
 ): void {
   for (const text of paragraphs) {
-    const p = document.createElement('p');
+    const p = document.createElement("p");
     p.append(linkify(text, links));
     parent.append(p);
   }
 }
 
 /** Render a legal document into `root` (replaces existing children). */
-export function renderLegalDocument(doc: LegalDocument, root: HTMLElement): void {
+export function renderLegalDocument(
+  doc: LegalDocument,
+  root: HTMLElement,
+): void {
   root.replaceChildren();
 
-  const article = document.createElement('article');
-  article.className = 'legal-article';
+  const article = document.createElement("article");
+  article.className = "legal-article";
 
-  const h1 = document.createElement('h1');
-  h1.id = 'legal-heading';
+  const h1 = document.createElement("h1");
+  h1.id = "legal-heading";
   h1.tabIndex = -1;
   h1.textContent = doc.title;
   article.append(h1);
 
-  const updated = document.createElement('p');
-  updated.className = 'legal-updated';
+  const updated = document.createElement("p");
+  updated.className = "legal-updated";
   updated.textContent = doc.updated;
   article.append(updated);
 
-  const intro = document.createElement('div');
-  intro.className = 'legal-intro';
+  const intro = document.createElement("div");
+  intro.className = "legal-intro";
   appendParagraphs(intro, doc.intro, undefined);
   article.append(intro);
 
   for (const section of doc.sections) {
-    const sec = document.createElement('section');
-    sec.className = 'legal-section';
+    const sec = document.createElement("section");
+    sec.className = "legal-section";
 
-    const h2 = document.createElement('h2');
+    const h2 = document.createElement("h2");
     h2.textContent = section.heading;
     sec.append(h2);
 
-    const body = document.createElement('div');
-    body.className = 'legal-section-body';
+    const body = document.createElement("div");
+    body.className = "legal-section-body";
     appendParagraphs(body, section.paragraphs, section.links);
 
     if (section.bullets?.length) {
-      const ul = document.createElement('ul');
+      const ul = document.createElement("ul");
       for (const bullet of section.bullets) {
-        const li = document.createElement('li');
+        const li = document.createElement("li");
         li.append(linkify(bullet, section.links));
         ul.append(li);
       }

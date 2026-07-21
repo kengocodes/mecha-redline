@@ -12,7 +12,7 @@ import {
   uiH,
   uiW,
 } from "../../core/uiSize";
-import { currentLevel } from "../levels";
+import { currentLevel, LEVELS } from "../levels";
 import { ROSTER, selectedPilot } from "../roster";
 import { getPilotArt } from "./pilotArt";
 import { attract, hud, LAUNCH_T, popups, sel, settingsUi } from "./state";
@@ -190,7 +190,7 @@ function drawTitleLandscape(g: Ctx): void {
 
   if (t > 0.7 && !settingsUi.open) {
     // Touch: sit above the chip row. Desktop: fixed band — links sit beside
-    // DESKTOP RECOMMENDED, not under the stack.
+    // DESKTOP RECOMMENDED (hit pad expands upward, clear of the ticker).
     const stackBottom = touchUi()
       ? titleLinkRects()[0]!.rect.y - cssToUi(16) - cssToUi(8)
       : 672;
@@ -811,6 +811,7 @@ function drawBattle(g: Ctx): void {
 
   // Standard HUD stands down while a camera cinematic holds the frame.
   if (hud.phase !== "intro" && hud.cineBars < 0.5) {
+    drawMarks(g);
     drawScore(g);
     drawMission(g);
     drawPilotCluster(g);
@@ -921,6 +922,36 @@ function drawScore(g: Ctx): void {
 }
 
 /** Floating +points popups at kill sites: pop in, drift up, fade out. */
+/** Mortar impact markers: a blinking diamond over the drop point with a
+ * ring that tightens as the fuse runs down — the dodge is reading the deck. */
+function drawMarks(g: Ctx): void {
+  for (const m of hud.marks) {
+    const urgent = m.frac < 0.35;
+    const blink = Math.floor(hud.t * (urgent ? 14 : 7)) % 2 === 0;
+    const color = urgent ? RED : AMBER;
+    g.globalAlpha = blink ? 1 : 0.55;
+    // Tightening ring (diamond) around the point.
+    const r = 12 + 30 * m.frac;
+    g.strokeStyle = color;
+    g.lineWidth = urgent ? 3 : 2;
+    g.beginPath();
+    g.moveTo(m.x, m.y - r);
+    g.lineTo(m.x + r, m.y);
+    g.lineTo(m.x, m.y + r);
+    g.lineTo(m.x - r, m.y);
+    g.closePath();
+    g.stroke();
+    // Centre cross.
+    g.beginPath();
+    g.moveTo(m.x - 5, m.y);
+    g.lineTo(m.x + 5, m.y);
+    g.moveTo(m.x, m.y - 5);
+    g.lineTo(m.x, m.y + 5);
+    g.stroke();
+    g.globalAlpha = 1;
+  }
+}
+
 function drawPopups(g: Ctx): void {
   for (let i = popups.length - 1; i >= 0; i--) {
     const p = popups[i];
@@ -996,7 +1027,7 @@ function drawBossCard(g: Ctx): void {
   tx(g, name ?? hud.bossName, uiW / 2, 470, 64 * pop, RED, "center", 18);
   if (tag) tx(g, tag, uiW / 2, 516, 20, FG, "center", 8);
   rule(g, uiW / 2 - 240, 540, 480, RED);
-  tx(g, "FORTRESS-CLASS HOSTILE GEAR", uiW / 2, 562, 13, DIM, "center", 4);
+  tx(g, currentLevel().boss.classLine, uiW / 2, 562, 13, DIM, "center", 4);
   g.globalAlpha = 1;
 }
 
@@ -1273,13 +1304,19 @@ function drawEndCard(g: Ctx, won: boolean): void {
   );
   const wait = won ? 2 : 1;
   if (t > wait && Math.floor(t * 1.6) % 2 === 0) {
+    const lvl = currentLevel();
+    const hasNext = won && LEVELS.indexOf(lvl) + 1 < LEVELS.length;
     tx(
       g,
-      won ? "CLICK ── RETURN TO BASE" : "CLICK ── RELAUNCH",
+      won
+        ? hasNext
+          ? "CLICK ── NEXT SORTIE"
+          : "CLICK ── RETURN TO BASE"
+        : "CLICK ── RELAUNCH",
       uiW / 2,
       y + h - 28,
       16,
-      DIM,
+      hasNext ? CYAN : DIM,
       "center",
       4,
     );

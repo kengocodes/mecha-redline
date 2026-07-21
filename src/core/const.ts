@@ -50,7 +50,16 @@ export const PLAYER = {
   startY: 18,
 };
 
-export const SCORE = { husk: 100, lancer: 500, boss: 10000 };
+export const SCORE = {
+  husk: 100,
+  lancer: 500,
+  boss: 10000,
+  dart: 150,
+  mortar: 600,
+  sentinel: 250,
+  kai: 1200,
+  seraph: 15000,
+};
 
 /** Kill-chain scoring: kills inside `window` seconds keep the chain alive;
  * every `per` kills raise the score multiplier one tier, capped at `maxMult`.
@@ -68,6 +77,7 @@ export const enum BK {
   player = 0,
   shot = 1, // red needle, aimed fire
   orb = 2, // amber orb, rings / spirals
+  needle = 3, // pale cyan lance — SERAPH's signature fire
 }
 
 export interface Bullet {
@@ -82,10 +92,17 @@ export interface Bullet {
   scale?: number;
   /** Countdown life for non-colliding purge trails. */
   life?: number;
+  /** Airburst countdown (mortar shells) — detonates into a ring at zero. */
+  fuse?: number;
+  /** Initial fuse, for the HUD marker's shrink animation. */
+  fuse0?: number;
+  /** Ground point the shell detonates over — drawn as a HUD deck marker. */
+  mark?: { x: number; y: number };
 }
 
 export const BULLET_R: Record<BK, number> = {
   [BK.player]: 0.5,
   [BK.shot]: 0.38,
   [BK.orb]: 0.5,
+  [BK.needle]: 0.34,
 };

@@ -15,7 +15,15 @@ const SFX_VOL = 0.68;
 const VO_VOL = 0.68;
 const DUCK = 0.32; // music multiplier while VO speaks
 
-export type MusicId = 'title' | 'select' | 'battle' | 'boss' | 'clear' | 'failed';
+export type MusicId =
+  | 'title'
+  | 'select'
+  | 'battle'
+  | 'boss'
+  | 'battle2'
+  | 'boss2'
+  | 'clear'
+  | 'failed';
 
 export type SfxId =
   | 'ui-move'
@@ -37,7 +45,13 @@ export type SfxId =
   | 'launch'
   | 'warning'
   | 'thruster'
-  | 'gear-arrive';
+  | 'gear-arrive'
+  | 'mortar-lob'
+  | 'mortar-boom'
+  | 'mine-beep'
+  | 'seraph-dash'
+  | 'seraph-purge'
+  | 'seraph-choir';
 
 export type VoId = string; // 'op-*' | '<pilot>-{select,launch,burst,hit,clear}'
 
@@ -63,6 +77,12 @@ const SFX_GAIN: Partial<Record<SfxId, number>> = {
   'warning': 0.48,
   'gear-arrive': 0.48,
   'thruster': 0.12,
+  'mortar-lob': 0.55,
+  'mortar-boom': 0.62,
+  'mine-beep': 0.5,
+  'seraph-dash': 0.5,
+  'seraph-purge': 0.66,
+  'seraph-choir': 0.55,
 };
 
 /** Soften shouty / select lines; operator stays a hair higher for radio clarity. */
@@ -88,12 +108,16 @@ const SFX_ALL: SfxId[] = [
   'ui-move', 'ui-confirm', 'ui-back', 'ui-tick', 'timer-beep', 'timer-alarm',
   'wipe', 'logo-slam', 'coin', 'shot-player', 'shot-enemy', 'expl-small',
   'expl-big', 'expl-boss', 'hit-armor', 'burst', 'launch', 'warning',
-  'thruster', 'gear-arrive',
+  'thruster', 'gear-arrive', 'mortar-lob', 'mortar-boom', 'mine-beep',
+  'seraph-dash', 'seraph-purge', 'seraph-choir',
 ];
 const VO_ALL = [
   ...['select-gear', 'launch', 'mission-start', 'weapons-free', 'lancer',
     'stragglers', 'warning', 'boss-kill', 'complete', 'failed', 'timeout',
   ].map((s) => `op-${s}`),
+  ...['mission-start', 'entry', 'dart', 'sentinel', 'mortar', 'kai',
+    'stragglers', 'seraph', 'seraph-kill',
+  ].map((s) => `op2-${s}`),
   ...['kira', 'ren', 'sera', 'juno'].flatMap((p) =>
     ['select', 'launch', 'burst', 'hit', 'hit2', 'hit3', 'clear'].map((s) => `${p}-${s}`),
   ),

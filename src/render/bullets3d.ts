@@ -9,7 +9,12 @@ import { BK, BULLET_H, type Bullet } from '../core/const';
 // Enemy pools must hold the sim's full ENEMY_CAP (460, patterns.ts) of a
 // single kind — anything over the cap is culled from the mesh but still
 // collides, i.e. an invisible lethal bullet.
-const CAPS: Record<BK, number> = { [BK.player]: 180, [BK.shot]: 460, [BK.orb]: 460 };
+const CAPS: Record<BK, number> = {
+  [BK.player]: 180,
+  [BK.shot]: 460,
+  [BK.orb]: 460,
+  [BK.needle]: 460,
+};
 
 interface Layer {
   mesh: THREE.InstancedMesh;
@@ -108,6 +113,12 @@ export class Bullets3D {
         core: this.mk(new THREE.IcosahedronGeometry(0.4, 0), 0xfff2cc, 1, CAPS[BK.orb], 1, 1, 1, 21),
         glow: this.mk(new THREE.IcosahedronGeometry(0.7, 0), 0xffb347, 0.38, CAPS[BK.orb], 1, 1, 1, 20),
       },
+      // Needle: SERAPH's pale lance — long, cold, flies point-first.
+      [BK.needle]: {
+        cap: CAPS[BK.needle],
+        core: this.mk(new THREE.BoxGeometry(0.1, 0.1, 2.3), 0xf4ffff, 1, CAPS[BK.needle], 1, 1, 1, 21),
+        glow: this.mk(new THREE.BoxGeometry(0.3, 0.3, 2.7), 0x9ffcff, 0.4, CAPS[BK.needle], 1, 1, 1, 20),
+      },
     };
   }
 
@@ -153,7 +164,12 @@ export class Bullets3D {
 
   sync(lists: Bullet[][], dt: number): void {
     this.t += dt;
-    const counts: Record<BK, number> = { [BK.player]: 0, [BK.shot]: 0, [BK.orb]: 0 };
+    const counts: Record<BK, number> = {
+      [BK.player]: 0,
+      [BK.shot]: 0,
+      [BK.orb]: 0,
+      [BK.needle]: 0,
+    };
     for (const list of lists) {
       for (const b of list) {
         const pool = this.pools[b.kind];
@@ -178,6 +194,8 @@ export class Bullets3D {
         } else if (b.kind === BK.shot) {
           // Point along velocity; roll so facets flash as it flies.
           this.dummy.rotation.set(0, Math.atan2(b.vx, b.vy), this.t * 5 + b.t * 4);
+        } else if (b.kind === BK.needle) {
+          this.dummy.rotation.set(0, Math.atan2(b.vx, b.vy), 0); // clean lance
         } else {
           this.dummy.rotation.set(this.t * 2.4 + b.t, this.t * 3.6 + b.t * 1.8, 0);
           pulse *= 1 + 0.12 * Math.sin(this.t * 9 + b.t * 5);
@@ -188,7 +206,7 @@ export class Bullets3D {
         counts[b.kind] = i + 1;
       }
     }
-    for (const k of [BK.player, BK.shot, BK.orb]) {
+    for (const k of [BK.player, BK.shot, BK.orb, BK.needle]) {
       const p = this.pools[k];
       p.core.mesh.count = counts[k];
       p.glow.mesh.count = counts[k];
@@ -204,7 +222,7 @@ export class Bullets3D {
   }
 
   clear(): void {
-    for (const k of [BK.player, BK.shot, BK.orb]) {
+    for (const k of [BK.player, BK.shot, BK.orb, BK.needle]) {
       this.pools[k].core.mesh.count = 0;
       this.pools[k].glow.mesh.count = 0;
     }

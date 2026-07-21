@@ -41,6 +41,8 @@ export interface HudState {
   msgT: number;
   px: number; // player position in UI space, for HUD proximity fades
   py: number;
+  /** Mortar impact markers in UI space; frac counts 1 → 0 to detonation. */
+  marks: { x: number; y: number; frac: number }[];
 }
 
 export const hud: HudState = {
@@ -71,6 +73,7 @@ export const hud: HudState = {
   msgT: 0,
   px: 640,
   py: 500,
+  marks: [],
 };
 
 /** Floating score popups: the sim spawns them in UI space at kill sites,

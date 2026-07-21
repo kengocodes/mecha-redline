@@ -7,6 +7,7 @@ import { HI_KEY } from '../../core/const';
 import { debugParam } from '../../core/debug';
 import { loadSettings } from '../../core/settings';
 import { Stage3D } from '../../render/stage3d';
+import { selectLevel } from '../levels';
 import { loadPilotArt } from '../ui/pilotArt';
 import { loadTitleArt } from '../ui/titleArt';
 import { hud, setPhase } from '../ui/state';
@@ -53,9 +54,11 @@ export class BootScene extends Phaser.Scene {
     document.getElementById('loading')?.remove();
 
     this.scene.launch('hud');
-    // Dev-only: ?debug=battle|boss skips the title (stripped in production).
+    // Dev-only: ?debug=battle|boss[2] skips the title (stripped in production);
+    // the '2' suffix jumps to Mission 02.
     const dbg = debugParam();
-    if (dbg === 'battle' || dbg === 'boss') {
+    if (dbg === 'battle' || dbg === 'boss' || dbg === 'battle2' || dbg === 'boss2') {
+      selectLevel(dbg.endsWith('2') ? 1 : 0);
       this.scene.start('game');
     } else {
       setPhase('title');

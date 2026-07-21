@@ -10,9 +10,13 @@ import { Fx3D } from './fx3d';
 import { disposeGear } from './gearFactory';
 import { HangarShowcase } from './hangarShowcase';
 import { SpaceBackdrop } from './backdrops/space';
+import { WakeBackdrop } from './backdrops/wake';
+
+export type BackdropId = 'space' | 'wake';
 
 const CAM_DIST = 100;
 const VOID = 0x02050c;
+const WAKE_VOID = 0x0a0509; // warm rust-black for the Mission 02 field
 
 // PS1 vertex snap: quantize every projected vertex to the internal pixel grid
 // so geometry subtly swims as it rotates. Appended to the shared chunk before
@@ -87,7 +91,10 @@ export class Stage3D {
   readonly fx: Fx3D;
 
   private space!: SpaceBackdrop;
+  private wakeDrop: WakeBackdrop | null = null; // built on first use
+  private backdropId: BackdropId = 'space';
   private hangar!: HangarShowcase;
+  private redSpill!: THREE.PointLight;
   private shake = 0;
   /** Last applied shake offset — re-used while dt is 0 (pause/hitstop). */
   private shakeOx = 0;
@@ -149,9 +156,9 @@ export class Stage3D {
     const under = new THREE.DirectionalLight(0x6a7a96, 0.45);
     under.position.set(0, -20, 10);
     this.scene.add(under);
-    const redSpill = new THREE.PointLight(0xff3b53, 1.05, 55, 2);
-    redSpill.position.set(0, 3.4, 0);
-    this.scene.add(redSpill);
+    this.redSpill = new THREE.PointLight(0xff3b53, 1.05, 55, 2);
+    this.redSpill.position.set(0, 3.4, 0);
+    this.scene.add(this.redSpill);
 
     this.space = new SpaceBackdrop();
     this.space.group.visible = false;
@@ -224,13 +231,43 @@ export class Stage3D {
       this.lookTarget.set(0, 0, 0);
     }
     this.applyUiAspect();
-    // Stars stay up on title — deep void behind the hangar set.
-    this.space.group.visible = true;
-    // Camera sits ~CAM_DIST (100) from the gear — fog must start past that
-    // or the whole hangar washes to void (which is what hid the unit).
-    this.scene.fog = showcase ? new THREE.Fog(VOID, 110, 200) : new THREE.Fog(VOID, 140, 260);
+    if (showcase) {
+      // Stars stay up on title — deep void behind the hangar set. Camera
+      // sits ~CAM_DIST (100) from the gear — fog must start past that or
+      // the whole hangar washes to void (which is what hid the unit).
+      this.space.group.visible = true;
+      if (this.wakeDrop) this.wakeDrop.group.visible = false;
+      this.renderer.setClearColor(VOID);
+      this.scene.fog = new THREE.Fog(VOID, 110, 200);
+    } else {
+      this.applyBackdrop();
+    }
     this.worldEl.classList.remove('hidden');
     this.update(0);
+  }
+
+  /** Choose the battle environment (per mission); showcase always uses stars. */
+  setBackdrop(id: BackdropId): void {
+    this.backdropId = id;
+    if (id === 'wake' && !this.wakeDrop) {
+      this.wakeDrop = new WakeBackdrop();
+      this.wakeDrop.group.visible = false;
+      this.scene.add(this.wakeDrop.group);
+    }
+    if (this.battleMode) this.applyBackdrop();
+  }
+
+  /** Battle-mode environment: backdrop group, void tint, arena spill light. */
+  private applyBackdrop(): void {
+    const wake = this.backdropId === 'wake';
+    this.space.group.visible = !wake;
+    if (this.wakeDrop) this.wakeDrop.group.visible = wake;
+    const voidCol = wake ? WAKE_VOID : VOID;
+    this.renderer.setClearColor(voidCol);
+    this.scene.fog = new THREE.Fog(voidCol, 140, 260);
+    // The red threat spill goes furnace-amber over the wake.
+    this.redSpill.color.setHex(wake ? 0xff9a3c : 0xff3b53);
+    this.redSpill.intensity = wake ? 1.25 : 1.05;
   }
 
   /** Tint the showcase pad aura (title/select) to a pilot's glow colour. */
@@ -341,6 +378,7 @@ export class Stage3D {
     this.camera.lookAt(look);
 
     this.space.update(dt);
+    this.wakeDrop?.update(dt);
     this.hangar.update(dt);
     this.fx.update(dt);
 

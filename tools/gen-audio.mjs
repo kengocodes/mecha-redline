@@ -73,6 +73,18 @@ const MUSIC = [
       'Late-90s console fortress-boss confrontation: darker industrial electronic pulse, heavy but measured kick pattern, ominous low drones, metallic percussion hits, a stark repeating synth motif. Dread with momentum — atmospheric and oppressive but clearly rhythmic, not a static drone bed. Instrumental, seamless loop.',
   },
   {
+    id: 'battle2',
+    ms: 120_000,
+    prompt:
+      'Late-90s Japanese console combat theme, second-mission variation: driving mid-tempo sequenced drums, rolling synth-bass, warmer haunted pads with an ember-lit glow, a mournful but determined melodic lead, faint choir-like synth swells drifting far behind the groove. Fighting through a burning orbital debris field — kinetic and propulsive with an uneasy sacred undertone, never idle ambient. Instrumental, seamless loop.',
+  },
+  {
+    id: 'boss2',
+    ms: 100_000,
+    prompt:
+      'Late-90s console duel-boss theme: urgent driving pulse in a insistent triple-feel rhythm, dark rolling bass sequence, a soaring cold synth lead motif, ethereal wordless choir-like synth voices layered behind, sparse cathedral-bell accents, metallic percussion. A beautiful and terrifying angelic war machine — sacred dread with relentless forward momentum, clearly rhythmic. Instrumental, seamless loop.',
+  },
+  {
     id: 'clear',
     ms: 18_000,
     prompt:
@@ -108,6 +120,12 @@ const SFX = [
   { id: 'warning', dur: 2.6, loop: true, text: 'Two-tone warning klaxon alarm siren, military base alert, urgent, loopable' },
   { id: 'thruster', dur: 2.5, loop: true, text: 'Steady sci-fi hover thruster hum, plasma jet loop, mid-frequency, smooth loopable' },
   { id: 'gear-arrive', dur: 1.3, text: 'Heavy mech servo whir with hydraulic clunk, robot settling into place on a metal pad' },
+  { id: 'mortar-lob', dur: 0.8, text: 'Deep hollow mortar tube launch thoomp, compressed air punch, sci-fi artillery lob, short, no piercing highs' },
+  { id: 'mortar-boom', dur: 1.2, text: 'Mid-size airburst explosion with a scattering ring of energy shrapnel, crunchy retro arcade detonation, punchy' },
+  { id: 'mine-beep', dur: 0.5, text: 'Single ominous low electronic proximity warning beep, armed mine blip, short, dry' },
+  { id: 'seraph-dash', dur: 0.7, text: 'Fast ethereal whoosh dash with a faint crystalline shimmer tail, sci-fi teleport step, short, smooth' },
+  { id: 'seraph-purge', dur: 1.8, text: 'Reversed shimmering energy implosion then a radiant choral shockwave bloom, holy sci-fi energy burst, awe-inspiring but smooth' },
+  { id: 'seraph-choir', dur: 3.6, text: 'Distant eerie angelic choir swell heard through radio static, haunting sacred wordless hum, unsettling and beautiful, fading in and out' },
 ];
 
 // [bracket] cues shape eleven_v3 delivery. kind selects the finishing chain:
@@ -124,6 +142,17 @@ const VO = [
   { id: 'op-complete', v: 'operator', kind: 'op', text: 'Mission complete. [warm] Fine work out there. Cycle down and return to base.' },
   { id: 'op-failed', v: 'operator', kind: 'op', text: '[urgent] Gear down, gear down! [quiet] Signal lost. Recovery team, move out.' },
   { id: 'op-timeout', v: 'operator', kind: 'op', text: 'Decision window closing. Launch order goes automatic in five.' },
+
+  // Mission 02 — Golgotha's Wake.
+  { id: 'op2-mission-start', v: 'operator', kind: 'op', tempo: 1.1, text: "Mission two. Golgotha's wake. The fortress is dead — its escort is not. Cut off the retreat, pilot." },
+  { id: 'op2-entry', v: 'operator', kind: 'op', text: 'Entering the debris ring. Watch your lanes — this wreckage is still hot.' },
+  { id: 'op2-dart', v: 'operator', kind: 'op', text: 'Fast movers on the flanks. Dart-types — lead your shots.' },
+  { id: 'op2-sentinel', v: 'operator', kind: 'op', text: '[wary] Autonomous mines drifting in. Do not hug them, pilot.' },
+  { id: 'op2-mortar', v: 'operator', kind: 'op', text: 'Mortar signature. Watch the deck markers — do not stand on the X.' },
+  { id: 'op2-kai', v: 'operator', kind: 'op', text: '[alarmed] Two elite signatures. Lancer frames — rebuilt. Watch the spirals.' },
+  { id: 'op2-stragglers', v: 'operator', kind: 'op', text: 'Sweep the stragglers. [pause] [quiet] ...Do you hear that? Something on the open channel.' },
+  { id: 'op2-seraph', v: 'operator', kind: 'op', text: '[unnerved] White contact. Duel-class. It is... singing. [steady] Weapons free, pilot.' },
+  { id: 'op2-seraph-kill', v: 'operator', kind: 'op', text: 'Confirmed kill. [quiet] The song has gone thin... [unsettled] but it has not stopped. Bring your gear home, pilot.' },
 
   { id: 'kira-select', v: 'kira', kind: 'pilot', tempo: 1.15, text: 'Checklist done. Launching.' },
   { id: 'kira-launch', v: 'kira', kind: 'pilot', tempo: 1.15, text: 'Valkyr, taking the rail. [exhales] Steady... go.' },

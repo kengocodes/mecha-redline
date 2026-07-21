@@ -8,6 +8,7 @@ import { setStageCursor } from '../../core/cursor';
 import { clearTap, takeKey, takeTap, pointer } from '../../core/input';
 import { animateGear, buildGear, type Gear, setGearFlash } from '../../render/gearFactory';
 import { Stage3D } from '../../render/stage3d';
+import { selectLevel } from '../levels';
 import { ROSTER, selectPilot, selectedPilot } from '../roster';
 import { selectBackRect, selectSlotRect } from '../ui/overlay';
 import { hud, LAUNCH_T, LOAD_T, sel, setPhase } from '../ui/state';
@@ -34,6 +35,7 @@ export class SelectScene extends Phaser.Scene {
     s.setMode('showcase');
     setPhase('select');
     clearTap();
+    selectLevel(0); // a fresh sortie always opens the campaign at Mission 01
     sel.ix = ROSTER.findIndex((p) => p.id === selectedPilot().id);
     sel.hover = -1;
     sel.hoverBack = false;

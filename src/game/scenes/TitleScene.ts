@@ -122,7 +122,9 @@ export class TitleScene extends Phaser.Scene {
 
     const showLinks = hud.t > 0.7 && !settingsUi.open;
     const hover = hitTitleChrome(pointer.x, pointer.y, settingsUi.open, { links: showLinks });
-    setStageCursor(hover && hover.kind !== 'panel' ? 'select' : 'aim');
+    const cursorHot =
+      !!hover && hover.kind !== 'panel' && hover.kind !== 'links-band';
+    setStageCursor(cursorHot ? 'select' : 'aim');
 
     if (settingsUi.open) {
       if (takeKey('Escape')) {
@@ -182,6 +184,8 @@ export class TitleScene extends Phaser.Scene {
       else window.open(SOCIAL_LINKS[hit.id], '_blank', 'noopener,noreferrer');
       return;
     }
+    // Near-miss on the footer link row — don't treat as PRESS START.
+    if (hit?.kind === 'links-band') return;
     if (!canPlay) return;
     sfx('ui-confirm');
     startWipe(() => this.scene.start('select'));

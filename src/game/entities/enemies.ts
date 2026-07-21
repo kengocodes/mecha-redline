@@ -1,11 +1,19 @@
 // Enemy definitions + per-frame behaviours. Enemies live in arena coords;
 // their gear models are positioned by GameScene after each sim step.
 
-import { BK, type Bullet, SCORE } from '../../core/const';
+import { BK, type Bullet, PLAY_X, PLAY_Y, SCORE } from '../../core/const';
 import { type Gear, muzzleArenaPos } from '../../render/gearFactory';
-import { aimAngle, emit, fan, ring } from '../systems/patterns';
+import { aimAngle, emit, fan, lob, ring } from '../systems/patterns';
 
-export type EnemyKind = 'husk' | 'lancer' | 'boss';
+export type EnemyKind =
+  | 'husk'
+  | 'lancer'
+  | 'boss'
+  | 'dart'
+  | 'mortar'
+  | 'sentinel'
+  | 'kai'
+  | 'seraph';
 
 /** Hit-flash timing. The refractory gap keeps sustained fire (~30 hits/s on
  * the boss) from pinning the flash on — worst case is a ~8Hz strobe. */
@@ -36,6 +44,8 @@ export interface SimCtx {
   px: number;
   py: number;
   eb: Bullet[]; // enemy bullet list to emit into
+  pb: Bullet[]; // player bullets — SERAPH's counter-burst steals from these
+  purge: Bullet[]; // harmless shatter trails (visual) to push purged fire into
   playerAlive: boolean;
 }
 
@@ -66,6 +76,16 @@ export function makeEnemy(
       return { ...base, kind, hp: 22, maxHp: 22, hitR: 2.1, score: SCORE.lancer, life: 26 };
     case 'boss':
       return { ...base, kind, hp: 560, maxHp: 560, hitR: 4.6, score: SCORE.boss, life: Infinity };
+    case 'dart':
+      return { ...base, kind, hp: 2, maxHp: 2, hitR: 1.1, score: SCORE.dart, life: 14 };
+    case 'mortar':
+      return { ...base, kind, hp: 30, maxHp: 30, hitR: 2.4, score: SCORE.mortar, life: 32 };
+    case 'sentinel':
+      return { ...base, kind, hp: 6, maxHp: 6, hitR: 1.3, score: SCORE.sentinel, life: 26 };
+    case 'kai':
+      return { ...base, kind, hp: 40, maxHp: 40, hitR: 2.4, score: SCORE.kai, life: 30 };
+    case 'seraph':
+      return { ...base, kind, hp: 640, maxHp: 640, hitR: 3.4, score: SCORE.seraph, life: Infinity };
   }
 }
 
@@ -75,9 +95,19 @@ export function updateEnemy(e: Enemy, c: SimCtx, dt: number): void {
   e.flashT = Math.max(-FLASH_GAP, e.flashT - dt);
   if (e.kind === 'husk') updateHusk(e, c, dt);
   else if (e.kind === 'lancer') updateLancer(e, c, dt);
+  else if (e.kind === 'dart') updateDart(e, c, dt);
+  else if (e.kind === 'mortar') updateMortar(e, c, dt);
+  else if (e.kind === 'sentinel') updateSentinel(e, c, dt);
+  else if (e.kind === 'kai') updateKai(e, c, dt);
+  else if (e.kind === 'seraph') updateSeraph(e, c, dt);
   else updateBoss(e, c, dt);
   e.x += e.vx * dt;
   e.y += e.vy * dt;
+}
+
+/** Sentinel payload — fired on player-kill AND on proximity detonation. */
+export function sentinelRing(e: Enemy, eb: Bullet[]): void {
+  ring(eb, e.x, e.y, 8, 15, BK.orb, e.seed);
 }
 
 /**
@@ -213,6 +243,250 @@ function updateBoss(e: Enemy, c: SimCtx, dt: number): void {
       a.spiral += phase === 3 ? -0.26 : 0.23;
       emit(c.eb, e.x, e.y, a.spiral, 15 * rate, BK.orb);
       emit(c.eb, e.x, e.y, a.spiral + Math.PI, 15 * rate, BK.orb);
+    }
+  }
+}
+
+// ---- Mission 02 hostiles ---------------------------------------------------
+
+/** Fast diver: cuts across the lane in a swooping strafe; one aimed 3-shot
+ * trailing burst as it crosses the player's column. Teaches leading shots. */
+function updateDart(e: Enemy, c: SimCtx, dt: number): void {
+  const a = e.ai;
+  if (a.dir === undefined) {
+    a.dir = e.x < 0 ? 1 : -1;
+    a.fired = 0;
+    a.bn = 0;
+    a.bt = 0;
+  }
+  e.vx = a.dir * (24 + Math.sin(e.seed) * 4);
+  const holdY = -4 + Math.sin(e.t * 1.6 + e.seed) * 7;
+  e.vy = (holdY - e.y) * 2.2;
+  const closing = Math.abs(e.x - c.px) < 16;
+  e.gear.aimTarget = c.playerAlive && closing && a.fired === 0 ? 1 : 0;
+  if (c.playerAlive && a.fired === 0 && Math.abs(e.x - c.px) < 12) {
+    a.fired = 1;
+    a.bn = 3;
+    a.bt = 0;
+  }
+  if (c.playerAlive && a.bn > 0) {
+    a.bt -= dt;
+    if (a.bt <= 0) {
+      a.bt = 0.13;
+      a.bn--;
+      e.muzzleT = 0.07;
+      const m = armMuzzle(e, c);
+      emit(c.eb, m.x, m.y, aimAngle(e.x, e.y, c.px, c.py), 23, BK.shot);
+    }
+  }
+}
+
+/** Arc bombardment: holds the top band and lobs fused shells at marked deck
+ * points — the mark is the dodge, the ring is the punishment. */
+function updateMortar(e: Enemy, c: SimCtx, dt: number): void {
+  const a = e.ai;
+  if (a.ty === undefined) {
+    a.ty = Math.min(e.y + 18, -16);
+    a.lobT = 1.8 + (e.seed % 1);
+    a.gun = 0;
+  }
+  if (e.t > e.life) {
+    e.vy = -12; // leave the way it came
+    return;
+  }
+  e.vy = (a.ty - e.y) * 1.3;
+  e.vx = Math.cos(e.t * 0.5 + e.seed) * 3.5;
+  if (!c.playerAlive) return;
+  a.lobT -= dt;
+  if (a.lobT <= 0 && e.t > 1.5) {
+    a.lobT = 4.4;
+    a.gun = 1 - a.gun;
+    a.evLob = 1; // GameScene: tube thoomp
+    e.muzzleT = 0.09;
+    const m = armMuzzle(e, c, a.gun);
+    const tx = Math.max(-PLAY_X + 4, Math.min(PLAY_X - 4, c.px + (Math.random() - 0.5) * 10));
+    const ty = Math.max(0, Math.min(PLAY_Y - 2, c.py + (Math.random() - 0.5) * 8));
+    lob(c.eb, m.x, m.y, tx, ty, 1.7, BK.orb);
+  }
+}
+
+/** Autonomous mine: slow home toward the player; arms close-in (beep + hot
+ * blink), detonates on proximity. GameScene fires the ring both ways. */
+function updateSentinel(e: Enemy, c: SimCtx, dt: number): void {
+  const a = e.ai;
+  const dx = c.px - e.x;
+  const dy = c.py - e.y;
+  const d = Math.hypot(dx, dy) || 1;
+  if (e.t > e.life) {
+    e.vy = 14; // drift out the bottom, disarmed
+    e.gear.root.userData.armed = false;
+    return;
+  }
+  const spd = Math.min(7.5, 2.5 + e.t * 0.55);
+  const k = Math.min(1, dt * 1.2);
+  e.vx += ((dx / d) * spd + Math.sin(e.t * 2 + e.seed) * 2 - e.vx) * k;
+  e.vy += ((dy / d) * spd - e.vy) * k;
+  const armed = c.playerAlive && d < 10;
+  e.gear.root.userData.armed = armed;
+  if (armed && !a.beeped) {
+    a.beeped = 1;
+    a.evBeep = 1; // GameScene: proximity beep
+  }
+  if (!armed) a.beeped = 0;
+  if (c.playerAlive && d < 4.2) a.boom = 1; // GameScene detonates it
+}
+
+/** Lancer-Kai: the L1 lancer elite — wider fans plus a short borrowed
+ * boss-spiral burst at the end of each attack cycle. Arrives in pairs. */
+function updateKai(e: Enemy, c: SimCtx, dt: number): void {
+  const a = e.ai;
+  if (a.ty === undefined) {
+    a.ty = Math.min(e.y + 22, -10);
+    a.spT = 0;
+    a.sp = e.seed;
+    a.spGap = 0;
+  }
+  if (e.t > e.life) {
+    e.gear.aimTarget = 0;
+    e.vy = -14;
+    return;
+  }
+  e.vy = (a.ty - e.y) * 1.4;
+  e.vx = Math.cos(e.t * 0.6 + e.seed) * 6;
+  e.gear.aimTarget = c.playerAlive && e.fireT > 1.9 && e.t > 1.3 ? 1 : 0;
+  if (!c.playerAlive) return;
+  if (e.fireT > 2.5 && e.t > 1.8) {
+    e.fireT = 0;
+    e.muzzleT = 0.07;
+    const m = armMuzzle(e, c);
+    fan(c.eb, m.x, m.y, aimAngle(e.x, e.y, c.px, c.py), 6, 0.7, 18, BK.shot);
+  }
+  // Spiral burst window at the tail of each ~5.2s cycle.
+  a.spT += dt;
+  if (a.spT % 5.2 > 4.1 && e.t > 3) {
+    a.spGap -= dt;
+    if (a.spGap <= 0) {
+      a.spGap = 0.11;
+      a.sp += 0.26;
+      emit(c.eb, e.x, e.y, a.sp, 13, BK.orb);
+      emit(c.eb, e.x, e.y, a.sp + Math.PI, 13, BK.orb);
+    }
+  }
+}
+
+/**
+ * SERAPH: duel-class. Fights with the player's own vocabulary.
+ *   P1 — dash-repositions across the top band, aimed needle fans.
+ *   P2 (<60%) — mirrors the player's lateral movement; slow needle curtains
+ *   rain from the outer wing tips.
+ *   P3 (<28%) — counter-burst: purges player fire crowding the hull, then
+ *   answers with a radial needle bloom. Everything ~25% faster.
+ */
+function updateSeraph(e: Enemy, c: SimCtx, dt: number): void {
+  const a = e.ai;
+  if (a.state === undefined) {
+    a.state = 0; // 0 = entering
+    a.cycle = -0.9;
+    a.volley = 0;
+    a.dashT = 0;
+    a.holdX = 0;
+    a.curT = 0;
+    a.curSide = 0;
+    a.purgeCd = 3;
+  }
+
+  if (a.state === 0) {
+    // Cinematic entrance, same contract as Golgotha: steady descent, then
+    // state 1 fires GameScene's touchdown beat.
+    e.vy = Math.max(5, Math.min(16, (-15 - e.y) * 2.2));
+    e.vx = 0;
+    if (e.y > -15.6) {
+      a.state = 1;
+      a.cycle = -0.9;
+    }
+    return;
+  }
+
+  const frac = e.hp / e.maxHp;
+  const phase = frac < 0.28 ? 3 : frac < 0.6 ? 2 : 1;
+  a.phase = phase; // read by GameScene for phase-transition hitstop
+  const rate = phase === 3 ? 1.25 : 1;
+
+  e.vy = (-15 + Math.sin(e.t * 0.8) * 2 - e.y) * 1.5;
+
+  // Horizontal: P1 dashes to fresh ground; P2+ shadows the player with lag.
+  if (phase === 1) {
+    a.dashT -= dt;
+    if (a.dashT <= 0) {
+      a.dashT = 2.6;
+      a.holdX = Math.max(-30, Math.min(30, c.px + (Math.random() - 0.5) * 44));
+      a.evDash = 1; // GameScene: dash whoosh
+    }
+  } else {
+    a.holdX = Math.max(-32, Math.min(32, c.px * 0.85));
+  }
+  e.vx = Math.max(-55, Math.min(55, (a.holdX - e.x) * (phase === 1 ? 5 : 2.4)));
+
+  if (!c.playerAlive) return;
+
+  // Aimed needle volleys from the chest core, three per cycle.
+  a.cycle += dt * rate;
+  if (a.cycle > 3.4) {
+    a.cycle = 0;
+    a.volley = 0;
+  }
+  if (a.volley < 3 && a.cycle > 0.5 + a.volley * 0.5) {
+    a.volley++;
+    e.muzzleT = 0.07;
+    const m = armMuzzle(e, c, 0);
+    fan(c.eb, m.x, m.y, aimAngle(e.x, e.y, c.px, c.py), phase === 1 ? 5 : 7, 0.5, 26 * rate, BK.needle);
+  }
+
+  // P2+: slow needle curtains from alternating outer wing tips. Because the
+  // boss mirrors the player, the curtains pressure the lane the player is
+  // in — weaving through them is the phase's dance.
+  if (phase >= 2) {
+    a.curT += dt;
+    const gap = phase === 3 ? 0.15 : 0.2;
+    while (a.curT > gap) {
+      a.curT -= gap;
+      a.curSide = 1 - a.curSide;
+      const m = armMuzzle(e, c, 1 + a.curSide);
+      const drift = Math.sin(e.t * 0.9 + a.curSide * Math.PI) * 0.35;
+      emit(c.eb, m.x, m.y, Math.PI / 2 + drift, 10.5, BK.needle);
+    }
+  }
+
+  // P3: counter-burst. When player fire crowds the hull, purge it into
+  // harmless shatter (the player's own move, reflected) and bloom outward.
+  if (phase === 3) {
+    a.purgeCd = Math.max(0, a.purgeCd - dt);
+    let near = 0;
+    for (const b of c.pb) {
+      if ((b.x - e.x) ** 2 + (b.y - e.y) ** 2 < 144) near++;
+    }
+    if (a.purgeCd <= 0 && near >= 8) {
+      a.purgeCd = 5;
+      for (let i = c.pb.length - 1; i >= 0; i--) {
+        const b = c.pb[i];
+        const d2 = (b.x - e.x) ** 2 + (b.y - e.y) ** 2;
+        if (d2 < 196) {
+          c.pb.splice(i, 1);
+          const len = Math.sqrt(d2) || 1;
+          c.purge.push({
+            ...b,
+            vx: ((b.x - e.x) / len) * 55,
+            vy: ((b.y - e.y) / len) * 55,
+            life: 0.38,
+            scale: 1,
+          });
+        }
+      }
+      a.evPurge = 1; // GameScene: flash + choral shockwave
+      e.flashT = 0.25;
+      const off = Math.random() * 6;
+      ring(c.eb, e.x, e.y, 22, 17, BK.needle, off);
+      ring(c.eb, e.x, e.y, 22, 13, BK.needle, off + 0.14);
     }
   }
 }

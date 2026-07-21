@@ -3,11 +3,12 @@
 // LEVELS and everything else follows.
 
 import { LEVEL_1 } from './level1';
+import { LEVEL_2 } from './level2';
 import type { LevelDef } from './types';
 
-export type { BossDef, LevelApi, LevelDef, LevelEvent } from './types';
+export type { BossDef, LevelApi, LevelDef, LevelEvent, SpawnKind } from './types';
 
-export const LEVELS: LevelDef[] = [LEVEL_1];
+export const LEVELS: LevelDef[] = [LEVEL_1, LEVEL_2];
 
 let currentIx = 0;
 
@@ -17,4 +18,11 @@ export function selectLevel(ix: number): void {
 
 export function currentLevel(): LevelDef {
   return LEVELS[currentIx];
+}
+
+/** Step to the next mission if there is one. True when a level was advanced. */
+export function advanceLevel(): boolean {
+  if (currentIx + 1 >= LEVELS.length) return false;
+  currentIx += 1;
+  return true;
 }

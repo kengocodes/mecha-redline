@@ -44,6 +44,36 @@ export function ring(
   }
 }
 
+/**
+ * Mortar lob: a shell that flies to (tx, ty) over `flight` seconds, then
+ * airbursts (GameScene detonates it into a ring when the fuse hits zero).
+ * Carries its target as a HUD deck marker so the player can read the drop.
+ */
+export function lob(
+  arr: Bullet[],
+  x: number,
+  y: number,
+  tx: number,
+  ty: number,
+  flight: number,
+  kind: BK,
+): void {
+  if (arr.length >= ENEMY_CAP) return;
+  arr.push({
+    kind,
+    x,
+    y,
+    vx: (tx - x) / flight,
+    vy: (ty - y) / flight,
+    r: BULLET_R[kind],
+    t: Math.random() * 6,
+    scale: 1.35, // fat shell — reads different from ring orbs
+    fuse: flight,
+    fuse0: flight,
+    mark: { x: tx, y: ty },
+  });
+}
+
 /** n bullets fanned across `spread` radians, centred on `ang`. */
 export function fan(
   arr: Bullet[],

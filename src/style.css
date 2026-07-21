@@ -98,26 +98,35 @@ body {
 /*
  * Legal reader — same-page overlay (Sylvaria pattern).
  * Arial body, readable size/line-height; audio muted via setLegalSilent.
+ * border-box on the shell so padding cannot push past the viewport
+ * (content-box + width:100% was clipping copy on narrow phones).
  */
 .legal-screen {
   position: fixed;
   inset: 0;
   z-index: 50;
+  width: 100%;
+  max-width: 100vw;
   background: #0a0e16;
   overflow-x: hidden;
   overflow-y: auto;
+  overscroll-behavior: contain;
   text-align: left;
   -webkit-font-smoothing: antialiased;
   user-select: text;
   -webkit-user-select: text;
-  touch-action: pan-x pan-y pinch-zoom;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y pinch-zoom;
 }
 .legal-shell {
+  box-sizing: border-box;
   width: min(42rem, 100%);
+  max-width: 100%;
   margin: 0 auto;
-  padding: 1.5rem max(1.25rem, env(safe-area-inset-right)) 3rem
-    max(1.25rem, env(safe-area-inset-left));
-  padding-top: max(1.5rem, env(safe-area-inset-top));
+  padding: max(1.25rem, env(safe-area-inset-top))
+    max(1rem, env(safe-area-inset-right))
+    max(2.5rem, env(safe-area-inset-bottom))
+    max(1rem, env(safe-area-inset-left));
 }
 .legal-back {
   display: inline-flex;
@@ -127,9 +136,9 @@ body {
   min-width: 44px;
   min-height: 44px;
   padding: 0.5rem 0.25rem;
-  margin-bottom: 1.5rem;
+  margin-bottom: 1.25rem;
   font-family: Arial, Helvetica, sans-serif;
-  font-size: 1.125rem;
+  font-size: 1.0625rem;
   font-weight: 600;
   line-height: 1.5;
   color: #7ffbff;
@@ -146,16 +155,18 @@ body {
 }
 .legal-article {
   font-family: Arial, Helvetica, sans-serif;
-  font-size: 1.125rem;
+  font-size: 1.0625rem;
   font-weight: 400;
   line-height: 1.6;
   color: #e8ecf4;
   letter-spacing: 0.01em;
+  overflow-wrap: break-word;
+  word-wrap: break-word;
 }
 .legal-article h1 {
-  font-size: 2rem;
+  font-size: clamp(1.5rem, 5vw + 0.75rem, 2rem);
   font-weight: 700;
-  line-height: 1.3;
+  line-height: 1.25;
   color: #ffffff;
   margin: 0;
 }
@@ -164,16 +175,16 @@ body {
   outline-offset: 4px;
 }
 .legal-updated {
-  margin: 0.75rem 0 0;
-  font-size: 1rem;
+  margin: 0.65rem 0 0;
+  font-size: 0.9375rem;
   line-height: 1.5;
   color: #93a0b4;
 }
 .legal-intro {
-  margin-top: 1.75rem;
+  margin-top: 1.5rem;
 }
 .legal-article p {
-  margin: 0 0 2.25rem;
+  margin: 0 0 1.5rem;
   max-width: 65ch;
 }
 .legal-intro p:last-child,
@@ -181,22 +192,22 @@ body {
   margin-bottom: 0;
 }
 .legal-section {
-  margin-top: 2.75rem;
+  margin-top: 2.25rem;
 }
 .legal-article h2 {
-  font-size: 1.35rem;
+  font-size: clamp(1.15rem, 2.5vw + 0.75rem, 1.35rem);
   font-weight: 700;
   line-height: 1.35;
   color: #ffffff;
-  margin: 0 0 1rem;
+  margin: 0 0 0.85rem;
 }
 .legal-article ul {
-  margin: 0 0 2.25rem;
-  padding-left: 1.5rem;
+  margin: 0 0 1.5rem;
+  padding-left: 1.25rem;
   max-width: 65ch;
 }
 .legal-article li {
-  margin-bottom: 0.75rem;
+  margin-bottom: 0.65rem;
   line-height: 1.6;
 }
 .legal-article li:last-child {
@@ -216,9 +227,56 @@ body {
   outline-offset: 3px;
 }
 
+@media (min-width: 640px) {
+  .legal-shell {
+    padding: max(1.5rem, env(safe-area-inset-top))
+      max(1.25rem, env(safe-area-inset-right))
+      max(3rem, env(safe-area-inset-bottom))
+      max(1.25rem, env(safe-area-inset-left));
+  }
+  .legal-back {
+    margin-bottom: 1.5rem;
+    font-size: 1.125rem;
+  }
+  .legal-article {
+    font-size: 1.125rem;
+  }
+  .legal-updated {
+    margin-top: 0.75rem;
+    font-size: 1rem;
+  }
+  .legal-intro {
+    margin-top: 1.75rem;
+  }
+  .legal-article p {
+    margin-bottom: 2.25rem;
+  }
+  .legal-section {
+    margin-top: 2.75rem;
+  }
+  .legal-article h2 {
+    margin-bottom: 1rem;
+  }
+  .legal-article ul {
+    margin-bottom: 2.25rem;
+    padding-left: 1.5rem;
+  }
+  .legal-article li {
+    margin-bottom: 0.75rem;
+  }
+}
+
 html.legal-reading,
 html.legal-reading body {
-  overflow: auto;
+  overflow: hidden;
+  width: 100%;
+  max-width: 100%;
+  height: 100%;
+  height: 100dvh;
+}
+html.legal-reading #stage {
+  visibility: hidden;
+  pointer-events: none;
 }
 html.legal-reading #loading {
   display: none !important;

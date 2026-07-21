@@ -611,7 +611,10 @@ export function animateGear(g: Gear, dt: number, bank = 0, pitch = 0, boost = 0.
   }
   // Head leads into the turn, with a slow idle scan on top.
   g.head.rotation.y = bank * 0.7 + Math.sin(g.t * 0.6) * 0.08;
-  for (const gun of g.guns) gun.rotation.x = -0.08 - g.recoil * 0.22;
+  // Shoulder guns rest near level; mortar frames override the base pitch
+  // (root.userData.gunPitch) to hold their tubes at a lob angle.
+  const gunPitch = (g.root.userData.gunPitch as number | undefined) ?? -0.08;
+  for (const gun of g.guns) gun.rotation.x = gunPitch - g.recoil * 0.22;
   // Pilot light at rest; speed stretches a modest rear plume.
   const len = 0.45 + b * 1.1;
   const fat = 0.75 + Math.min(1.2, b) * 0.35;
@@ -717,6 +720,72 @@ export const LANCER: GearOptions = {
   shoulderCannons: false,
   wings: false,
   bulk: 1.15,
+};
+
+// ---- Mission 02 hostiles (wake scavengers: ash plate, signal-orange heat) --
+
+/** Fast diver — lean winged frame, ash-violet plate, signal-orange optics. */
+export const DART: GearOptions = {
+  palette: {
+    armor: 0x413d52,
+    dark: 0x1b1a24,
+    accent: 0xff7a3c,
+    trim: 0x6a6580,
+    glow: 0xff8a4a,
+    thrust: 0xffa050,
+  },
+  scale: 0.78,
+  hover: 1.9,
+  head: 'mono',
+  fins: true,
+  rifle: false,
+  armCannon: true,
+  shoulderCannons: false,
+  wings: true,
+  bulk: 0.72,
+};
+
+/** Arc bombardment — squat rust hull, twin lob tubes over the shoulders. */
+export const MORTAR: GearOptions = {
+  palette: {
+    armor: 0x5c4a38,
+    dark: 0x241f19,
+    accent: 0xc8b088,
+    trim: 0x7a6a52,
+    glow: 0xff9a3c,
+    thrust: 0xffb060,
+  },
+  scale: 1.15,
+  hover: 1.4,
+  head: 'mono',
+  fins: false,
+  rifle: false,
+  armCannon: false,
+  shoulderCannons: true,
+  wings: false,
+  bulk: 1.35,
+};
+
+/** Lancer-Kai — the L1 lancer rebuilt in the wake: charcoal-teal, redline
+ * accents, wings, and one of the boss's spiral arms. */
+export const LANCER_KAI: GearOptions = {
+  palette: {
+    armor: 0x2f4a4e,
+    dark: 0x18262a,
+    accent: 0xff3b53,
+    trim: 0x5f7d78,
+    glow: 0xff5566,
+    thrust: 0xd8f2ff,
+  },
+  scale: 1.32,
+  hover: 1.7,
+  head: 'mono',
+  fins: false,
+  rifle: false,
+  armCannon: true,
+  shoulderCannons: false,
+  wings: true,
+  bulk: 1.18,
 };
 
 export const GOLGOTHA: GearOptions = {

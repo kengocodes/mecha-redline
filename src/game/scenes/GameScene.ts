@@ -32,14 +32,20 @@ import { isLegalOpen } from '../../legal/overlay';
 import {
   animateGear,
   buildGear,
+  DART,
   disposeGear,
   type Gear,
+  type GearOptions,
   GOLGOTHA,
   HUSK,
   LANCER,
+  LANCER_KAI,
+  MORTAR,
   muzzleArenaPos,
   setGearFlash,
 } from '../../render/gearFactory';
+import { buildSentinel } from '../../render/sentinel';
+import { buildSeraph } from '../../render/seraph';
 import { Stage3D } from '../../render/stage3d';
 import { type PilotStats, ROSTER, selectedPilot } from '../roster';
 import {
@@ -48,9 +54,10 @@ import {
   FLASH_DUR,
   FLASH_GAP,
   makeEnemy,
+  sentinelRing,
   updateEnemy,
 } from '../entities/enemies';
-import { currentLevel, type LevelDef } from '../levels';
+import { advanceLevel, currentLevel, type LevelDef, type SpawnKind } from '../levels';
 import {
   BURST,
   createBurstState,
@@ -59,7 +66,7 @@ import {
   tickPurge,
   tryBurst,
 } from '../systems/burst';
-import { emit } from '../systems/patterns';
+import { emit, ring } from '../systems/patterns';
 import { addPopup, hud, popups, say, setPhase, settingsUi } from '../ui/state';
 import { hitTitleChrome, sliderValueAt } from '../ui/titleChrome';
 import { startWipe } from '../ui/wipe';
@@ -138,15 +145,17 @@ export class GameScene extends Phaser.Scene {
     this.bossCineT = 99;
     this.bossEngaged = false;
 
+    s.setBackdrop(this.level.backdrop);
+
     const pilot = selectedPilot();
     this.stats = pilot.stats;
     this.callsign = pilot.displayName;
     this.burst = createBurstState(this.stats.burst);
     this.voPfx = PILOT_VO[pilot.id] ?? 'kira';
     this.clearVoDone = false;
-    music('battle');
+    music(this.level.music.battle);
     // Queued: the pilot's launch line from the select cut-in may still be going.
-    vo('op-mission-start', { queue: true });
+    vo(this.level.introVo, { queue: true });
     sfxLoopStart('thruster');
     sfx('gear-arrive', { gain: 0.55 }); // servo settle under the hero shot
 
@@ -176,13 +185,13 @@ export class GameScene extends Phaser.Scene {
     this.dragBus = null;
     setPhase('intro');
 
-    // Dev-only: ?debug=boss jumps straight to the fortress fight.
-    if (debugParam() === 'boss') {
+    // Dev-only: ?debug=boss / boss2 jumps straight to the boss fight.
+    if (debugParam()?.startsWith('boss')) {
       this.scriptIx = this.level.events.length;
       this.levelT = 999;
       setPhase('warning');
       // Mirror the real battle→warning transition or the fight runs silent.
-      music('boss', { fade: 1.4 });
+      music(this.level.music.boss, { fade: 1.4 });
       sfx('warning');
     }
 
@@ -229,8 +238,23 @@ export class GameScene extends Phaser.Scene {
 
   // ---- level script api ----
   private spawn(kind: EnemyKind, x: number, y: number, seed?: number): Enemy {
-    const opts = kind === 'husk' ? HUSK : kind === 'lancer' ? LANCER : GOLGOTHA;
-    const gear = buildGear(opts);
+    let gear: Gear;
+    if (kind === 'sentinel') {
+      gear = buildSentinel();
+    } else if (kind === 'seraph') {
+      gear = buildSeraph();
+    } else {
+      const OPTS: Partial<Record<EnemyKind, GearOptions>> = {
+        husk: HUSK,
+        lancer: LANCER,
+        boss: GOLGOTHA,
+        dart: DART,
+        mortar: MORTAR,
+        kai: LANCER_KAI,
+      };
+      gear = buildGear(OPTS[kind] ?? HUSK);
+      if (kind === 'mortar') gear.root.userData.gunPitch = -0.62; // tubes at lob angle
+    }
     Stage3D.I.battleGroup.add(gear.root);
     const e = makeEnemy(kind, x, y, gear, seed);
     this.enemies.push(e);
@@ -243,8 +267,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   private api = {
-    husk: (x: number, y = -36, seed?: number) => void this.spawn('husk', x, y, seed),
-    lancer: (x: number, y = -34) => void this.spawn('lancer', x, y),
+    spawn: (kind: SpawnKind, x: number, y = -36, seed?: number) =>
+      void this.spawn(kind, x, y, seed),
     say,
     wave: (n: number) => {
       hud.wave = n;
@@ -347,13 +371,18 @@ export class GameScene extends Phaser.Scene {
       vo(`${this.voPfx}-clear`);
     }
 
-    // End-state input.
+    // End-state input. A win rolls into the next mission when one exists.
     if (hud.phase === 'failed' && hud.t > 1 && takeTap()) {
       startWipe(() => this.scene.restart());
       return;
     }
     if (hud.phase === 'complete' && hud.t > 2 && takeTap()) {
-      startWipe(() => this.scene.start('title'));
+      if (advanceLevel()) {
+        sfx('ui-confirm');
+        startWipe(() => this.scene.restart());
+      } else {
+        startWipe(() => this.scene.start('title'));
+      }
       return;
     }
 
@@ -384,7 +413,9 @@ export class GameScene extends Phaser.Scene {
     } else if (this.boss && this.bossCineT < 3.2) {
       const t = this.bossCineT;
       const w = t < 0.6 ? easeInOut(t / 0.6) : t < 2.3 ? 1 : 1 - easeInOut((t - 2.3) / 0.9);
-      s.setCine(this.boss.x, this.boss.y + 3, 5, 1.65, 42, w);
+      // SERAPH is three gears tall — pull the reveal wider and look higher.
+      const tall = this.boss.kind === 'seraph';
+      s.setCine(this.boss.x, this.boss.y + 3, tall ? 8 : 5, tall ? 1.3 : 1.65, 42, w);
       bars = w;
     } else {
       s.setCine(0, 0, 0, 1, CAM_ELEV, 0);
@@ -409,11 +440,12 @@ export class GameScene extends Phaser.Scene {
         this.eb.length = 0; // stage is clear for the reveal — no stray fire
         say(this.level.boss.warnSay, this.level.boss.warnVo);
         sfx('warning');
-        music('boss', { fade: 1.4 });
+        if (this.level.boss.warnSfx) sfx(this.level.boss.warnSfx);
+        music(this.level.music.boss, { fade: 1.4 });
       }
     } else if (hud.phase === 'warning' && hud.t > 2.8) {
       setPhase('boss');
-      this.boss = this.spawn('boss', 0, -44);
+      this.boss = this.spawn(this.level.boss.kind, 0, -44);
       this.bossCineT = 0;
       hud.bossName = `${this.level.boss.name} ── ${this.level.boss.tag}`;
       hud.bossMax = this.boss.maxHp;
@@ -546,12 +578,51 @@ export class GameScene extends Phaser.Scene {
       px: this.p.x,
       py: this.p.y,
       eb: this.eb,
+      pb: this.pb,
+      purge: this.purge,
       playerAlive: this.p.alive && hud.phase !== 'intro',
     };
+    const s = Stage3D.I;
     const shotsBefore = this.eb.length;
     for (let i = this.enemies.length - 1; i >= 0; i--) {
       const e = this.enemies[i];
       updateEnemy(e, ctx, dt);
+
+      // One-shot audio/FX events raised by the AI this frame.
+      if (e.ai.evLob) {
+        e.ai.evLob = 0;
+        sfx('mortar-lob', { jitter: true, throttleMs: 120 });
+      }
+      if (e.ai.evBeep) {
+        e.ai.evBeep = 0;
+        sfx('mine-beep', { throttleMs: 220 });
+      }
+      if (e.ai.evDash) {
+        e.ai.evDash = 0;
+        sfx('seraph-dash', { jitter: true, throttleMs: 200 });
+      }
+      if (e.ai.evPurge) {
+        e.ai.evPurge = 0;
+        this.stop(HITSTOP.burst);
+        s.addShake(0.5);
+        s.impact(0.007, 0.16, 0x9ffcff);
+        s.fx.burst(e.x, e.y, 0x9ffcff, 0xe8fbff);
+        sfx('seraph-purge');
+      }
+
+      // Sentinel proximity detonation: the ring fires, no score changes hands.
+      if (e.ai.boom) {
+        sentinelRing(e, this.eb);
+        s.fx.explode(e.x, e.y, 0.9);
+        s.addShake(0.35);
+        s.impact(0.004, 0.08);
+        sfx('mortar-boom', { jitter: true, throttleMs: 80 });
+        Stage3D.I.battleGroup.remove(e.gear.root);
+        disposeGear(e.gear.root);
+        this.enemies.splice(i, 1);
+        continue;
+      }
+
       const gone =
         e.y > CULL_Y || e.y < -CULL_Y - 8 || e.x < -CULL_X - 8 || e.x > CULL_X + 8;
       if (gone && e.t > 3) {
@@ -575,6 +646,21 @@ export class GameScene extends Phaser.Scene {
         if (Math.abs(b.x) > CULL_X || Math.abs(b.y) > CULL_Y) list.splice(i, 1);
       }
     }
+    // Fused mortar shells airburst into a ring over their deck marker.
+    for (let i = this.eb.length - 1; i >= 0; i--) {
+      const b = this.eb[i];
+      if (b.fuse === undefined) continue;
+      b.fuse -= dt;
+      if (b.fuse <= 0) {
+        this.eb.splice(i, 1);
+        ring(this.eb, b.x, b.y, 10, 14, BK.orb, Math.random() * 6);
+        const s = Stage3D.I;
+        s.fx.explode(b.x, b.y, 0.7);
+        s.addShake(0.25);
+        s.impact(0.003, 0.07);
+        sfx('mortar-boom', { jitter: true, throttleMs: 90 });
+      }
+    }
     tickPurge(this.purge, dt);
   }
 
@@ -588,7 +674,8 @@ export class GameScene extends Phaser.Scene {
       for (let i = this.pb.length - 1; i >= 0; i--) {
         const b = this.pb[i];
         for (const e of this.enemies) {
-          if (e.kind === 'boss' && e.ai.state === 0) continue; // entrance armour
+          const isBoss = e.kind === 'boss' || e.kind === 'seraph';
+          if (isBoss && e.ai.state === 0) continue; // entrance armour
           const rr = e.hitR + b.r;
           const dx = e.x - b.x;
           const dy = e.y - b.y;
@@ -651,17 +738,22 @@ export class GameScene extends Phaser.Scene {
 
     const s = Stage3D.I;
     const ui = s.uiPoint(e.x, e.y);
-    if (e.kind === 'boss') {
+    const isBoss = e.kind === 'boss' || e.kind === 'seraph';
+    if (isBoss) {
       addPopup(ui.x, ui.y - 20, `+${pts}`, '#ffffff', 30);
     } else {
-      addPopup(ui.x, ui.y - 14, `+${pts}`, mult > 1 ? '#7ffbff' : '#ffb54a', e.kind === 'husk' ? 15 : 19);
+      const small = e.kind === 'husk' || e.kind === 'dart' || e.kind === 'sentinel';
+      addPopup(ui.x, ui.y - 14, `+${pts}`, mult > 1 ? '#7ffbff' : '#ffb54a', small ? 15 : 19);
     }
     if (mult > prevMult) {
       addPopup(ui.x, ui.y - 46, `CHAIN ×${mult}`, '#ffffff', 22);
       sfx('coin', { throttleMs: 90 });
     }
 
-    if (e.kind === 'boss') {
+    // A killed mine still rings out — shooting it is a commitment.
+    if (e.kind === 'sentinel') sentinelRing(e, this.eb);
+
+    if (isBoss) {
       this.boss = null;
       s.addShake(1.4);
       s.addPunch(1);
@@ -679,26 +771,25 @@ export class GameScene extends Phaser.Scene {
       say(this.level.boss.killSay(this.callsign), this.level.boss.killVo);
       sfx('expl-boss');
     } else {
-      const lancer = e.kind === 'lancer';
-      s.fx.explode(e.x, e.y, lancer ? 1.5 : 1);
-      // Spark shower (+ a delayed secondary blast on lancers) so kills read
-      // as a shredding, not a single pop.
-      for (let i = 0; i < (lancer ? 10 : 5); i++) {
+      // Heavies (lancer / mortar / kai) get the big shredding; grunts pop.
+      const heavy = e.kind === 'lancer' || e.kind === 'mortar' || e.kind === 'kai';
+      s.fx.explode(e.x, e.y, heavy ? 1.5 : 1);
+      for (let i = 0; i < (heavy ? 10 : 5); i++) {
         s.fx.spark(
-          e.x + (Math.random() - 0.5) * (lancer ? 4 : 2.4),
-          e.y + (Math.random() - 0.5) * (lancer ? 3 : 2),
+          e.x + (Math.random() - 0.5) * (heavy ? 4 : 2.4),
+          e.y + (Math.random() - 0.5) * (heavy ? 3 : 2),
         );
       }
-      if (lancer) {
+      if (heavy) {
         this.time.delayedCall(110, () =>
           s.fx.explode(e.x + (Math.random() - 0.5) * 3, e.y - 1, 0.8),
         );
       }
-      s.addShake(lancer ? 0.45 : 0.2);
-      s.addPunch(lancer ? 0.3 : 0.1);
-      s.impact(lancer ? 0.005 : 0.0025, lancer ? 0.1 : 0.05);
-      this.stop(lancer ? HITSTOP.lancer : HITSTOP.husk);
-      sfx(lancer ? 'expl-big' : 'expl-small', { jitter: true, throttleMs: 60 });
+      s.addShake(heavy ? 0.45 : 0.2);
+      s.addPunch(heavy ? 0.3 : 0.1);
+      s.impact(heavy ? 0.005 : 0.0025, heavy ? 0.1 : 0.05);
+      this.stop(heavy ? HITSTOP.lancer : HITSTOP.husk);
+      sfx(heavy ? 'expl-big' : 'expl-small', { jitter: true, throttleMs: 60 });
     }
   }
 
@@ -801,6 +892,17 @@ export class GameScene extends Phaser.Scene {
       }
       const spd = Math.hypot(e.vx, e.vy);
       animateGear(e.gear, dt, -e.vx * 0.01, -e.vy * 0.004, Math.min(1.15, 0.25 + spd / 9));
+      // Custom-mesh extras animateGear doesn't know (halo, bits, mine spin).
+      const hook = e.gear.root.userData.anim as ((t: number) => void) | undefined;
+      hook?.(hud.t);
+    }
+
+    // Mortar deck markers: project each fused shell's target for the HUD.
+    hud.marks.length = 0;
+    for (const b of this.eb) {
+      if (!b.mark || b.fuse === undefined) continue;
+      const ui = s.uiPoint(b.mark.x, b.mark.y, 0.2);
+      hud.marks.push({ x: ui.x, y: ui.y, frac: b.fuse / (b.fuse0 ?? 1) });
     }
 
     s.bullets.sync([this.eb, this.pb, this.purge], dt);

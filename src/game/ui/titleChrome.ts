@@ -190,14 +190,16 @@ export function titleLinkRects(): { id: LinkId; rect: Rect }[] {
     }));
   }
   const labels = SITE_LINKS.map((l) => l.label);
-  const gap = 22;
-  const pad = 10;
-  const widths = labels.map((lab) => lab.length * 7.2 + pad * 2);
+  // Wider gaps + taller hits so near-misses don't fall through to PRESS START.
+  // Visual stays on the DESKTOP RECOMMENDED band (~672); extra hit pad goes
+  // upward so we don't collide with the scrolling ticker (~708).
+  const gap = 32;
+  const padX = 14;
+  const widths = labels.map((lab) => lab.length * 7.2 + padX * 2);
   const total = widths.reduce((a, b) => a + b, 0) + gap * (labels.length - 1);
-  // Bottom-right chrome — text center aligns with DESKTOP RECOMMENDED (~672).
   let x = uiW - total - 36;
-  const y = 663;
-  const h = 18;
+  const h = 28;
+  const y = 658;
   return SITE_LINKS.map((link, i) => {
     const w = widths[i];
     const rect = { x, y, w, h };
@@ -206,9 +208,33 @@ export function titleLinkRects(): { id: LinkId; rect: Rect }[] {
   });
 }
 
+/**
+ * Union of the link row (including gaps). Clicks here that miss a label are
+ * inert — they must not count as PRESS START.
+ */
+export function titleLinksBandRect(): Rect {
+  const links = titleLinkRects();
+  const first = links[0]!.rect;
+  const last = links[links.length - 1]!.rect;
+  const padX = touchUi() ? touchGap() : 16;
+  // Desktop: pad upward only — keep the inert band clear of the ticker.
+  const padTop = touchUi() ? touchGap() : 10;
+  const padBottom = touchUi() ? touchGap() : 4;
+  const top = Math.min(...links.map((l) => l.rect.y));
+  const bottom = Math.max(...links.map((l) => l.rect.y + l.rect.h));
+  return {
+    x: first.x - padX,
+    y: top - padTop,
+    w: last.x + last.w - first.x + padX * 2,
+    h: bottom - top + padTop + padBottom,
+  };
+}
+
 export type TitleHit =
   | { kind: 'settings' }
   | { kind: 'link'; id: LinkId }
+  /** Near-miss in the footer link row — swallow, don't start. */
+  | { kind: 'links-band' }
   | { kind: 'close' }
   | { kind: 'mute' }
   | { kind: 'exit' }
@@ -251,6 +277,7 @@ export function hitTitleChrome(
     for (const { id, rect } of titleLinkRects()) {
       if (inside(rect, x, y)) return { kind: 'link', id };
     }
+    if (inside(titleLinksBandRect(), x, y)) return { kind: 'links-band' };
   }
   return null;
 }
@@ -338,12 +365,14 @@ export function drawTitleChrome(
   }
 
   // Resting = near-white FG (≥7:1 on the hangar void); hover = cyan cue.
+  // Hit rects are taller than the glyphs — keep underline tight under the text.
   for (const { id, rect } of titleLinkRects()) {
     const hot = hover?.kind === 'link' && hover.id === id;
     const link = SITE_LINKS.find((l) => l.id === id)!;
-    tx(g, link.label, rect.x + rect.w / 2, rect.y + rect.h / 2, 11, hot ? CYAN : FG, 'center', 2);
+    const cy = rect.y + rect.h / 2;
+    tx(g, link.label, rect.x + rect.w / 2, cy, 11, hot ? CYAN : FG, 'center', 2);
     g.fillStyle = hot ? CYAN : 'rgba(232, 236, 244, 0.45)';
-    g.fillRect(rect.x + 8, rect.y + rect.h - 1, rect.w - 16, 1);
+    g.fillRect(rect.x + 10, cy + 9, rect.w - 20, 1);
   }
 }
 
