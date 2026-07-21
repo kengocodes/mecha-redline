@@ -2,6 +2,7 @@
   "name": "mecha-redline",
   "version": "0.1.0",
   "description": "MECHA REDLINE — a 2.5D bullet hell mecha shooter for the browser",
+  "license": "MIT",
   "private": true,
   "type": "module",
   "scripts": {

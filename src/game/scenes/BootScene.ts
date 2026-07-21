@@ -4,6 +4,7 @@
 import Phaser from 'phaser';
 import { initAudio } from '../../core/audio';
 import { HI_KEY } from '../../core/const';
+import { debugParam } from '../../core/debug';
 import { loadSettings } from '../../core/settings';
 import { Stage3D } from '../../render/stage3d';
 import { loadPilotArt } from '../ui/pilotArt';
@@ -43,8 +44,8 @@ export class BootScene extends Phaser.Scene {
     document.getElementById('loading')?.remove();
 
     this.scene.launch('hud');
-    // Debug: ?debug=battle|boss skips the title.
-    const dbg = new URLSearchParams(location.search).get('debug');
+    // Dev-only: ?debug=battle|boss skips the title (stripped in production).
+    const dbg = debugParam();
     if (dbg === 'battle' || dbg === 'boss') {
       this.scene.start('game');
     } else {

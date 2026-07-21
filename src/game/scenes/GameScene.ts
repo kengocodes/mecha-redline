@@ -13,6 +13,7 @@ import {
   PLAY_Y,
   PLAYER,
 } from '../../core/const';
+import { debugParam } from '../../core/debug';
 import {
   clearTap,
   firing,
@@ -150,8 +151,8 @@ export class GameScene extends Phaser.Scene {
     this.dragBus = null;
     setPhase('intro');
 
-    // ?debug=boss jumps straight to the fortress fight.
-    if (new URLSearchParams(location.search).get('debug') === 'boss') {
+    // Dev-only: ?debug=boss jumps straight to the fortress fight.
+    if (debugParam() === 'boss') {
       this.scriptIx = LEVEL1.length;
       this.levelT = 999;
       setPhase('warning');
@@ -171,6 +172,14 @@ export class GameScene extends Phaser.Scene {
     settingsUi.confirmExit = false;
     if (!on) this.dragBus = null;
     clearTap();
+  }
+
+  /** Tab hidden mid-fight — open the pause panel so the sim does not keep running. */
+  pauseForBackground(): void {
+    if (!this.scene.isActive()) return;
+    if (hud.phase !== 'battle' && hud.phase !== 'boss') return;
+    if (hud.paused) return;
+    this.setPaused(true);
   }
 
   private exitToTitle(): void {

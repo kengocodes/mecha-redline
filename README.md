@@ -20,7 +20,23 @@ npm run build    # type-check + production bundle into dist/
 npm run preview  # serve the built bundle
 ```
 
+## Deploy
+
+Static host from `dist/` after `npm run build`. The app uses History API routes
+(`/privacy`, `/terms`), so the host must serve `index.html` for those paths:
+
+- **Vercel** — `vercel.json` rewrites (checked in)
+- **Netlify / Cloudflare Pages** — `public/_redirects` (copied into `dist/`)
+
+Share previews use `/og.png`, `/favicon.ico`, and `public/icons/`. Some
+crawlers prefer absolute `og:image` URLs — point those at your live origin
+once the site is deployed (e.g. `https://your.domain/og.png`).
+
 ## Controls
+
+**Desktop recommended.** Combat uses keyboard + mouse. Title / select /
+settings menus work with pointer (including touch browsers), but there are
+no on-screen combat controls yet.
 
 | Input         | Action                                     |
 | ------------- | ------------------------------------------ |
@@ -94,11 +110,13 @@ src/
 
 Title art lives in `public/branding/` (galaxy plate + magenta-keyed logo).
 
-### Debug URLs
+### Debug URLs (dev only)
+
+Available with `npm run dev`. Production builds ignore these.
 
 - `?debug=battle` — skip the title, start Mission 01.
 - `?debug=boss` — jump straight to the Golgotha fight.
 
 ## Not yet in this MVP
 
-Audio/music, additional levels, weapon/upgrade systems, and touch controls.
+Additional levels, weapon/upgrade systems, and touch / gamepad combat controls.

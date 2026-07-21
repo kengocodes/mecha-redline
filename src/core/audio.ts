@@ -194,6 +194,18 @@ export function setLegalSilent(on: boolean): void {
   applyAudioSettings();
 }
 
+/** Suspend the AudioContext while the tab is hidden (battery + no ghost audio). */
+export function suspendAudio(): void {
+  if (!ctx || ctx.state !== 'running') return;
+  void ctx.suspend().catch(() => {});
+}
+
+/** Resume after the tab is visible again (gesture unlock still applies if needed). */
+export function resumeAudio(): void {
+  if (!ctx || ctx.state !== 'suspended') return;
+  void ctx.resume().catch(() => {});
+}
+
 function musicLevel(duck: boolean): number {
   return MUSIC_VOL * audioSettings.music * (duck ? DUCK : 1);
 }

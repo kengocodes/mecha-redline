@@ -1,0 +1,5 @@
+# SPA fallback so /privacy and /terms serve the app (Netlify, Cloudflare Pages).
+/privacy   /index.html   200
+/privacy/  /index.html   200
+/terms     /index.html   200
+/terms/    /index.html   200

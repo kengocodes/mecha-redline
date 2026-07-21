@@ -1,6 +1,7 @@
 // MECHA REDLINE — bootstrap: stage sizing, raw input, Phaser game.
 
 import Phaser from 'phaser';
+import { resumeAudio, suspendAudio } from './core/audio';
 import { UI_H, UI_W } from './core/const';
 import { initInput } from './core/input';
 import { BootScene } from './game/scenes/BootScene';
@@ -47,4 +48,15 @@ const game = new Phaser.Game({
 window.addEventListener('resize', () => {
   fitStage();
   game.scale.refresh();
+});
+
+// Tab away: freeze combat + suspend audio. Stay paused on return (player resumes).
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') {
+    suspendAudio();
+    const battle = game.scene.getScene('game');
+    if (battle instanceof GameScene) battle.pauseForBackground();
+  } else {
+    resumeAudio();
+  }
 });

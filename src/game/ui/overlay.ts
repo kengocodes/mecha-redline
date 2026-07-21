@@ -169,18 +169,29 @@ function drawTitle(g: Ctx): void {
 
   if (t > 0.7 && !settingsUi.open) {
     // Stack sits high enough that the link row below clears the frame edge.
-    rule(g, UI_W / 2 - 190, 620, 380, LINE);
+    rule(g, UI_W / 2 - 190, 608, 380, LINE);
     if (blink)
-      tx(g, "PRESS START BUTTON", UI_W / 2, 644, 20, CYAN, "center", 5);
+      tx(g, "PRESS START BUTTON", UI_W / 2, 630, 20, CYAN, "center", 5);
     tx(
       g,
       "ゲームスタート ── ボタンを押せ",
       UI_W / 2,
-      668,
+      652,
       11,
       DIM,
       "center",
       3,
+    );
+    // Combat is keyboard + mouse; menus stay pointer-friendly on touch.
+    tx(
+      g,
+      "DESKTOP RECOMMENDED ── KEYBOARD + MOUSE",
+      UI_W / 2,
+      672,
+      10,
+      DIM,
+      "center",
+      2,
     );
   }
 

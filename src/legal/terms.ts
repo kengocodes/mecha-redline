@@ -9,10 +9,11 @@ export const termsOfService: LegalDocument = {
   ],
   sections: [
     {
-      heading: 'License to play',
+      heading: 'Open source',
       paragraphs: [
-        'You may play the game in a web browser for personal, non-commercial use. You may not redistribute the game client, assets, or audio as your own product without permission.',
+        'MECHA REDLINE is open source under the MIT License. You may play it in a browser, and you may use, modify, and redistribute the project under the terms of that license (see the LICENSE file in the repository).',
       ],
+      links: [{ text: 'Source on GitHub', href: 'https://github.com/mecha-redline/mecha-redline' }],
     },
     {
       heading: 'No warranty',
