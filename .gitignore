@@ -6,6 +6,3 @@ docs/
 .env
 .env.*
 !.env.example
-
-concept.html
-concept/
