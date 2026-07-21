@@ -11,7 +11,7 @@ export interface AudioSettings {
   muted: boolean;
 }
 
-export const AUDIO_KEY = 'mecha-redline-audio';
+const AUDIO_KEY = 'mecha-redline-audio';
 
 const DEFAULTS: AudioSettings = {
   master: 1,
@@ -45,7 +45,7 @@ export function loadSettings(): void {
   }
 }
 
-export function saveSettings(): void {
+function saveSettings(): void {
   try {
     localStorage.setItem(AUDIO_KEY, JSON.stringify(audioSettings));
   } catch {
@@ -59,7 +59,7 @@ export function setBus(id: BusId, value: number): void {
   saveSettings();
 }
 
-export function setMuted(muted: boolean): void {
+function setMuted(muted: boolean): void {
   audioSettings.muted = muted;
   saveSettings();
 }

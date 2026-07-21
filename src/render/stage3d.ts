@@ -1,22 +1,27 @@
-// The three.js layer: orthographic camera tilted 60° over deep space.
-// Renders at a fixed low resolution into a canvas that CSS stretches with
-// nearest-neighbour sampling.
+// The three.js layer. Battle flies a perspective camera pitched ~65° over
+// a scrolling deck (forward-flight framing); the title/select showcase
+// keeps a low orthographic tilt over the hangar. Renders at a fixed low
+// resolution into a canvas that CSS stretches with nearest-neighbour
+// sampling.
 
 import * as THREE from 'three';
-import { CAM_ELEV, RES_H, RES_W, VIEW_HH, VIEW_HW } from '../core/const';
+import { PCAM, RES_H, RES_W, VIEW_HH, VIEW_HW } from '../core/const';
 import { portraitAttract, uiH, uiW } from '../core/uiSize';
 import { Bullets3D } from './bullets3d';
 import { Fx3D } from './fx3d';
 import { disposeGear } from './gearFactory';
 import { HangarShowcase } from './hangarShowcase';
+import { DECK_THEMES, DeckBackdrop } from './backdrops/deck';
 import { SpaceBackdrop } from './backdrops/space';
-import { WakeBackdrop } from './backdrops/wake';
 
-export type BackdropId = 'space' | 'wake';
+export type BackdropId = 'space' | 'wake' | 'city';
 
 const CAM_DIST = 100;
+/** Orthographic camera elevation for the hangar showcase, degrees. */
+const SHOWCASE_ELEV = 16;
 const VOID = 0x02050c;
 const WAKE_VOID = 0x0a0509; // warm rust-black for the Mission 02 field
+const CITY_VOID = 0x06050f; // blackout violet-navy for the Mission 03 rain
 
 // PS1 vertex snap: quantize every projected vertex to the internal pixel grid
 // so geometry subtly swims as it rotates. Appended to the shared chunk before
@@ -84,6 +89,8 @@ export class Stage3D {
 
   readonly scene = new THREE.Scene();
   readonly camera: THREE.OrthographicCamera;
+  /** Perspective battle camera — forward-flight missions (space backdrop). */
+  readonly pcam: THREE.PerspectiveCamera;
   readonly renderer: THREE.WebGLRenderer;
   /** Everything battle-scoped (gears) goes here so scene resets are one call. */
   readonly battleGroup = new THREE.Group();
@@ -91,7 +98,7 @@ export class Stage3D {
   readonly fx: Fx3D;
 
   private space!: SpaceBackdrop;
-  private wakeDrop: WakeBackdrop | null = null; // built on first use
+  private deck!: DeckBackdrop;
   private backdropId: BackdropId = 'space';
   private hangar!: HangarShowcase;
   private redSpill!: THREE.PointLight;
@@ -104,15 +111,21 @@ export class Stage3D {
   private flashColor = new THREE.Color(1, 1, 1);
   private punch = 0;
   private battleMode = false;
+  /** Player-follow camera drift target/state (battle mode only). */
+  private focusX = 0;
+  private focusY = 0;
+  private driftX = 0;
+  private driftY = 0;
   private cineW = 0;
   private cineTx = 0;
   private cineTy = 0;
   private cineH = 0;
   private cineZoom = 1;
-  private cineElev = (CAM_ELEV * Math.PI) / 180;
+  private cineElev = (PCAM.elev * Math.PI) / 180;
   private _look = new THREE.Vector3();
   private _camPos = new THREE.Vector3();
-  private elev = (CAM_ELEV * Math.PI) / 180;
+  /** Ortho camera elevation — showcase only; battle flies the perspective cam. */
+  private elev = (SHOWCASE_ELEV * Math.PI) / 180;
   private lookTarget = new THREE.Vector3(0, 0, 0);
   private ray = new THREE.Raycaster();
   private aimPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -2.2);
@@ -134,10 +147,11 @@ export class Stage3D {
     this.worldEl = this.renderer.domElement;
     container.insertBefore(this.worldEl, container.firstChild);
 
-    const el = (CAM_ELEV * Math.PI) / 180;
+    const el = (SHOWCASE_ELEV * Math.PI) / 180;
     this.camera = new THREE.OrthographicCamera(-VIEW_HW, VIEW_HW, VIEW_HH, -VIEW_HH, 1, 400);
     this.camera.position.set(0, CAM_DIST * Math.sin(el), CAM_DIST * Math.cos(el));
     this.camera.lookAt(this.lookTarget);
+    this.pcam = new THREE.PerspectiveCamera(PCAM.fov, VIEW_HW / VIEW_HH, 1, 400);
     this.applyUiAspect();
 
     // Soft void falloff only — backdrop materials opt out of fog so stars stay sharp.
@@ -163,6 +177,9 @@ export class Stage3D {
     this.space = new SpaceBackdrop();
     this.space.group.visible = false;
     this.scene.add(this.space.group);
+    this.deck = new DeckBackdrop();
+    this.deck.group.visible = false;
+    this.scene.add(this.deck.group);
     this.hangar = new HangarShowcase();
     this.scene.add(this.hangar.group);
 
@@ -204,8 +221,15 @@ export class Stage3D {
     this.camera.right = halfW;
     this.camera.top = halfH;
     this.camera.bottom = -halfH;
+    this.pcam.aspect = aspect;
+    this.pcam.updateProjectionMatrix();
     if (this.hangar?.group.visible) this.frameShowcase();
     else this.camera.updateProjectionMatrix();
+  }
+
+  /** The camera the scene is currently rendered (and picked) through. */
+  private get cam(): THREE.OrthographicCamera | THREE.PerspectiveCamera {
+    return this.battleMode ? this.pcam : this.camera;
   }
 
   /** Showcase framing — portrait pulls the unit mid-frame under the logo. */
@@ -223,11 +247,12 @@ export class Stage3D {
   setMode(mode: 'battle' | 'showcase'): void {
     const showcase = mode === 'showcase';
     this.battleMode = !showcase;
-    this.elev = ((showcase ? 16 : CAM_ELEV) * Math.PI) / 180;
     this.hangar.group.visible = showcase;
     if (showcase) this.frameShowcase();
     else {
       this.camera.zoom = 1;
+      this.pcam.zoom = 1;
+      this.pcam.updateProjectionMatrix();
       this.lookTarget.set(0, 0, 0);
     }
     this.applyUiAspect();
@@ -236,7 +261,7 @@ export class Stage3D {
       // sits ~CAM_DIST (100) from the gear — fog must start past that or
       // the whole hangar washes to void (which is what hid the unit).
       this.space.group.visible = true;
-      if (this.wakeDrop) this.wakeDrop.group.visible = false;
+      this.deck.group.visible = false;
       this.renderer.setClearColor(VOID);
       this.scene.fog = new THREE.Fog(VOID, 110, 200);
     } else {
@@ -249,25 +274,27 @@ export class Stage3D {
   /** Choose the battle environment (per mission); showcase always uses stars. */
   setBackdrop(id: BackdropId): void {
     this.backdropId = id;
-    if (id === 'wake' && !this.wakeDrop) {
-      this.wakeDrop = new WakeBackdrop();
-      this.wakeDrop.group.visible = false;
-      this.scene.add(this.wakeDrop.group);
-    }
     if (this.battleMode) this.applyBackdrop();
   }
 
-  /** Battle-mode environment: backdrop group, void tint, arena spill light. */
+  /** Battle-mode environment: themed deck, void tint, arena spill light. */
   private applyBackdrop(): void {
-    const wake = this.backdropId === 'wake';
-    this.space.group.visible = !wake;
-    if (this.wakeDrop) this.wakeDrop.group.visible = wake;
-    const voidCol = wake ? WAKE_VOID : VOID;
+    const id = this.backdropId;
+    // Every mission fights over the same scrolling deck, tinted per theatre;
+    // the starfield is showcase-only (it never read as 3D in battle).
+    this.space.group.visible = false;
+    this.deck.setTheme(DECK_THEMES[id]);
+    this.deck.group.visible = true;
+    const voidCol = id === 'wake' ? WAKE_VOID : id === 'city' ? CITY_VOID : VOID;
     this.renderer.setClearColor(voidCol);
-    this.scene.fog = new THREE.Fog(voidCol, 140, 260);
-    // The red threat spill goes furnace-amber over the wake.
-    this.redSpill.color.setHex(wake ? 0xff9a3c : 0xff3b53);
-    this.redSpill.intensity = wake ? 1.25 : 1.05;
+    // Fog starts just past the player row so the deck inks out into the
+    // void ahead (and on low-angle cine horizons).
+    this.scene.fog = new THREE.Fog(voidCol, 80, 165);
+    // Arena spill: threat-red in space, furnace-amber over the wake,
+    // neon-magenta under the blackout rain.
+    const spill = id === 'wake' ? 0xff9a3c : id === 'city' ? 0xd94aff : 0xff3b53;
+    this.redSpill.color.setHex(spill);
+    this.redSpill.intensity = id === 'space' ? 1.05 : 1.25;
   }
 
   /** Tint the showcase pad aura (title/select) to a pilot's glow colour. */
@@ -286,6 +313,19 @@ export class Stage3D {
     this.flash = 0;
     this.punch = 0;
     this.cineW = 0;
+    this.focusX = 0;
+    this.focusY = 0;
+    this.driftX = 0;
+    this.driftY = 0;
+  }
+
+  /**
+   * Where the player is this frame — the perspective camera drifts a little
+   * toward it (parallax follow) so lateral movement swings the whole world.
+   */
+  setFocus(x: number, y: number): void {
+    this.focusX = x;
+    this.focusY = y;
   }
 
   addShake(mag: number): void {
@@ -328,7 +368,7 @@ export class Stage3D {
 
   /** Arena-plane point → UI-space coords (inverse of aimPoint). */
   uiPoint(x: number, y: number, h = 2.2): { x: number; y: number } {
-    this._proj.set(x, h, y).project(this.camera);
+    this._proj.set(x, h, y).project(this.cam);
     return {
       x: ((this._proj.x + 1) / 2) * uiW,
       y: ((1 - this._proj.y) / 2) * uiH,
@@ -338,7 +378,7 @@ export class Stage3D {
   /** UI-space pointer position → arena-plane gameplay coords. */
   aimPoint(sx: number, sy: number): { x: number; y: number } {
     const ndc = new THREE.Vector2((sx / uiW) * 2 - 1, -(sy / uiH) * 2 + 1);
-    this.ray.setFromCamera(ndc, this.camera);
+    this.ray.setFromCamera(ndc, this.cam);
     const hit = new THREE.Vector3();
     if (this.ray.ray.intersectPlane(this.aimPlane, hit)) {
       return { x: hit.x, y: hit.z };
@@ -348,18 +388,34 @@ export class Stage3D {
 
   update(dt: number): void {
     // Camera pose: the default framing blended toward any cinematic target
-    // (battle only), with pure screen-space shake on top (orthographic).
+    // (battle only), with pure screen-space shake on top. The perspective
+    // battle camera adds a soft player-follow drift so lateral movement
+    // swings the parallax; the orthographic framing stays pinned.
     const cw = this.battleMode ? this.cineW : 0;
-    const el = this.elev + (this.cineElev - this.elev) * cw;
-    const look = this._look.set(this.cineTx * cw, this.cineH * cw, this.cineTy * cw);
+    const persp = this.battleMode;
+    const baseEl = persp ? (PCAM.elev * Math.PI) / 180 : this.elev;
+    const el = baseEl + (this.cineElev - baseEl) * cw;
+    const dist = persp ? PCAM.dist : CAM_DIST;
+    if (persp && dt > 0) {
+      const k = Math.min(1, dt * 3);
+      this.driftX += (this.focusX * PCAM.driftX - this.driftX) * k;
+      this.driftY += (this.focusY * PCAM.driftY - this.driftY) * k;
+    }
+    const bx = persp ? this.driftX : 0;
+    const bz = persp ? this.driftY : 0;
+    const look = this._look.set(
+      bx + (this.cineTx - bx) * cw,
+      this.cineH * cw,
+      bz + (this.cineTy - bz) * cw,
+    );
     const base = this._camPos.set(
       look.x,
-      look.y + CAM_DIST * Math.sin(el),
-      look.z + CAM_DIST * Math.cos(el),
+      look.y + dist * Math.sin(el),
+      look.z + dist * Math.cos(el),
     );
     if (!this.battleMode) {
       look.copy(this.lookTarget);
-      base.set(0, CAM_DIST * Math.sin(el), CAM_DIST * Math.cos(el));
+      base.set(0, dist * Math.sin(el), dist * Math.cos(el));
     }
     if (this.shake > 0.005) {
       const right = new THREE.Vector3(1, 0, 0);
@@ -374,11 +430,12 @@ export class Stage3D {
       base.addScaledVector(right, this.shakeOx).addScaledVector(up, this.shakeOy);
       look.addScaledVector(right, this.shakeOx).addScaledVector(up, this.shakeOy);
     }
-    this.camera.position.copy(base);
-    this.camera.lookAt(look);
+    const cam = this.cam;
+    cam.position.copy(base);
+    cam.lookAt(look);
 
     this.space.update(dt);
-    this.wakeDrop?.update(dt);
+    this.deck.update(dt);
     this.hangar.update(dt);
     this.fx.update(dt);
 
@@ -389,9 +446,9 @@ export class Stage3D {
     this.punch = this.punch < 0.01 ? 0 : this.punch * Math.exp(-dt * 8);
     if (this.battleMode) {
       const zoom = (1 + (this.cineZoom - 1) * cw) * (1 + this.punch * 0.05);
-      if (Math.abs(zoom - this.camera.zoom) > 0.0005) {
-        this.camera.zoom = zoom;
-        this.camera.updateProjectionMatrix();
+      if (Math.abs(zoom - cam.zoom) > 0.0005) {
+        cam.zoom = zoom;
+        cam.updateProjectionMatrix();
       }
     }
 
@@ -402,7 +459,7 @@ export class Stage3D {
     this.postMat.uniforms.uAberr.value = this.aberr;
     this.postMat.uniforms.uFlash.value = Math.min(0.5, this.flash);
     this.renderer.setRenderTarget(this.rt);
-    this.renderer.render(this.scene, this.camera);
+    this.renderer.render(this.scene, cam);
     this.renderer.setRenderTarget(null);
     this.renderer.render(this.postScene, this.postCam);
   }

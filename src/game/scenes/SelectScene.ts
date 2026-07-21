@@ -5,11 +5,26 @@
 import Phaser from 'phaser';
 import { music, PILOT_VO, sfx, vo } from '../../core/audio';
 import { setStageCursor } from '../../core/cursor';
-import { clearTap, takeKey, takeTap, pointer } from '../../core/input';
+import {
+  clearTap,
+  pointer,
+  takeKey,
+  takeTabDir,
+  takeTap,
+} from '../../core/input';
 import { animateGear, buildGear, type Gear, setGearFlash } from '../../render/gearFactory';
 import { Stage3D } from '../../render/stage3d';
 import { selectLevel } from '../levels';
 import { ROSTER, selectPilot, selectedPilot } from '../roster';
+import {
+  clearMenuFocus,
+  cycleMenuFocus,
+  ensureMenuFocus,
+  isPilotFocus,
+  menuNav,
+  selectFocusList,
+  setMenuFocus,
+} from '../ui/menuFocus';
 import { selectBackRect, selectSlotRect } from '../ui/overlay';
 import { hud, LAUNCH_T, LOAD_T, sel, setPhase } from '../ui/state';
 import { startWipe, wipeActive } from '../ui/wipe';
@@ -37,16 +52,21 @@ export class SelectScene extends Phaser.Scene {
     clearTap();
     selectLevel(0); // a fresh sortie always opens the campaign at Mission 01
     sel.ix = ROSTER.findIndex((p) => p.id === selectedPilot().id);
+    if (sel.ix < 0) sel.ix = 0;
     sel.hover = -1;
     sel.hoverBack = false;
     sel.swapT = 0; // run the spec-sheet fill on entry too
     sel.confirmT = -1;
     sel.timer = SELECT_T;
+    setMenuFocus(`pilot-${sel.ix}`);
     this.spawnGear();
     music('title'); // hold the title bed through hangar select
     vo('op-select-gear');
     setStageCursor('aim');
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => setStageCursor('auto'));
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      setStageCursor('auto');
+      clearMenuFocus();
+    });
   }
 
   private spawnGear(): void {
@@ -66,6 +86,7 @@ export class SelectScene extends Phaser.Scene {
     if (ix === sel.ix || sel.confirmT >= 0) return;
     sel.ix = ((ix % ROSTER.length) + ROSTER.length) % ROSTER.length;
     sel.swapT = 0;
+    setMenuFocus(`pilot-${sel.ix}`);
     this.spawnGear();
     sfx('ui-move');
     vo(`${PILOT_VO[ROSTER[sel.ix].id]}-select`);
@@ -90,6 +111,23 @@ export class SelectScene extends Phaser.Scene {
     startWipe(() => this.scene.start('title'));
   }
 
+  private activateFocus(): void {
+    const id = menuNav.id;
+    if (id === 'sel-back') {
+      this.goBack();
+      return;
+    }
+    if (id === 'sel-launch') {
+      this.confirm();
+      return;
+    }
+    const pi = isPilotFocus(id);
+    if (pi !== null) {
+      if (pi === sel.ix) this.confirm();
+      else this.pick(pi);
+    }
+  }
+
   update(_t: number, dms: number): void {
     const dt = Math.min(dms, 50) / 1000;
     hud.t += dt;
@@ -109,9 +147,27 @@ export class SelectScene extends Phaser.Scene {
         return;
       }
     } else if (!wipeActive()) {
-      // Roster input — one-shot keys move, slot clicks pick, the rest launches.
-      if (takeKey('ArrowLeft') || takeKey('KeyA')) this.pick(sel.ix - 1);
-      if (takeKey('ArrowRight') || takeKey('KeyD')) this.pick(sel.ix + 1);
+      const list = selectFocusList();
+      ensureMenuFocus(list);
+
+      const tab = takeTabDir();
+      if (tab) {
+        cycleMenuFocus(list, tab);
+        const pi = isPilotFocus(menuNav.id);
+        if (pi !== null && pi !== sel.ix) this.pick(pi);
+        else sfx('ui-move');
+      } else if (takeKey('ArrowLeft') || takeKey('KeyA')) {
+        this.pick(sel.ix - 1);
+      } else if (takeKey('ArrowRight') || takeKey('KeyD')) {
+        this.pick(sel.ix + 1);
+      } else if (takeKey('ArrowUp')) {
+        cycleMenuFocus(list, -1);
+        sfx('ui-move');
+      } else if (takeKey('ArrowDown')) {
+        cycleMenuFocus(list, 1);
+        sfx('ui-move');
+      }
+
       if (takeKey('Escape')) {
         this.goBack();
         return;
@@ -123,21 +179,27 @@ export class SelectScene extends Phaser.Scene {
         pointer.x <= back.x + back.w &&
         pointer.y >= back.y &&
         pointer.y <= back.y + back.h;
+      if (sel.hoverBack) setMenuFocus('sel-back');
 
       sel.hover = -1;
       for (let i = 0; i < ROSTER.length; i++) {
         const r = selectSlotRect(i);
-        if (pointer.x >= r.x && pointer.x <= r.x + r.w && pointer.y >= r.y && pointer.y <= r.y + r.h) {
+        if (
+          pointer.x >= r.x &&
+          pointer.x <= r.x + r.w &&
+          pointer.y >= r.y &&
+          pointer.y <= r.y + r.h
+        ) {
           sel.hover = i;
+          setMenuFocus(`pilot-${i}`);
         }
       }
       setStageCursor(sel.hover >= 0 || sel.hoverBack ? 'select' : 'aim');
 
-      // Enter/Space launch; taps only pick a slot or re-confirm the current
-      // one — bare clicks on the briefing / void must not sortie you.
+      // Enter/Space activate focused control (launch / back / pilot).
       if (takeKey('Enter') || takeKey('Space')) {
-        takeTap(); // eat the latch those keys also set
-        this.confirm();
+        takeTap();
+        this.activateFocus();
       } else if (takeTap()) {
         if (sel.hoverBack) this.goBack();
         else if (sel.hover === sel.ix) this.confirm();

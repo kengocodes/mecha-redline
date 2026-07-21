@@ -17,11 +17,15 @@ import { ROSTER, selectedPilot } from "../roster";
 import { getPilotArt } from "./pilotArt";
 import { attract, hud, LAUNCH_T, popups, sel, settingsUi } from "./state";
 import {
+  drawChromeFocus,
+  drawFocusRing,
   drawSettingsPanel,
   drawTitleChrome,
   hitTitleChrome,
   titleLinkRects,
+  titleStartRect,
 } from "./titleChrome";
+import { isPilotFocus, menuNav, paintTitleHit } from "./menuFocus";
 import { getTitleArt } from "./titleArt";
 import { drawWipe } from "./wipe";
 
@@ -211,7 +215,7 @@ function drawTitleLandscape(g: Ctx): void {
       );
       tx(
         g,
-        "DESKTOP RECOMMENDED ── KEYBOARD + MOUSE",
+        "DESKTOP ── KEYBOARD OR MOUSE",
         uiW / 2,
         y0 + 64,
         10,
@@ -245,11 +249,22 @@ function drawTitleLandscape(g: Ctx): void {
   }
 
   const showLinks = t > 0.7 && !settingsUi.open;
-  const hover = hitTitleChrome(settingsUi.pointerX, settingsUi.pointerY, settingsUi.open, {
+  const pointerHit = hitTitleChrome(settingsUi.pointerX, settingsUi.pointerY, settingsUi.open, {
     links: showLinks,
   });
-  if (!settingsUi.open) drawTitleChrome(g, hover, { links: showLinks });
-  else drawSettingsPanel(g, hover);
+  const hover = paintTitleHit(pointerHit, menuNav.id);
+  if (!settingsUi.open) {
+    drawTitleChrome(g, hover, { links: showLinks });
+    if (menuNav.id === "start" && desktopPlayable()) {
+      const r = titleStartRect();
+      g.fillStyle = "rgba(127, 251, 255, 0.08)";
+      g.fillRect(r.x, r.y, r.w, r.h);
+    }
+    drawChromeFocus(g, menuNav.id, false, { links: showLinks });
+  } else {
+    drawSettingsPanel(g, hover);
+    drawChromeFocus(g, menuNav.id, true);
+  }
 
   // Scrolling cabinet ticker along the very bottom (under the footer band).
   if (!settingsUi.open) {
@@ -271,10 +286,10 @@ function drawTitleControls(g: Ctx): void {
   tx(g, "CONTROLS ── 操作", x, y0, 12, CYAN, "left", 3);
   const lines = [
     "WASD / ARROWS ── MOVE",
-    "MOUSE ── AIM · FIRE",
+    "SPACE ── FIRE · MOUSE ── AIM",
     "SHIFT ── FOCUS",
     "Z / X ── BURST",
-    "P / ESC ── PAUSE",
+    "P / ESC ── PAUSE · TAB ── MENUS",
   ];
   for (let i = 0; i < lines.length; i++) {
     tx(g, lines[i], x, y0 + 22 + i * 18, 12, DIM, "left", 2);
@@ -353,11 +368,22 @@ function drawTitlePortrait(g: Ctx): void {
   }
 
   const showLinks = t > 0.7 && !settingsUi.open;
-  const hover = hitTitleChrome(settingsUi.pointerX, settingsUi.pointerY, settingsUi.open, {
+  const pointerHit = hitTitleChrome(settingsUi.pointerX, settingsUi.pointerY, settingsUi.open, {
     links: showLinks,
   });
-  if (!settingsUi.open) drawTitleChrome(g, hover, { links: showLinks });
-  else drawSettingsPanel(g, hover);
+  const hover = paintTitleHit(pointerHit, menuNav.id);
+  if (!settingsUi.open) {
+    drawTitleChrome(g, hover, { links: showLinks });
+    if (menuNav.id === "start" && desktopPlayable()) {
+      const r = titleStartRect();
+      g.fillStyle = "rgba(127, 251, 255, 0.08)";
+      g.fillRect(r.x, r.y, r.w, r.h);
+    }
+    drawChromeFocus(g, menuNav.id, false, { links: showLinks });
+  } else {
+    drawSettingsPanel(g, hover);
+    drawChromeFocus(g, menuNav.id, true);
+  }
 
   crtScanlines(g);
 }
@@ -449,13 +475,14 @@ function drawSelect(g: Ctx): void {
   // BACK chip — top-left, same language as title SETTINGS.
   {
     const r = selectBackRect();
-    const hot = sel.hoverBack;
+    const hot = sel.hoverBack || menuNav.id === "sel-back";
     g.fillStyle = hot ? "rgba(127, 251, 255, 0.12)" : "rgba(6, 10, 18, 0.55)";
     g.fillRect(r.x, r.y, r.w, r.h);
     g.strokeStyle = hot ? CYAN : LINE;
     g.lineWidth = 1;
     g.strokeRect(r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1);
     tx(g, "◄ BACK", r.x + r.w / 2, r.y + r.h / 2, 12, hot ? CYAN : DIM, "center", 2);
+    if (menuNav.id === "sel-back") drawFocusRing(g, r);
   }
 
   // Header + callsign block, top-center above the turntable.
@@ -489,7 +516,7 @@ function drawSelect(g: Ctx): void {
   if (blink) {
     tx(
       g,
-      "◄ ► SELECT ── CONFIRM SLOT / ENTER: LAUNCH 出撃",
+      "TAB / ◄ ► ── SELECT · ENTER ── LAUNCH 出撃",
       uiW / 2,
       626,
       14,
@@ -497,6 +524,12 @@ function drawSelect(g: Ctx): void {
       "center",
       3,
     );
+  }
+  if (menuNav.id === "sel-launch") {
+    // Focus cue under the prompt — launch is confirm, not a separate chip.
+    g.strokeStyle = CYAN;
+    g.lineWidth = 2;
+    g.strokeRect(uiW / 2 - 220 + 1, 610, 440 - 2, 32);
   }
 
   crtScanlines(g);
@@ -673,12 +706,14 @@ function drawRoster(g: Ctx): void {
     const p = ROSTER[i];
     const r = selectSlotRect(i);
     const on = i === sel.ix;
-    const hov = i === sel.hover;
+    const kb = isPilotFocus(menuNav.id) === i || menuNav.id === "sel-launch" && on;
+    const hov = i === sel.hover || kb;
     g.fillStyle = on ? "rgba(127, 251, 255, 0.12)" : PANEL;
     g.fillRect(r.x, r.y, r.w, r.h);
     g.strokeStyle = on ? CYAN : hov ? "rgba(127, 251, 255, 0.55)" : LINE;
     g.lineWidth = 1;
     g.strokeRect(r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1);
+    if (isPilotFocus(menuNav.id) === i) drawFocusRing(g, r);
     if (on) {
       // corner ticks, matching panel()
       const t = 7;
@@ -878,13 +913,17 @@ function drawBattle(g: Ctx): void {
       resume: true,
       confirmExit: settingsUi.confirmExit,
     };
-    const hover = hitTitleChrome(
-      settingsUi.pointerX,
-      settingsUi.pointerY,
-      true,
-      pauseOpts,
+    const hover = paintTitleHit(
+      hitTitleChrome(
+        settingsUi.pointerX,
+        settingsUi.pointerY,
+        true,
+        pauseOpts,
+      ),
+      menuNav.id,
     );
     drawSettingsPanel(g, hover, pauseOpts);
+    drawChromeFocus(g, menuNav.id, true, pauseOpts);
   }
 }
 

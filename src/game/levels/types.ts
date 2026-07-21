@@ -7,7 +7,7 @@ import type { BackdropId } from '../../render/stage3d';
 import type { EnemyKind } from '../entities/enemies';
 
 /** Kinds a wave script may spawn (bosses arrive via the WARNING flow). */
-export type SpawnKind = Exclude<EnemyKind, 'boss' | 'seraph'>;
+export type SpawnKind = Exclude<EnemyKind, 'boss' | 'seraph' | 'cerberus'>;
 
 export interface LevelApi {
   spawn(kind: SpawnKind, x: number, y?: number, seed?: number): void;
@@ -22,7 +22,7 @@ export interface LevelEvent {
   run: (g: LevelApi) => void;
 }
 
-export interface BossDef {
+interface BossDef {
   kind: EnemyKind; // which entity the WARNING phase spawns
   name: string; // 'GOLGOTHA'
   tag: string; // katakana class tag under the name on the boss bar

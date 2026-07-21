@@ -1,11 +1,11 @@
 # MECHA REDLINE
 
-A 2.5D bullet-hell mecha shooter for the browser. Two-mission campaign:
-sweep six waves over the Sector 7 perimeter and break the fortress-class
-**GOLGOTHA**, then fly into its burning debris ring — **Golgotha's Wake** —
-to cut off the retreat and duel the white duel-class **SERAPH**. Low-poly
-flat-shaded models, a low internal render resolution stretched with
-nearest-neighbour sampling, and a sharp-cornered katakana HUD.
+A 2.5D bullet-hell mecha shooter for the browser. Three-mission campaign:
+break the fortress-class **GOLGOTHA** over the Sector 7 perimeter, duel the
+white duel-class **SERAPH** in the fortress's burning debris ring, then
+defend blacked-out Neo-Kyoto from the three-headed hound-class walker
+**CERBERUS**. Low-poly flat-shaded models, a low internal render resolution
+stretched with nearest-neighbour sampling, and a sharp-cornered katakana HUD.
 
 ## Run it
 
@@ -86,10 +86,12 @@ src/
     input.ts              raw keyboard/pointer, UI-space pointer mapping
   render/
     stage3d.ts            camera, lights, backdrop switching, aim raycast
-    backdrops/            per-mission environments (space.ts starfield, wake.ts debris field)
-    gearFactory.ts        procedural low-poly mecha + unit palettes
+    backdrops/            per-mission environments (space / wake / city)
+    gearFactory.ts        procedural low-poly mecha + unit palettes + cloak
     seraph.ts             the SERAPH boss — robed frame, wing fans, halo
+    cerberus.ts           the CERBERUS boss — three-headed strider walker
     sentinel.ts           the sentinel proximity mine
+    pylon.ts              the fixed lane-emplacement turret
     bullets3d.ts          instanced bullet pools
     fx3d.ts               instanced explosions + hit sparks
   game/
@@ -112,6 +114,7 @@ src/
       index.ts            mission registry + current-level selection
       level1.ts           Mission 01 — Sector 7 Perimeter
       level2.ts           Mission 02 — Golgotha's Wake
+      level3.ts           Mission 03 — Neo-Kyoto Nightfall
 ```
 
 Title art lives in `public/branding/` (galaxy plate + magenta-keyed logo).
@@ -120,8 +123,8 @@ Title art lives in `public/branding/` (galaxy plate + magenta-keyed logo).
 
 Available with `npm run dev`. Production builds ignore these.
 
-- `?debug=battle` / `?debug=battle2` — skip the title, start Mission 01 / 02.
-- `?debug=boss` / `?debug=boss2` — jump straight to Golgotha / SERAPH.
+- `?debug=battleN` (battle, battle2, battle3) — skip the title, start Mission N.
+- `?debug=bossN` (boss, boss2, boss3) — jump straight to that mission's boss.
 
 ## Not yet in this MVP
 

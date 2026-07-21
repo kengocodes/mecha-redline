@@ -4,11 +4,12 @@
 
 import { LEVEL_1 } from './level1';
 import { LEVEL_2 } from './level2';
+import { LEVEL_3 } from './level3';
 import type { LevelDef } from './types';
 
-export type { BossDef, LevelApi, LevelDef, LevelEvent, SpawnKind } from './types';
+export type { LevelDef, SpawnKind } from './types';
 
-export const LEVELS: LevelDef[] = [LEVEL_1, LEVEL_2];
+export const LEVELS: LevelDef[] = [LEVEL_1, LEVEL_2, LEVEL_3];
 
 let currentIx = 0;
 

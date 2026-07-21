@@ -13,7 +13,11 @@ export type EnemyKind =
   | 'mortar'
   | 'sentinel'
   | 'kai'
-  | 'seraph';
+  | 'seraph'
+  | 'ashhusk'
+  | 'shade'
+  | 'pylon'
+  | 'cerberus';
 
 /** Hit-flash timing. The refractory gap keeps sustained fire (~30 hits/s on
  * the boss) from pinning the flash on — worst case is a ~8Hz strobe. */
@@ -86,6 +90,14 @@ export function makeEnemy(
       return { ...base, kind, hp: 40, maxHp: 40, hitR: 2.4, score: SCORE.kai, life: 30 };
     case 'seraph':
       return { ...base, kind, hp: 640, maxHp: 640, hitR: 3.4, score: SCORE.seraph, life: Infinity };
+    case 'ashhusk':
+      return { ...base, kind, hp: 3, maxHp: 3, hitR: 1.5, score: SCORE.husk, life: 18 };
+    case 'shade':
+      return { ...base, kind, hp: 8, maxHp: 8, hitR: 1.3, score: SCORE.shade, life: 30 };
+    case 'pylon':
+      return { ...base, kind, hp: 20, maxHp: 20, hitR: 2.0, score: SCORE.pylon, life: 24 };
+    case 'cerberus':
+      return { ...base, kind, hp: 660, maxHp: 660, hitR: 3.6, score: SCORE.cerberus, life: Infinity };
   }
 }
 
@@ -93,13 +105,16 @@ export function updateEnemy(e: Enemy, c: SimCtx, dt: number): void {
   e.t += dt;
   e.fireT += dt;
   e.flashT = Math.max(-FLASH_GAP, e.flashT - dt);
-  if (e.kind === 'husk') updateHusk(e, c, dt);
+  if (e.kind === 'husk' || e.kind === 'ashhusk') updateHusk(e, c, dt);
   else if (e.kind === 'lancer') updateLancer(e, c, dt);
   else if (e.kind === 'dart') updateDart(e, c, dt);
   else if (e.kind === 'mortar') updateMortar(e, c, dt);
   else if (e.kind === 'sentinel') updateSentinel(e, c, dt);
   else if (e.kind === 'kai') updateKai(e, c, dt);
   else if (e.kind === 'seraph') updateSeraph(e, c, dt);
+  else if (e.kind === 'shade') updateShade(e, c, dt);
+  else if (e.kind === 'pylon') updatePylon(e, c, dt);
+  else if (e.kind === 'cerberus') updateCerberus(e, c, dt);
   else updateBoss(e, c, dt);
   e.x += e.vx * dt;
   e.y += e.vy * dt;
@@ -487,6 +502,266 @@ function updateSeraph(e: Enemy, c: SimCtx, dt: number): void {
       const off = Math.random() * 6;
       ring(c.eb, e.x, e.y, 22, 17, BK.needle, off);
       ring(c.eb, e.x, e.y, 22, 13, BK.needle, off + 0.14);
+    }
+  }
+}
+
+// ---- Mission 03 hostiles ---------------------------------------------------
+
+/**
+ * Cloak skirmisher. Cycle: cloaked dash to a fresh point → shimmer decloak
+ * (the tell) → two tight needle triples → fade and repeat. e.ai.cloak is the
+ * visibility factor GameScene pushes into the gear's material set.
+ */
+function updateShade(e: Enemy, c: SimCtx, dt: number): void {
+  const a = e.ai;
+  if (a.st === undefined) {
+    a.st = 0; // 0 arrive · 1 cloaked dash · 2 shimmer · 3 firing · 4 fade
+    a.cloak = 1;
+    a.ty = Math.min(e.y + 18, -10);
+    a.timer = 0;
+    a.volley = 0;
+    a.tx = e.x;
+  }
+  a.cloak = a.cloak ?? 1;
+
+  if (e.t > e.life) {
+    // Leaves visible — the player gets to watch it go.
+    a.cloak = Math.min(1, a.cloak + dt * 2);
+    e.gear.aimTarget = 0;
+    e.vy = -16;
+    return;
+  }
+
+  if (a.st === 0) {
+    e.vy = (a.ty - e.y) * 2;
+    e.vx = 0;
+    if (Math.abs(a.ty - e.y) < 1.5) {
+      a.st = 1;
+      a.tx = Math.max(-32, Math.min(32, c.px + (Math.random() - 0.5) * 40));
+      a.ty = -16 + Math.random() * 12;
+    }
+  } else if (a.st === 1) {
+    // Cloaked repositioning dash.
+    a.cloak = Math.max(0.12, a.cloak - dt * 2.4);
+    const dx = a.tx - e.x;
+    const dy = a.ty - e.y;
+    const d = Math.hypot(dx, dy) || 1;
+    e.vx = (dx / d) * 26;
+    e.vy = (dy / d) * 26;
+    if (d < 2) {
+      a.st = 2;
+      a.timer = 0.5;
+      a.evShim = 1; // GameScene: decloak shimmer sfx
+    }
+  } else if (a.st === 2) {
+    // Shimmer: flickering back to solid — the half-second tell.
+    e.vx = 0;
+    e.vy = 0;
+    a.timer -= dt;
+    const u = 1 - Math.max(0, a.timer) / 0.5;
+    a.cloak = 0.12 + 0.88 * u + Math.sin(e.t * 40) * 0.1 * (1 - u);
+    e.gear.aimTarget = 1;
+    if (a.timer <= 0) {
+      a.cloak = 1;
+      a.st = 3;
+      a.timer = 0;
+      a.volley = 0;
+    }
+  } else if (a.st === 3) {
+    e.vx = Math.sin(e.t * 3) * 2;
+    e.vy = 0;
+    a.timer -= dt;
+    if (c.playerAlive && a.volley < 2 && a.timer <= 0) {
+      a.volley++;
+      a.timer = 0.4;
+      e.muzzleT = 0.07;
+      const m = armMuzzle(e, c);
+      fan(c.eb, m.x, m.y, aimAngle(e.x, e.y, c.px, c.py), 3, 0.22, 24, BK.needle);
+    }
+    if (a.volley >= 2 && a.timer <= 0) {
+      a.st = 4;
+      e.gear.aimTarget = 0;
+    }
+  } else {
+    // Fade and pick the next ambush point.
+    a.cloak = Math.max(0.12, a.cloak - dt * 2.4);
+    if (a.cloak <= 0.13) {
+      a.st = 1;
+      a.tx = Math.max(-32, Math.min(32, c.px + (Math.random() - 0.5) * 40));
+      a.ty = -18 + Math.random() * 14;
+    }
+  }
+}
+
+/**
+ * Fixed emplacement. Rises from below deck (gear.hover), then cycles: the
+ * projector eye charges (the lane tell), then a slow orb stream walks down
+ * its column. Sinks back under after its life runs out.
+ */
+function updatePylon(e: Enemy, c: SimCtx, dt: number): void {
+  const a = e.ai;
+  const g = e.gear;
+  if (a.st === undefined) {
+    a.st = 0; // 0 rising · 1 cycling · 2 sinking
+    a.cy = 1.6 + (e.seed % 1);
+    a.streamT = 0;
+    a.gun = 0;
+    a.evRise = 1; // GameScene: servo thunk
+  }
+  e.vx = 0;
+  e.vy = 0;
+
+  if (a.st === 0) {
+    g.hover = Math.min(0, g.hover + dt * 6);
+    if (g.hover >= -0.05) a.st = 1;
+    return;
+  }
+  if (a.st === 2 || e.t > e.life) {
+    a.st = 2;
+    g.root.userData.charge = 0;
+    g.hover = Math.max(-4.4, g.hover - dt * 4);
+    if (g.hover <= -4.3) a.despawn = 1; // GameScene: quiet removal
+    return;
+  }
+  if (!c.playerAlive) {
+    g.root.userData.charge = 0;
+    return;
+  }
+
+  a.cy += dt;
+  const CYCLE = 4.2;
+  // Eye flare through the last 1.2s before the stream opens.
+  g.root.userData.charge = Math.max(0, Math.min(1, (a.cy - (CYCLE - 1.2)) / 1.2));
+  if (a.cy >= CYCLE) {
+    a.cy = 0;
+    a.streamT = 1.8;
+  }
+  if (a.streamT > 0) {
+    a.streamT -= dt;
+    g.root.userData.charge = 0;
+    a.gap = (a.gap ?? 0) - dt;
+    if (a.gap <= 0) {
+      a.gap = 0.14;
+      a.gun = 1 - a.gun;
+      e.muzzleT = 0.06;
+      const m = muzzleArenaPos(g, a.gun) ?? { x: e.x, y: e.y };
+      emit(c.eb, m.x, m.y, Math.PI / 2, 9.5, BK.orb); // straight down the lane
+    }
+  }
+}
+
+/**
+ * CERBERUS: giant three-headed strider. The heads are targetable parts
+ * (GameScene owns their hit zones and break meters in e.ai.h0/h1/h2):
+ *   alpha (centre) — the charge; broken = no more charges.
+ *   beta (right) — rotary tracer fans.
+ *   gamma (left) — fused mortar lobs onto marked deck points.
+ * Pack-rage: everything ~15% faster per broken head (a.phase drives the
+ * existing boss phase banner/hitstop).
+ */
+function updateCerberus(e: Enemy, c: SimCtx, dt: number): void {
+  const a = e.ai;
+  if (a.state === undefined) {
+    a.state = 0; // 0 = entering
+    a.h0 = 150;
+    a.h1 = 150;
+    a.h2 = 150;
+    a.broken = 0;
+    a.mode = 0; // 0 prowl · 1 telegraph · 2 charging · 3 recover
+    a.lungeT = 5;
+    a.fanT = 1.2;
+    a.lobT = 3;
+    a.timer = 0;
+    a.lx = 0;
+    a.ly = 0;
+  }
+
+  if (a.state === 0) {
+    e.vy = Math.max(5, Math.min(16, (-15 - e.y) * 2.2));
+    e.vx = 0;
+    if (e.y > -15.6) {
+      a.state = 1;
+    }
+    return;
+  }
+
+  a.phase = 1 + a.broken;
+  const rate = 1 + 0.15 * a.broken;
+  const crouchTarget = a.mode === 1 ? 1 : 0;
+  a.crouch = (a.crouch ?? 0) + (crouchTarget - (a.crouch ?? 0)) * Math.min(1, dt * 8);
+  e.gear.root.userData.crouch = a.crouch;
+
+  if (a.mode === 0) {
+    // Heavy prowl across the top band.
+    e.vy = (-15 + Math.sin(e.t * 0.7) * 1.5 - e.y) * 1.4;
+    e.vx = Math.sin(e.t * 0.4) * 6.5 * rate;
+  } else if (a.mode === 1) {
+    // Telegraph: dig in, flare the vents, then launch.
+    e.vx *= Math.max(0, 1 - dt * 8);
+    e.vy *= Math.max(0, 1 - dt * 8);
+    a.timer -= dt;
+    if (a.timer <= 0) {
+      a.mode = 2;
+      a.timer = 0.55;
+      a.evLunge = 1; // GameScene: hydraulic charge sfx + shake
+      e.muzzleT = 0.1;
+      const dx = c.px - e.x;
+      const dy = c.py - e.y;
+      const d = Math.hypot(dx, dy) || 1;
+      a.lx = (dx / d) * 52;
+      a.ly = (dy / d) * 52;
+    }
+  } else if (a.mode === 2) {
+    e.vx = a.lx;
+    e.vy = a.ly;
+    a.timer -= dt;
+    if (a.timer <= 0) {
+      a.mode = 3;
+      a.timer = 0.9;
+    }
+  } else {
+    // Recover: haul the hull back up to the band.
+    e.vx = Math.sin(e.t * 0.4) * 4;
+    e.vy = (-15 - e.y) * 1.6;
+    a.timer -= dt;
+    if (a.timer <= 0) a.mode = 0;
+  }
+
+  if (!c.playerAlive) return;
+
+  // The charge belongs to the alpha head.
+  if (a.h0 > 0 && a.mode === 0) {
+    a.lungeT -= dt * rate;
+    if (a.lungeT <= 0) {
+      a.mode = 1;
+      a.timer = 0.8;
+      a.lungeT = 5.2 / rate;
+    }
+  }
+
+  // Beta: rotary tracer fans while prowling.
+  if (a.h1 > 0 && a.mode === 0) {
+    a.fanT -= dt * rate;
+    if (a.fanT <= 0) {
+      a.fanT = 2.4;
+      e.muzzleT = 0.07;
+      const m = armMuzzle(e, c, 1);
+      fan(c.eb, m.x, m.y, aimAngle(e.x, e.y, c.px, c.py), 5, 0.6, 19 * rate, BK.shot);
+    }
+  }
+
+  // Gamma: fused mortar arcs onto marked deck points.
+  if (a.h2 > 0 && a.mode !== 2) {
+    a.lobT -= dt * rate;
+    if (a.lobT <= 0) {
+      a.lobT = 4.6;
+      a.evLob = 1; // GameScene: tube thoomp
+      e.muzzleT = 0.09;
+      const m = armMuzzle(e, c, 2);
+      const tx = Math.max(-PLAY_X + 4, Math.min(PLAY_X - 4, c.px + (Math.random() - 0.5) * 12));
+      const ty = Math.max(0, Math.min(PLAY_Y - 2, c.py + (Math.random() - 0.5) * 9));
+      lob(c.eb, m.x, m.y, tx, ty, 1.6, BK.orb);
     }
   }
 }

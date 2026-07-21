@@ -15,9 +15,6 @@ const JUST_TTL_MS = 350;
 
 export const pointer = { x: uiW / 2, y: uiH / 4, down: false };
 
-let tapped = false;
-let stage: HTMLElement | null = null;
-
 const CAPTURE = new Set([
   'Space',
   'ArrowUp',
@@ -28,7 +25,21 @@ const CAPTURE = new Set([
   'KeyZ',
   'KeyX',
   'Escape',
+  'Tab',
 ]);
+
+/** Once true, combat aims with the pointer; until then aim stays world-up. */
+export let aimWithPointer = false;
+
+/** Call at mission start so title-screen mouse motion does not lock aim mode. */
+export function resetAimMode(): void {
+  aimWithPointer = false;
+}
+
+let tapped = false;
+let stage: HTMLElement | null = null;
+/** Shift held on the Tab that was just latched. */
+let tabShifted = false;
 
 export function initInput(stageEl: HTMLElement): void {
   stage = stageEl;
@@ -36,7 +47,10 @@ export function initInput(stageEl: HTMLElement): void {
   window.addEventListener('keydown', (e) => {
     if (CAPTURE.has(e.code)) e.preventDefault();
     const fresh = !keys.has(e.code); // OS auto-repeat re-fires keydown while held
-    if (fresh) just.set(e.code, performance.now());
+    if (fresh) {
+      just.set(e.code, performance.now());
+      if (e.code === 'Tab') tabShifted = e.shiftKey;
+    }
     keys.add(e.code);
     if (fresh && (e.code === 'Enter' || e.code === 'Space')) tapped = true;
   });
@@ -48,6 +62,7 @@ export function initInput(stageEl: HTMLElement): void {
 
   window.addEventListener('pointermove', (e) => {
     updatePointer(e.clientX, e.clientY);
+    aimWithPointer = true;
     // Released off-window: no pointerup reaches the page, so the first move
     // with no buttons pressed proves the fire latch is stale.
     if (pointer.down && e.buttons === 0) pointer.down = false;
@@ -63,6 +78,7 @@ export function initInput(stageEl: HTMLElement): void {
     ) {
       return;
     }
+    aimWithPointer = true;
     pointer.down = true;
     tapped = true;
   });
@@ -82,7 +98,7 @@ function updatePointer(cx: number, cy: number): void {
   pointer.y = ((cy - r.top) / r.height) * uiH;
 }
 
-export function isDown(code: string): boolean {
+function isDown(code: string): boolean {
   return keys.has(code);
 }
 
@@ -103,6 +119,12 @@ export function takeTap(): boolean {
     return true;
   }
   return false;
+}
+
+/** One-shot Tab: +1 forward, −1 Shift+Tab, 0 if none. */
+export function takeTabDir(): -1 | 0 | 1 {
+  if (!takeKey('Tab')) return 0;
+  return tabShifted ? -1 : 1;
 }
 
 export function clearTap(): void {

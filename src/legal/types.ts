@@ -1,6 +1,6 @@
 /** Structured legal copy — one renderer keeps typography consistent. */
 
-export interface LegalSection {
+interface LegalSection {
   heading: string;
   paragraphs: string[];
   bullets?: string[];

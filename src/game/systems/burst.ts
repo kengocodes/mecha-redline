@@ -35,7 +35,7 @@ export function tickBurst(state: BurstState, dt: number): void {
   state.flashT = Math.max(0, state.flashT - dt);
 }
 
-export function canBurst(state: BurstState, alive: boolean, phaseOk: boolean): boolean {
+function canBurst(state: BurstState, alive: boolean, phaseOk: boolean): boolean {
   return alive && phaseOk && state.charges > 0 && state.cd <= 0;
 }
 

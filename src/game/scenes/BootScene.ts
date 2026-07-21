@@ -54,11 +54,12 @@ export class BootScene extends Phaser.Scene {
     document.getElementById('loading')?.remove();
 
     this.scene.launch('hud');
-    // Dev-only: ?debug=battle|boss[2] skips the title (stripped in production);
-    // the '2' suffix jumps to Mission 02.
+    // Dev-only: ?debug=battle|boss[N] skips the title (stripped in
+    // production); a trailing digit jumps to that mission (battle3, boss2…).
     const dbg = debugParam();
-    if (dbg === 'battle' || dbg === 'boss' || dbg === 'battle2' || dbg === 'boss2') {
-      selectLevel(dbg.endsWith('2') ? 1 : 0);
+    const m = dbg?.match(/^(battle|boss)(\d?)$/);
+    if (m) {
+      selectLevel(m[2] ? Number.parseInt(m[2], 10) - 1 : 0);
       this.scene.start('game');
     } else {
       setPhase('title');

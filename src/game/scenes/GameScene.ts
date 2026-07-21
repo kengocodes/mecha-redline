@@ -2,15 +2,16 @@
 // mission flow; pushes positions into the three.js stage every frame.
 
 import Phaser from 'phaser';
+import type { Object3D } from 'three';
 import { applyAudioSettings, music, PILOT_VO, sfx, sfxLoopStart, sfxLoopStop, vo } from '../../core/audio';
 import {
   BK,
   type Bullet,
-  CAM_ELEV,
   CHAIN,
   CULL_X,
   CULL_Y,
   HI_KEY,
+  PCAM,
   PLAY_X,
   PLAY_Y,
   PLAYER,
@@ -18,32 +19,51 @@ import {
 import { setStageCursor } from '../../core/cursor';
 import { debugParam } from '../../core/debug';
 import {
+  aimWithPointer,
   clearTap,
   firing,
   focusing,
   moveAxis,
   pointer,
+  resetAimMode,
   takeBurst,
   takeKey,
+  takeTabDir,
   takeTap,
 } from '../../core/input';
-import { setBus, toggleMuted, type BusId } from '../../core/settings';
+import { audioSettings, setBus, toggleMuted, type BusId } from '../../core/settings';
 import { isLegalOpen } from '../../legal/overlay';
 import {
+  clearMenuFocus,
+  cycleMenuFocus,
+  ensureMenuFocus,
+  menuNav,
+  setMenuFocus,
+  settingsFocusList,
+} from '../ui/menuFocus';
+import {
   animateGear,
+  ASH_HUSK,
   buildGear,
   DART,
   disposeGear,
+  dressAshHusk,
+  dressShade,
   type Gear,
   type GearOptions,
   GOLGOTHA,
   HUSK,
   LANCER,
   LANCER_KAI,
+  makeCloakable,
   MORTAR,
   muzzleArenaPos,
+  objectArenaPos,
   setGearFlash,
+  SHADE,
 } from '../../render/gearFactory';
+import { buildCerberus } from '../../render/cerberus';
+import { buildPylon } from '../../render/pylon';
 import { buildSentinel } from '../../render/sentinel';
 import { buildSeraph } from '../../render/seraph';
 import { Stage3D } from '../../render/stage3d';
@@ -184,6 +204,7 @@ export class GameScene extends Phaser.Scene {
     settingsUi.confirmExit = false;
     this.dragBus = null;
     setPhase('intro');
+    resetAimMode();
 
     // Dev-only: ?debug=boss / boss2 jumps straight to the boss fight.
     if (debugParam()?.startsWith('boss')) {
@@ -209,7 +230,12 @@ export class GameScene extends Phaser.Scene {
     hud.paused = on;
     settingsUi.open = on;
     settingsUi.confirmExit = false;
-    if (!on) this.dragBus = null;
+    if (!on) {
+      this.dragBus = null;
+      clearMenuFocus();
+    } else {
+      setMenuFocus('close');
+    }
     clearTap();
   }
 
@@ -243,6 +269,17 @@ export class GameScene extends Phaser.Scene {
       gear = buildSentinel();
     } else if (kind === 'seraph') {
       gear = buildSeraph();
+    } else if (kind === 'pylon') {
+      gear = buildPylon();
+    } else if (kind === 'cerberus') {
+      gear = buildCerberus();
+    } else if (kind === 'shade') {
+      gear = buildGear(SHADE);
+      dressShade(gear);
+      makeCloakable(gear); // after dressing so the seams fade too
+    } else if (kind === 'ashhusk') {
+      gear = buildGear(ASH_HUSK);
+      dressAshHusk(gear);
     } else {
       const OPTS: Partial<Record<EnemyKind, GearOptions>> = {
         husk: HUSK,
@@ -301,17 +338,49 @@ export class GameScene extends Phaser.Scene {
       setStageCursor(
         this.dragBus || (hover && hover.kind !== 'panel') ? 'select' : 'aim',
       );
+
+      if (hover?.kind === 'mute') setMenuFocus('mute');
+      else if (hover?.kind === 'close') setMenuFocus('close');
+      else if (hover?.kind === 'exit') setMenuFocus('exit');
+      else if (hover?.kind === 'exit-cancel') setMenuFocus('exit-cancel');
+      else if (hover?.kind === 'exit-confirm') setMenuFocus('exit-confirm');
+      else if (hover?.kind === 'slider') setMenuFocus(hover.bus);
+
+      const list = settingsFocusList(opts);
+      ensureMenuFocus(list);
+
       if (settingsUi.confirmExit) {
+        const tab = takeTabDir();
+        if (tab) {
+          cycleMenuFocus(list, tab);
+          sfx('ui-move');
+        } else if (takeKey('ArrowLeft') || takeKey('ArrowUp')) {
+          cycleMenuFocus(list, -1);
+          sfx('ui-move');
+        } else if (takeKey('ArrowRight') || takeKey('ArrowDown')) {
+          cycleMenuFocus(list, 1);
+          sfx('ui-move');
+        }
         // Esc / P cancel the confirm (Sylvaria: safe option), not the whole pause.
         if (takeKey('KeyP') || takeKey('Escape')) {
           sfx('ui-back');
           settingsUi.confirmExit = false;
+          setMenuFocus('exit');
           clearTap();
+        } else if (takeKey('Enter') || takeKey('Space')) {
+          takeTap();
+          if (menuNav.id === 'exit-confirm') this.exitToTitle();
+          else {
+            sfx('ui-back');
+            settingsUi.confirmExit = false;
+            setMenuFocus('exit');
+          }
         } else if (takeTap()) {
           const hit = hitTitleChrome(pointer.x, pointer.y, true, opts);
           if (hit?.kind === 'exit-cancel') {
             sfx('ui-back');
             settingsUi.confirmExit = false;
+            setMenuFocus('exit');
           } else if (hit?.kind === 'exit-confirm') {
             this.exitToTitle();
           }
@@ -324,26 +393,78 @@ export class GameScene extends Phaser.Scene {
           applyAudioSettings();
         }
         takeTap();
-      } else if (takeKey('KeyP') || takeKey('Escape')) {
-        sfx('ui-back');
-        this.setPaused(false);
-      } else if (takeTap()) {
-        const hit = hitTitleChrome(pointer.x, pointer.y, true, opts);
-        if (hit?.kind === 'slider') {
-          this.dragBus = hit.bus;
-          setBus(hit.bus, hit.t);
-          applyAudioSettings();
-        } else if (hit?.kind === 'mute') {
-          toggleMuted();
-          applyAudioSettings();
-          sfx('ui-confirm');
-        } else if (hit?.kind === 'close') {
+      } else {
+        const tab = takeTabDir();
+        if (tab) {
+          cycleMenuFocus(list, tab);
+          sfx('ui-move');
+        } else if (takeKey('ArrowDown')) {
+          cycleMenuFocus(list, 1);
+          sfx('ui-move');
+        } else if (takeKey('ArrowUp')) {
+          cycleMenuFocus(list, -1);
+          sfx('ui-move');
+        } else if (takeKey('ArrowRight')) {
+          const id = menuNav.id;
+          if (id === 'master' || id === 'music' || id === 'sfx' || id === 'voice') {
+            setBus(id, Math.min(1, audioSettings[id] + 0.05));
+            applyAudioSettings();
+            sfx('ui-tick');
+          } else {
+            cycleMenuFocus(list, 1);
+            sfx('ui-move');
+          }
+        } else if (takeKey('ArrowLeft')) {
+          const id = menuNav.id;
+          if (id === 'master' || id === 'music' || id === 'sfx' || id === 'voice') {
+            setBus(id, Math.max(0, audioSettings[id] - 0.05));
+            applyAudioSettings();
+            sfx('ui-tick');
+          } else {
+            cycleMenuFocus(list, -1);
+            sfx('ui-move');
+          }
+        }
+
+        if (takeKey('KeyP') || takeKey('Escape')) {
           sfx('ui-back');
           this.setPaused(false);
-        } else if (hit?.kind === 'exit') {
-          sfx('ui-confirm');
-          settingsUi.confirmExit = true;
-          clearTap();
+        } else if (takeKey('Enter') || takeKey('Space')) {
+          takeTap();
+          const id = menuNav.id;
+          if (id === 'mute') {
+            toggleMuted();
+            applyAudioSettings();
+            sfx('ui-confirm');
+          } else if (id === 'close') {
+            sfx('ui-back');
+            this.setPaused(false);
+          } else if (id === 'exit') {
+            sfx('ui-confirm');
+            settingsUi.confirmExit = true;
+            setMenuFocus('exit-cancel');
+            clearTap();
+          }
+        } else if (takeTap()) {
+          const hit = hitTitleChrome(pointer.x, pointer.y, true, opts);
+          if (hit?.kind === 'slider') {
+            this.dragBus = hit.bus;
+            setBus(hit.bus, hit.t);
+            applyAudioSettings();
+            setMenuFocus(hit.bus);
+          } else if (hit?.kind === 'mute') {
+            toggleMuted();
+            applyAudioSettings();
+            sfx('ui-confirm');
+          } else if (hit?.kind === 'close') {
+            sfx('ui-back');
+            this.setPaused(false);
+          } else if (hit?.kind === 'exit') {
+            sfx('ui-confirm');
+            settingsUi.confirmExit = true;
+            setMenuFocus('exit-cancel');
+            clearTap();
+          }
         }
       }
     } else if (canPause && (takeKey('KeyP') || takeKey('Escape'))) {
@@ -415,10 +536,18 @@ export class GameScene extends Phaser.Scene {
       const w = t < 0.6 ? easeInOut(t / 0.6) : t < 2.3 ? 1 : 1 - easeInOut((t - 2.3) / 0.9);
       // SERAPH is three gears tall — pull the reveal wider and look higher.
       const tall = this.boss.kind === 'seraph';
-      s.setCine(this.boss.x, this.boss.y + 3, tall ? 8 : 5, tall ? 1.3 : 1.65, 42, w);
+      const wide = this.boss.kind === 'cerberus';
+      s.setCine(
+        this.boss.x,
+        this.boss.y + 3,
+        tall ? 8 : wide ? 4.5 : 5,
+        tall ? 1.3 : wide ? 1.45 : 1.65,
+        42,
+        w,
+      );
       bars = w;
     } else {
-      s.setCine(0, 0, 0, 1, CAM_ELEV, 0);
+      s.setCine(0, 0, 0, 1, PCAM.elev, 0);
     }
     hud.cineBars += (bars - hud.cineBars) * Math.min(1, raw * 8);
     if (bars === 0 && hud.cineBars < 0.005) hud.cineBars = 0;
@@ -536,8 +665,13 @@ export class GameScene extends Phaser.Scene {
     p.x = Math.max(-PLAY_X, Math.min(PLAY_X, p.x + p.vx * dt));
     p.y = Math.max(-PLAY_Y, Math.min(PLAY_Y, p.y + p.vy * dt));
 
-    const aim = Stage3D.I.aimPoint(pointer.x, pointer.y);
-    p.aim = Math.atan2(aim.y - p.y, aim.x - p.x);
+    if (aimWithPointer) {
+      const aim = Stage3D.I.aimPoint(pointer.x, pointer.y);
+      p.aim = Math.atan2(aim.y - p.y, aim.x - p.x);
+    } else {
+      // Keyboard-only: fire world-up until the pointer is used to aim.
+      p.aim = -Math.PI / 2;
+    }
 
     const phaseOk = hud.phase === 'battle' || hud.phase === 'boss' || hud.phase === 'warning';
     if (takeBurst() && tryBurst(this.burst, p.alive, phaseOk)) {
@@ -609,6 +743,27 @@ export class GameScene extends Phaser.Scene {
         s.fx.burst(e.x, e.y, 0x9ffcff, 0xe8fbff);
         sfx('seraph-purge');
       }
+      if (e.ai.evShim) {
+        e.ai.evShim = 0;
+        sfx('decloak', { jitter: true, throttleMs: 150 });
+      }
+      if (e.ai.evRise) {
+        e.ai.evRise = 0;
+        sfx('gear-arrive', { gain: 0.5, throttleMs: 120 });
+      }
+      if (e.ai.evLunge) {
+        e.ai.evLunge = 0;
+        s.addShake(0.35);
+        sfx('hound-lunge');
+      }
+
+      // Pylons sink back under the deck when their life runs out.
+      if (e.ai.despawn) {
+        Stage3D.I.battleGroup.remove(e.gear.root);
+        disposeGear(e.gear.root);
+        this.enemies.splice(i, 1);
+        continue;
+      }
 
       // Sentinel proximity detonation: the ring fires, no score changes hands.
       if (e.ai.boom) {
@@ -674,8 +829,26 @@ export class GameScene extends Phaser.Scene {
       for (let i = this.pb.length - 1; i >= 0; i--) {
         const b = this.pb[i];
         for (const e of this.enemies) {
-          const isBoss = e.kind === 'boss' || e.kind === 'seraph';
+          const isBoss = e.kind === 'boss' || e.kind === 'seraph' || e.kind === 'cerberus';
           if (isBoss && e.ai.state === 0) continue; // entrance armour
+          if (e.kind === 'cerberus') {
+            // Part-targeted: heads are break zones, the hull soaks the rest.
+            const part = this.cerberusPartHit(e, b.x, b.y, b.r);
+            if (part === null) continue;
+            this.pb.splice(i, 1);
+            e.hp -= 1;
+            Stage3D.I.fx.spark(b.x, b.y);
+            if (part >= 0) {
+              const key = `h${part}`;
+              if (e.ai[key] > 0) {
+                e.ai[key] -= 1;
+                if (e.ai[key] <= 0) this.breakCerberusHead(e, part);
+              }
+            }
+            if (e.hp > 0 && e.flashT <= -FLASH_GAP) e.flashT = FLASH_DUR;
+            if (e.hp <= 0) this.killEnemy(e);
+            break;
+          }
           const rr = e.hitR + b.r;
           const dx = e.x - b.x;
           const dy = e.y - b.y;
@@ -709,6 +882,13 @@ export class GameScene extends Phaser.Scene {
 
     // Ramming damage.
     for (const e of this.enemies) {
+      if (e.kind === 'cerberus') {
+        if (e.ai.state !== 0 && this.cerberusPartHit(e, p.x, p.y, this.stats.hitR + 0.4) !== null) {
+          this.hitPlayer();
+          return;
+        }
+        continue;
+      }
       const rr = e.hitR + this.stats.hitR + 0.4;
       const dx = p.x - e.x;
       const dy = p.y - e.y;
@@ -717,6 +897,61 @@ export class GameScene extends Phaser.Scene {
         return;
       }
     }
+  }
+
+  /**
+   * CERBERUS hit test against its part circles. Returns the head index
+   * (0/1/2) for a head strike, -1 for a hull strike, null for a miss.
+   * Head zones are projected along the camera line (objectArenaPos) so
+   * hits land where the player SEES the heads.
+   */
+  private cerberusPartHit(e: Enemy, x: number, y: number, r: number): number | null {
+    // Pose the gear to this sim step the way syncStage will.
+    const g = e.gear;
+    g.root.position.set(e.x, 0, e.y);
+    const a = Math.atan2(this.p.y - e.y, this.p.x - e.x);
+    g.root.rotation.y = Math.atan2(Math.cos(a), Math.sin(a));
+    const anchors = g.root.userData.headAnchors as Object3D[] | undefined;
+    if (anchors) {
+      for (let ix = 0; ix < anchors.length; ix++) {
+        if (e.ai[`h${ix}`] <= 0) continue; // broken heads are dead metal
+        const hp = objectArenaPos(anchors[ix]);
+        const hr = (ix === 0 ? 2.5 : 2.1) + r;
+        if ((hp.x - x) ** 2 + (hp.y - y) ** 2 < hr * hr) return ix;
+      }
+    }
+    // Hull: two circles along the facing axis (shoulder + engine block).
+    const fx = Math.cos(a);
+    const fy = Math.sin(a);
+    for (const [off, cr] of [[2.6, 4.0], [-4.2, 3.4]] as [number, number][]) {
+      const cx = e.x + fx * off;
+      const cy = e.y + fy * off;
+      const rr = cr + r;
+      if ((cx - x) ** 2 + (cy - y) ** 2 < rr * rr) return -1;
+    }
+    return null;
+  }
+
+  /** A head's break meter emptied: part-death beat + pack-rage escalation. */
+  private breakCerberusHead(e: Enemy, ix: number): void {
+    e.ai.broken = (e.ai.broken ?? 0) + 1;
+    const setDead = e.gear.root.userData.setHeadDead as ((i: number) => void) | undefined;
+    setDead?.(ix);
+    const anchors = e.gear.root.userData.headAnchors as Object3D[] | undefined;
+    const at = anchors ? objectArenaPos(anchors[ix]) : { x: e.x, y: e.y };
+    const s = Stage3D.I;
+    s.fx.explode(at.x, at.y, 1.4);
+    for (let i = 0; i < 8; i++) {
+      s.fx.spark(at.x + (Math.random() - 0.5) * 3, at.y + (Math.random() - 0.5) * 2.5);
+    }
+    s.addShake(0.7);
+    s.addPunch(0.4);
+    s.impact(0.008, 0.2, 0xff6a5c);
+    this.stop(HITSTOP.bossPhase);
+    e.flashT = 0.3;
+    sfx('expl-big');
+    sfx('hound-rage');
+    // The existing phase watcher slams the banner: ai.phase = 1 + broken.
   }
 
   private killEnemy(e: Enemy): void {
@@ -738,7 +973,7 @@ export class GameScene extends Phaser.Scene {
 
     const s = Stage3D.I;
     const ui = s.uiPoint(e.x, e.y);
-    const isBoss = e.kind === 'boss' || e.kind === 'seraph';
+    const isBoss = e.kind === 'boss' || e.kind === 'seraph' || e.kind === 'cerberus';
     if (isBoss) {
       addPopup(ui.x, ui.y - 20, `+${pts}`, '#ffffff', 30);
     } else {
@@ -863,6 +1098,7 @@ export class GameScene extends Phaser.Scene {
     const p = this.p;
 
     if (p.alive) {
+      s.setFocus(p.x, p.y);
       const ui = s.uiPoint(p.x, p.y);
       hud.px = ui.x;
       hud.py = ui.y;
@@ -882,14 +1118,21 @@ export class GameScene extends Phaser.Scene {
 
     for (const e of this.enemies) {
       e.gear.root.position.set(e.x, 0, e.y);
-      const a = Math.atan2(p.y - e.y, p.x - e.x);
-      e.gear.root.rotation.y = Math.atan2(Math.cos(a), Math.sin(a));
+      // Lane emplacements hold their spawn facing; everything else tracks.
+      if (!e.gear.root.userData.noFace) {
+        const a = Math.atan2(p.y - e.y, p.x - e.x);
+        e.gear.root.rotation.y = Math.atan2(Math.cos(a), Math.sin(a));
+      }
       setGearFlash(e.gear, e.flashT > 0);
       if (e.muzzleT > 0) {
         e.gear.muzzleT = e.muzzleT; // consume the pending-flash message
         e.gear.recoil = Math.min(1, e.gear.recoil + 0.8); // arm/gun kick
         e.muzzleT = 0;
       }
+      // Cloak factor (shades): set before animateGear so the thruster
+      // flames pick up the same frame's fade.
+      const setCloak = e.gear.root.userData.setCloak as ((v: number) => void) | undefined;
+      if (setCloak && e.ai.cloak !== undefined) setCloak(e.ai.cloak);
       const spd = Math.hypot(e.vx, e.vy);
       animateGear(e.gear, dt, -e.vx * 0.01, -e.vy * 0.004, Math.min(1.15, 0.25 + spd / 9));
       // Custom-mesh extras animateGear doesn't know (halo, bits, mine spin).

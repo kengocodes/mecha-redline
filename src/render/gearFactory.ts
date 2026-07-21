@@ -4,9 +4,9 @@
 // wing binders. One parametric humanoid builder feeds every unit type.
 
 import * as THREE from 'three';
-import { BULLET_H, CAM_ELEV } from '../core/const';
+import { BULLET_H, PCAM } from '../core/const';
 
-export interface GearPalette {
+interface GearPalette {
   armor: number; // main plating
   dark: number; // joints, inner frame, feet
   accent: number; // chest / trim stripes
@@ -559,23 +559,30 @@ export function buildGear(o: GearOptions): Gear {
 }
 
 const _muzzleWorld = new THREE.Vector3();
-/** Screen-vertical arena drift per unit of height above the bullet plane. */
-const CAM_DROP = 1 / Math.tan((CAM_ELEV * Math.PI) / 180);
+/** Screen-vertical arena drift per unit of height above the bullet plane.
+ * Uses the battle camera's base pitch; the perspective ray direction varies
+ * a little across the frame, but centre-frame is the right average. */
+const CAM_DROP = 1 / Math.tan((PCAM.elev * Math.PI) / 180);
+
+/**
+ * Arena-plane position of any scene object (gameplay x/y). The object may
+ * sit well above the plane bullets render on, so it is projected along the
+ * camera's view line rather than straight down — matching where the player
+ * SEES it. Used for muzzles and for boss part-target hit zones.
+ */
+export function objectArenaPos(obj: THREE.Object3D): { x: number; y: number } {
+  obj.getWorldPosition(_muzzleWorld);
+  return { x: _muzzleWorld.x, y: _muzzleWorld.z - (_muzzleWorld.y - BULLET_H) * CAM_DROP };
+}
 
 /**
  * Arena-plane spawn point for a weapon muzzle (gameplay x/y).
  * Caller should pose `g.root` (position + yaw) before calling.
- *
- * The muzzle sits ~2u above the plane bullets render on, so we project it
- * along the camera's view line rather than straight down — a plain ground
- * drop lands ~1.3u down-screen of the barrel tip, which reads fine firing
- * up/down (along the tracer) but visibly misses the rifle firing sideways.
  */
 export function muzzleArenaPos(g: Gear, ix = 0): { x: number; y: number } | null {
   const tip = g.muzzles[ix];
   if (!tip) return null;
-  tip.getWorldPosition(_muzzleWorld);
-  return { x: _muzzleWorld.x, y: _muzzleWorld.z - (_muzzleWorld.y - BULLET_H) * CAM_DROP };
+  return objectArenaPos(tip);
 }
 
 /**
@@ -632,10 +639,9 @@ export function animateGear(g: Gear, dt: number, bank = 0, pitch = 0, boost = 0.
     f.scale.set(sxz, sy, sxz);
     // Pin the wide end to the nozzle so length only grows rearward (−Z).
     f.position.z = meta.nozZ - (meta.geoH * 0.5) * sy;
-    (f.material as THREE.MeshBasicMaterial).opacity = Math.min(
-      0.85,
-      (0.35 + Math.random() * 0.2) * (0.35 + b * 0.7) * meta.opMul,
-    );
+    (f.material as THREE.MeshBasicMaterial).opacity =
+      Math.min(0.85, (0.35 + Math.random() * 0.2) * (0.35 + b * 0.7) * meta.opMul) *
+      ((g.root.userData.cloakF as number | undefined) ?? 1);
   }
   for (const w of g.wings) {
     // Gentle flex, fanning wider under boost.
@@ -787,6 +793,96 @@ export const LANCER_KAI: GearOptions = {
   wings: true,
   bulk: 1.18,
 };
+
+// ---- Mission 03 hostiles (blackout raiders: dusk plate, neon heat) --------
+
+/** Cloak skirmisher. The CLOAK is the stealth, so the visible form is loud:
+ * dusk-violet plate with magenta light seams (see dressShade). */
+export const SHADE: GearOptions = {
+  palette: {
+    armor: 0x4a4462,
+    dark: 0x201c2c,
+    accent: 0xff4ad8,
+    trim: 0x7a6f96,
+    glow: 0xff6ae8,
+    thrust: 0xc88aff,
+  },
+  scale: 0.95,
+  hover: 1.8,
+  head: 'mono',
+  fins: false,
+  rifle: false,
+  armCannon: true,
+  shoulderCannons: false,
+  wings: false,
+  bulk: 0.8,
+};
+
+/** The Mission 01 husk rebuilt from wake scrap (see dressAshHusk). */
+export const ASH_HUSK: GearOptions = {
+  ...HUSK,
+  palette: {
+    armor: 0x55504c,
+    dark: 0x262322,
+    accent: 0xb63c22,
+    trim: 0x7a746e,
+    glow: 0xff5544,
+    thrust: 0xffc45c,
+  },
+};
+
+/** Magenta light seams + a tall single sensor blade. Call after buildGear. */
+export function dressShade(g: Gear): void {
+  const seam = glowMat(0xff4ad8);
+  for (const s of [-1, 1]) {
+    put(g.att, boxGeo(0.07, 0.75, 0.06), seam, s * 0.3, 3.95, 0.4, 0.1, 0, s * -0.2);
+    put(g.att, boxGeo(0.5, 0.07, 0.07), seam, s * 0.86, 4.65, 0.1, 0, 0, s * -0.16);
+  }
+  for (const leg of g.legs) {
+    put(leg, boxGeo(0.07, 1.0, 0.06), seam, 0, -1.85, 0.34);
+  }
+  put(g.head, frustumBox(0.06, 0.14, 0.12, 0.22, 1.3), lambert(0x201c2c), 0, 0.85, -0.08, -0.18);
+  put(g.head, boxGeo(0.05, 1.1, 0.05), seam, 0, 0.82, 0, -0.18);
+}
+
+/** Ember weld-seams + exposed core — "rebuilt" must read at 640×360. */
+export function dressAshHusk(g: Gear): void {
+  const ember = glowMat(0xff6a3c);
+  put(g.att, boxGeo(0.6, 0.08, 0.08), ember, 0.3, 4.25, 0.35, 0, 0, 0.35);
+  put(g.att, boxGeo(0.08, 0.5, 0.08), ember, -0.5, 3.7, 0.38);
+  put(g.att, boxGeo(0.34, 0.3, 0.1), ember, 0, 3.66, 0.34); // exposed core
+  for (const s of [-1, 1]) {
+    put(g.att, boxGeo(0.4, 0.07, 0.07), ember, s * 0.95, 4.5, 0.12, 0, 0, s * -0.3);
+  }
+}
+
+/**
+ * Give a gear a per-instance cloak: every material is cloned so opacity can
+ * fade without touching the shared caches, and `root.userData.setCloak(v)`
+ * (1 = solid, ~0.12 = cloaked) drives it. Thruster flames read the same
+ * factor inside animateGear. Call AFTER any dressing, BEFORE first render.
+ */
+export function makeCloakable(g: Gear): void {
+  const entries: { mat: THREE.Material; base: number; soft: boolean }[] = [];
+  g.root.traverse((obj) => {
+    const m = obj as THREE.Mesh;
+    if (!m.isMesh) return;
+    const src = m.material as THREE.Material;
+    const mat = src.clone();
+    m.material = mat;
+    entries.push({ mat, base: src.transparent ? src.opacity : 1, soft: src.transparent });
+  });
+  g.root.userData.cloakF = 1;
+  g.root.userData.setCloak = (v: number): void => {
+    g.root.userData.cloakF = v;
+    for (const e of entries) {
+      e.mat.transparent = true;
+      e.mat.opacity = e.base * v;
+      // Solid plate keeps depth while visible so the frame self-sorts.
+      e.mat.depthWrite = !e.soft && v > 0.85;
+    }
+  };
+}
 
 export const GOLGOTHA: GearOptions = {
   palette: {

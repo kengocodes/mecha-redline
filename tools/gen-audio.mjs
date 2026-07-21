@@ -85,6 +85,18 @@ const MUSIC = [
       'Late-90s console duel-boss theme: urgent driving pulse in a insistent triple-feel rhythm, dark rolling bass sequence, a soaring cold synth lead motif, ethereal wordless choir-like synth voices layered behind, sparse cathedral-bell accents, metallic percussion. A beautiful and terrifying angelic war machine — sacred dread with relentless forward momentum, clearly rhythmic. Instrumental, seamless loop.',
   },
   {
+    id: 'battle3',
+    ms: 120_000,
+    prompt:
+      'Late-90s Japanese console combat theme, urban night variation: rain-slick breakbeat drums, driving rolling bass, distant siren-like synth wails woven into dark pads, neon arpeggios, an urgent determined melodic lead. Fighting over a blacked-out neon city in the rain — kinetic, gritty, propulsive, never idle ambient. Instrumental, seamless loop.',
+  },
+  {
+    id: 'boss3',
+    ms: 100_000,
+    prompt:
+      'Late-90s console giant-machine boss theme: relentless hunting percussion with a tom-heavy galloping rhythm, low brass-like synth stabs, snarling distorted bass, a driving aggressive lead motif over mechanical clank accents. A colossal three-headed war machine running down its prey through city rain — primal menace with unstoppable momentum, clearly rhythmic. Instrumental, seamless loop.',
+  },
+  {
     id: 'clear',
     ms: 18_000,
     prompt:
@@ -126,6 +138,10 @@ const SFX = [
   { id: 'seraph-dash', dur: 0.7, text: 'Fast ethereal whoosh dash with a faint crystalline shimmer tail, sci-fi teleport step, short, smooth' },
   { id: 'seraph-purge', dur: 1.8, text: 'Reversed shimmering energy implosion then a radiant choral shockwave bloom, holy sci-fi energy burst, awe-inspiring but smooth' },
   { id: 'seraph-choir', dur: 3.6, text: 'Distant eerie angelic choir swell heard through radio static, haunting sacred wordless hum, unsettling and beautiful, fading in and out' },
+  { id: 'decloak', dur: 0.7, text: 'Quick crystalline shimmer materialization, sci-fi cloaking field dropping with a glassy sweep, short, smooth' },
+  { id: 'hound-howl', dur: 3.0, text: 'Colossal mechanical war-horn roar, distorted klaxon bellow of a giant war machine announcing itself, terrifying, echoing over a city' },
+  { id: 'hound-rage', dur: 1.6, text: 'Furious grinding servo roar burst, giant mech damage bellow with metal shriek, aggressive, punchy' },
+  { id: 'hound-lunge', dur: 0.8, text: 'Massive mech charge launch: hydraulic release clunk then thundering acceleration whoosh, short, powerful' },
 ];
 
 // [bracket] cues shape eleven_v3 delivery. kind selects the finishing chain:
@@ -153,6 +169,16 @@ const VO = [
   { id: 'op2-stragglers', v: 'operator', kind: 'op', text: 'Sweep the stragglers. [pause] [quiet] ...Do you hear that? Something on the open channel.' },
   { id: 'op2-seraph', v: 'operator', kind: 'op', text: '[unnerved] White contact. Duel-class. It is... singing. [steady] Weapons free, pilot.' },
   { id: 'op2-seraph-kill', v: 'operator', kind: 'op', text: 'Confirmed kill. [quiet] The song has gone thin... [unsettled] but it has not stopped. Bring your gear home, pilot.' },
+
+  // Mission 03 — Neo-Kyoto Nightfall.
+  { id: 'op3-mission-start', v: 'operator', kind: 'op', tempo: 1.1, text: 'Mission three. Neo-Kyoto blackout. The song was a beacon — and the answer came home. Defend the capital, pilot.' },
+  { id: 'op3-entry', v: 'operator', kind: 'op', text: 'Blackout rain over the capital. All gears — the city is behind you.' },
+  { id: 'op3-rebuilt', v: 'operator', kind: 'op', text: '[grim] Husk frames... rebuilt from the wake. They are salvaging our kills, pilot.' },
+  { id: 'op3-shade', v: 'operator', kind: 'op', text: '[wary] Cloaked signatures. Shade-types — watch for the shimmer, then hit hard.' },
+  { id: 'op3-pylon', v: 'operator', kind: 'op', text: 'Fixed emplacements rising. Do not stand in the projector lanes.' },
+  { id: 'op3-stragglers', v: 'operator', kind: 'op', text: 'Sweep the stragglers. [pause] [unnerved] Something big is moving under the smog. On all fours.' },
+  { id: 'op3-cerberus', v: 'operator', kind: 'op', text: '[alarmed] Ground contact. Hound-class walker — three heads. [steady] It hunts in kill order, pilot. Choose yours.' },
+  { id: 'op3-cerberus-kill', v: 'operator', kind: 'op', text: 'Confirmed kill. [relieved] The pack is down. The capital holds — bring your gear home.' },
 
   { id: 'kira-select', v: 'kira', kind: 'pilot', tempo: 1.15, text: 'Checklist done. Launching.' },
   { id: 'kira-launch', v: 'kira', kind: 'pilot', tempo: 1.15, text: 'Valkyr, taking the rail. [exhales] Steady... go.' },

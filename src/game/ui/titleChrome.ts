@@ -47,7 +47,7 @@ const BUSES: { id: BusId; label: string }[] = [
 ];
 
 /** SETTINGS affordance under FREE PLAY (desktop) / top-right (touch). */
-export function settingsBtnRect(): Rect {
+function settingsBtnRect(): Rect {
   if (touchUi()) {
     const s = touchMin();
     const pad = Math.max(touchGap(), cssToUi(12));
@@ -56,7 +56,26 @@ export function settingsBtnRect(): Rect {
   return { x: uiW - 168, y: 68, w: 132, h: 28 };
 }
 
-export function settingsPanelRect(opts: SettingsPanelOpts = {}): Rect {
+/** PRESS START band — keyboard focus target on the title attract. */
+export function titleStartRect(): Rect {
+  const stackBottom = touchUi()
+    ? (() => {
+        const links = titleLinkRects();
+        return links[0]!.rect.y - cssToUi(16) - cssToUi(8);
+      })()
+    : 672;
+  const y0 = stackBottom - 64;
+  return { x: uiW / 2 - 210, y: y0, w: 420, h: 70 };
+}
+
+/** Cyan focus frame for keyboard navigation (drawn over chips / bands). */
+export function drawFocusRing(g: Ctx, r: Rect): void {
+  g.strokeStyle = CYAN;
+  g.lineWidth = 2;
+  g.strokeRect(r.x + 1, r.y + 1, r.w - 2, r.h - 2);
+}
+
+function settingsPanelRect(opts: SettingsPanelOpts = {}): Rect {
   if (touchUi()) {
     const s = touchMin();
     const gap = touchGap();
@@ -108,7 +127,7 @@ export function sliderValueAt(bus: BusId, x: number, opts: SettingsPanelOpts = {
   return Math.max(0, Math.min(1, (x - tr.x) / tr.w));
 }
 
-export function muteBtnRect(opts: SettingsPanelOpts = {}): Rect {
+function muteBtnRect(opts: SettingsPanelOpts = {}): Rect {
   const p = settingsPanelRect(opts);
   if (touchUi()) {
     const s = touchMin();
@@ -118,7 +137,7 @@ export function muteBtnRect(opts: SettingsPanelOpts = {}): Rect {
   return { x: p.x + 36, y: p.y + 286, w: 120, h: 28 };
 }
 
-export function closeBtnRect(opts: SettingsPanelOpts = {}): Rect {
+function closeBtnRect(opts: SettingsPanelOpts = {}): Rect {
   const p = settingsPanelRect(opts);
   if (touchUi()) {
     const s = touchMin();
@@ -130,7 +149,7 @@ export function closeBtnRect(opts: SettingsPanelOpts = {}): Rect {
 }
 
 /** Full-width EXIT TO TITLE — pause panel only. */
-export function exitBtnRect(opts: SettingsPanelOpts = {}): Rect {
+function exitBtnRect(opts: SettingsPanelOpts = {}): Rect {
   const p = settingsPanelRect(opts);
   if (touchUi()) {
     const s = touchMin();
@@ -144,7 +163,7 @@ export function exitBtnRect(opts: SettingsPanelOpts = {}): Rect {
   return { x: p.x + 36, y: p.y + 328, w: p.w - 72, h: 28 };
 }
 
-export function exitCancelRect(opts: SettingsPanelOpts = {}): Rect {
+function exitCancelRect(opts: SettingsPanelOpts = {}): Rect {
   const p = settingsPanelRect(opts);
   if (touchUi()) {
     const s = touchMin();
@@ -154,7 +173,7 @@ export function exitCancelRect(opts: SettingsPanelOpts = {}): Rect {
   return { x: p.x + 36, y: p.y + p.h - 72, w: 160, h: 32 };
 }
 
-export function exitConfirmRect(opts: SettingsPanelOpts = {}): Rect {
+function exitConfirmRect(opts: SettingsPanelOpts = {}): Rect {
   const p = settingsPanelRect(opts);
   if (touchUi()) {
     const s = touchMin();
@@ -212,7 +231,7 @@ export function titleLinkRects(): { id: LinkId; rect: Rect }[] {
  * Union of the link row (including gaps). Clicks here that miss a label are
  * inert — they must not count as PRESS START.
  */
-export function titleLinksBandRect(): Rect {
+function titleLinksBandRect(): Rect {
   const links = titleLinkRects();
   const first = links[0]!.rect;
   const last = links[links.length - 1]!.rect;
@@ -459,6 +478,45 @@ export function drawSettingsPanel(
     chip(g, exitBtnRect(opts), 'EXIT TO TITLE', hover?.kind === 'exit', true);
   }
   if (!touch) {
-    tx(g, opts.footer ?? 'ESC TO CLOSE', p.x + p.w / 2, p.y + p.h - 22, 10, DIM, 'center', 2);
+    tx(
+      g,
+      opts.footer ?? 'TAB / ARROWS ── MOVE · ENTER ── CONFIRM · ESC ── CLOSE',
+      p.x + p.w / 2,
+      p.y + p.h - 22,
+      10,
+      DIM,
+      'center',
+      2,
+    );
+  }
+}
+
+/** Draw a focus ring for the current keyboard target (settings / title chrome). */
+export function drawChromeFocus(
+  g: Ctx,
+  focusId: string | null,
+  open: boolean,
+  opts: SettingsPanelOpts & { links?: boolean } = {},
+): void {
+  if (!focusId) return;
+  if (open) {
+    if (opts.confirmExit) {
+      if (focusId === 'exit-cancel') drawFocusRing(g, exitCancelRect(opts));
+      if (focusId === 'exit-confirm') drawFocusRing(g, exitConfirmRect(opts));
+      return;
+    }
+    const bi = BUSES.findIndex((b) => b.id === focusId);
+    if (bi >= 0) drawFocusRing(g, sliderHit(bi, opts));
+    else if (focusId === 'mute') drawFocusRing(g, muteBtnRect(opts));
+    else if (focusId === 'close') drawFocusRing(g, closeBtnRect(opts));
+    else if (focusId === 'exit' && opts.resume) drawFocusRing(g, exitBtnRect(opts));
+    return;
+  }
+  if (focusId === 'settings') drawFocusRing(g, settingsBtnRect());
+  if (focusId === 'start') drawFocusRing(g, titleStartRect());
+  if (opts.links !== false) {
+    for (const { id, rect } of titleLinkRects()) {
+      if (focusId === id) drawFocusRing(g, rect);
+    }
   }
 }

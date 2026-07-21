@@ -1,17 +1,17 @@
 // Shared mutable HUD state: gameplay scenes write it, the HUD scene draws it.
 
-import { vo } from '../../core/audio';
+import { vo } from "../../core/audio";
 
 export type Phase =
-  | 'boot'
-  | 'title'
-  | 'select'
-  | 'intro'
-  | 'battle'
-  | 'warning'
-  | 'boss'
-  | 'complete'
-  | 'failed';
+  | "boot"
+  | "title"
+  | "select"
+  | "intro"
+  | "battle"
+  | "warning"
+  | "boss"
+  | "complete"
+  | "failed";
 
 export interface HudState {
   phase: Phase;
@@ -46,7 +46,7 @@ export interface HudState {
 }
 
 export const hud: HudState = {
-  phase: 'boot',
+  phase: "boot",
   t: 0,
   score: 0,
   hi: 0,
@@ -61,15 +61,15 @@ export const hud: HudState = {
   burstFlashT: 0,
   bossHp: 0,
   bossMax: 0,
-  bossName: '',
+  bossName: "",
   combo: 0,
   comboT: 0,
   comboBest: 0,
   waveBannerT: 0,
-  phaseBanner: '',
+  phaseBanner: "",
   phaseBannerT: 0,
   cineBars: 0,
-  msg: '',
+  msg: "",
   msgT: 0,
   px: 640,
   py: 500,
@@ -89,7 +89,13 @@ export interface Popup {
 
 export const popups: Popup[] = [];
 
-export function addPopup(x: number, y: number, text: string, color: string, size = 16): void {
+export function addPopup(
+  x: number,
+  y: number,
+  text: string,
+  color: string,
+  size = 16,
+): void {
   if (popups.length >= 24) popups.shift();
   popups.push({ x, y, text, color, size, t: 0 });
 }

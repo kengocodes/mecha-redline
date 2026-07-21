@@ -48,7 +48,7 @@ export function openLegal(id: LegalPageId, push = true): void {
   if (push) history.pushState({ legal: id }, '', `/${id}`);
 }
 
-export function closeLegal(push = true): void {
+function closeLegal(push = true): void {
   const legalEl = $('legal');
   legalEl.classList.add('hidden');
   legalEl.removeAttribute('role');

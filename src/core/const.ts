@@ -2,8 +2,8 @@
 //
 // Gameplay happens on a 2D plane in "arena units": x grows right, y grows
 // DOWN the screen (like screen space). The three.js stage maps (x, y) onto
-// its ground plane as (x, height, z = y), with an orthographic camera tilted
-// ~60° so mecha read as 3D — the 2.5D trick.
+// its ground plane as (x, height, z = y), with a perspective camera pitched
+// ~65° over a scrolling deck so battles read as forward flight.
 
 /** Logical UI resolution (Phaser canvas). */
 export const UI_W = 1280;
@@ -17,12 +17,20 @@ export const RES_H = 360;
 export const VIEW_HW = 48;
 export const VIEW_HH = 27;
 
-/** Camera elevation above the ground plane, degrees. */
-export const CAM_ELEV = 60;
-
-/** Playable arena (the "redline"). */
-export const ARENA_X = 44;
-export const ARENA_Y = 26;
+/**
+ * Perspective battle camera (all missions). Elevation and FOV echo the
+ * tilted wharf-run look: the boom distance is chosen so the player row
+ * renders at the same on-screen scale as the old orthographic view
+ * (dist * tan(fov/2) ~ VIEW_HH), and the look target stays on arena centre.
+ */
+export const PCAM = {
+  fov: 40,
+  elev: 65,
+  dist: 80,
+  /** How far the camera drifts with the player, per arena unit. */
+  driftX: 0.14,
+  driftY: 0.08,
+};
 
 /** Player movement clamp. */
 export const PLAY_X = 43;
@@ -59,6 +67,9 @@ export const SCORE = {
   sentinel: 250,
   kai: 1200,
   seraph: 15000,
+  shade: 400,
+  pylon: 500,
+  cerberus: 20000,
 };
 
 /** Kill-chain scoring: kills inside `window` seconds keep the chain alive;

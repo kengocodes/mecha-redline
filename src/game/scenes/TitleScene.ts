@@ -4,14 +4,29 @@
 import Phaser from 'phaser';
 import { applyAudioSettings, music, sfx } from '../../core/audio';
 import { setStageCursor } from '../../core/cursor';
-import { clearTap, pointer, takeKey, takeTap } from '../../core/input';
+import {
+  clearTap,
+  pointer,
+  takeKey,
+  takeTabDir,
+  takeTap,
+} from '../../core/input';
 import { SOCIAL_LINKS } from '../../core/links';
 import { desktopPlayable } from '../../core/platform';
-import { setBus, toggleMuted, type BusId } from '../../core/settings';
+import { audioSettings, setBus, toggleMuted, type BusId } from '../../core/settings';
 import { isLegalOpen, openLegal } from '../../legal/overlay';
 import { animateGear, buildGear, type Gear, setGearFlash } from '../../render/gearFactory';
 import { Stage3D } from '../../render/stage3d';
 import { ROSTER } from '../roster';
+import {
+  clearMenuFocus,
+  cycleMenuFocus,
+  ensureMenuFocus,
+  menuNav,
+  setMenuFocus,
+  settingsFocusList,
+  titleFocusList,
+} from '../ui/menuFocus';
 import { attract, hud, setPhase, settingsUi } from '../ui/state';
 import { hitTitleChrome, sliderValueAt } from '../ui/titleChrome';
 import { startWipe, wipeActive } from '../ui/wipe';
@@ -21,6 +36,10 @@ const SWAP_EVERY = 7;
 
 /** Arrival pose: slight three-quarter turn, matching the select screen. */
 const ARRIVE_YAW = 0.42;
+
+function isBusFocus(id: string | null): id is BusId {
+  return id === 'master' || id === 'music' || id === 'sfx' || id === 'voice';
+}
 
 export class TitleScene extends Phaser.Scene {
   private gear!: Gear;
@@ -41,6 +60,7 @@ export class TitleScene extends Phaser.Scene {
     settingsUi.open = false;
     this.dragBus = null;
     attract.swapT = 0;
+    clearMenuFocus();
     this.spawnGear(false);
     music('title');
     sfx('logo-slam'); // lands with the logo overscale hit
@@ -49,6 +69,7 @@ export class TitleScene extends Phaser.Scene {
       setStageCursor('auto');
       settingsUi.open = false;
       this.dragBus = null;
+      clearMenuFocus();
     });
   }
 
@@ -76,6 +97,55 @@ export class TitleScene extends Phaser.Scene {
 
   private setSettingsOpen(open: boolean): void {
     settingsUi.open = open;
+    if (open) setMenuFocus('master');
+    else clearMenuFocus();
+  }
+
+  private nudgeSlider(dir: 1 | -1): void {
+    const id = menuNav.id;
+    if (!isBusFocus(id)) return;
+    const next = Math.max(0, Math.min(1, audioSettings[id] + dir * 0.05));
+    this.applySlider(id, next);
+    sfx('ui-tick');
+  }
+
+  private activateFocus(): void {
+    const id = menuNav.id;
+    if (!id) return;
+
+    if (settingsUi.open) {
+      if (id === 'mute') {
+        toggleMuted();
+        applyAudioSettings();
+        sfx('ui-confirm');
+      } else if (id === 'close') {
+        sfx('ui-back');
+        this.setSettingsOpen(false);
+      }
+      // Sliders: Enter does nothing special — Left/Right adjust volume.
+      return;
+    }
+
+    if (id === 'start') {
+      if (!desktopPlayable() || wipeActive()) return;
+      sfx('ui-confirm');
+      startWipe(() => this.scene.start('select'));
+      return;
+    }
+    if (id === 'settings') {
+      sfx('ui-confirm');
+      this.setSettingsOpen(true);
+      return;
+    }
+    if (id === 'privacy' || id === 'terms') {
+      sfx('ui-tick');
+      openLegal(id);
+      return;
+    }
+    if (id === 'github' || id === 'x') {
+      sfx('ui-tick');
+      window.open(SOCIAL_LINKS[id], '_blank', 'noopener,noreferrer');
+    }
   }
 
   update(_t: number, dms: number): void {
@@ -121,16 +191,57 @@ export class TitleScene extends Phaser.Scene {
     }
 
     const showLinks = hud.t > 0.7 && !settingsUi.open;
-    const hover = hitTitleChrome(pointer.x, pointer.y, settingsUi.open, { links: showLinks });
+    const hover = hitTitleChrome(pointer.x, pointer.y, settingsUi.open, {
+      links: showLinks,
+    });
     const cursorHot =
       !!hover && hover.kind !== 'panel' && hover.kind !== 'links-band';
     setStageCursor(cursorHot ? 'select' : 'aim');
 
+    // Pointer resting on a control mirrors keyboard focus (visible ring follows).
+    if (hover?.kind === 'settings') setMenuFocus('settings');
+    else if (hover?.kind === 'link') setMenuFocus(hover.id);
+    else if (hover?.kind === 'mute') setMenuFocus('mute');
+    else if (hover?.kind === 'close') setMenuFocus('close');
+    else if (hover?.kind === 'slider') setMenuFocus(hover.bus);
+
     if (settingsUi.open) {
+      const list = settingsFocusList();
+      ensureMenuFocus(list);
+
+      const tab = takeTabDir();
+      if (tab) {
+        cycleMenuFocus(list, tab);
+        sfx('ui-move');
+      } else if (takeKey('ArrowDown')) {
+        cycleMenuFocus(list, 1);
+        sfx('ui-move');
+      } else if (takeKey('ArrowUp')) {
+        cycleMenuFocus(list, -1);
+        sfx('ui-move');
+      } else if (takeKey('ArrowRight')) {
+        if (isBusFocus(menuNav.id)) this.nudgeSlider(1);
+        else {
+          cycleMenuFocus(list, 1);
+          sfx('ui-move');
+        }
+      } else if (takeKey('ArrowLeft')) {
+        if (isBusFocus(menuNav.id)) this.nudgeSlider(-1);
+        else {
+          cycleMenuFocus(list, -1);
+          sfx('ui-move');
+        }
+      }
+
       if (takeKey('Escape')) {
         sfx('ui-back');
         this.setSettingsOpen(false);
         clearTap();
+        return;
+      }
+      if (takeKey('Enter') || takeKey('Space')) {
+        takeTap();
+        this.activateFocus();
         return;
       }
       if (takeTap()) {
@@ -138,7 +249,9 @@ export class TitleScene extends Phaser.Scene {
         if (hit?.kind === 'slider') {
           this.dragBus = hit.bus;
           this.applySlider(hit.bus, hit.t);
+          setMenuFocus(hit.bus);
         } else if (hit?.kind === 'mute') {
+          setMenuFocus('mute');
           toggleMuted();
           applyAudioSettings();
           sfx('ui-confirm');
@@ -159,14 +272,30 @@ export class TitleScene extends Phaser.Scene {
 
     if (wipeActive() || hud.t <= 0.5) return;
 
-    const canPlay = desktopPlayable();
+    const list = titleFocusList();
+    ensureMenuFocus(list);
+    const tab = takeTabDir();
+    if (tab) {
+      cycleMenuFocus(list, tab);
+      sfx('ui-move');
+    } else if (takeKey('ArrowRight') || takeKey('ArrowDown')) {
+      cycleMenuFocus(list, 1);
+      sfx('ui-move');
+    } else if (takeKey('ArrowLeft') || takeKey('ArrowUp')) {
+      cycleMenuFocus(list, -1);
+      sfx('ui-move');
+    }
 
-    // Keyboard start — desktop only (combat needs mouse aim).
     if (takeKey('Enter') || takeKey('Space')) {
       takeTap();
-      if (!canPlay) return;
-      sfx('ui-confirm');
-      startWipe(() => this.scene.start('select'));
+      // No Tab focus yet — classic cabinet Start (don't invent a focus ring).
+      if (!menuNav.id) {
+        if (!desktopPlayable() || wipeActive()) return;
+        sfx('ui-confirm');
+        startWipe(() => this.scene.start('select'));
+        return;
+      }
+      this.activateFocus();
       return;
     }
 
@@ -186,7 +315,8 @@ export class TitleScene extends Phaser.Scene {
     }
     // Near-miss on the footer link row — don't treat as PRESS START.
     if (hit?.kind === 'links-band') return;
-    if (!canPlay) return;
+    if (!desktopPlayable()) return;
+    setMenuFocus('start');
     sfx('ui-confirm');
     startWipe(() => this.scene.start('select'));
   }
