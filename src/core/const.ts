@@ -81,6 +81,14 @@ export const CHAIN = {
   maxMult: 8,
 };
 
+/** Graze: enemy fire shaving past the core pays points and tops the chain
+ * window back up — the reward for dodging late instead of wide. */
+export const GRAZE = {
+  r: 1.9, // extra radius beyond the hitbox that counts as a shave
+  score: 30,
+  chainRefill: 0.35, // seconds added back to an open chain window
+};
+
 export const HI_KEY = 'mecha-redline-hi';
 
 /** Bullet kinds — index into the instanced pools. */
@@ -109,6 +117,8 @@ export interface Bullet {
   fuse0?: number;
   /** Ground point the shell detonates over — drawn as a HUD deck marker. */
   mark?: { x: number; y: number };
+  /** Already paid its graze bonus — each bullet shaves the player once. */
+  grazed?: boolean;
 }
 
 export const BULLET_R: Record<BK, number> = {

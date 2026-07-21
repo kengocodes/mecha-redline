@@ -18,16 +18,21 @@ function build(): LevelEvent[] {
     ),
   );
 
-  // W1 — rebuilt husks: familiar silhouettes, wrong seams.
+  // W1 — rebuilt husks: familiar silhouettes, wrong seams — and two of
+  // them slide in off the flanks.
   add(3, (g) => g.wave(1));
-  for (let i = 0; i < 4; i++) {
-    add(3 + i * 0.45, (g) => g.spawn('ashhusk', -27 + i * 18, -36, i * 1.7));
+  for (let i = 0; i < 3; i++) {
+    add(3 + i * 0.45, (g) => g.spawn('ashhusk', -22 + i * 22, -36, i * 1.7));
   }
+  add(4.5, (g) => {
+    g.spawn('ashhusk', -SIDE, -10, 1.3);
+    g.spawn('ashhusk', SIDE, -6, 3.4);
+  });
   add(5, (g) =>
     g.say('OPERATOR // Husk frames... rebuilt from the wake. They are salvaging our kills.', 'op3-rebuilt'),
   );
 
-  // W2 — first shades with a husk screen.
+  // W2 — first shades with a husk screen pressing from three sides.
   add(13, (g) => {
     g.wave(2);
     g.say('OPERATOR // Cloaked signatures. Shade-types — watch for the shimmer, then hit hard.', 'op3-shade');
@@ -37,8 +42,12 @@ function build(): LevelEvent[] {
     g.spawn('shade', 20, -34, 3);
     g.spawn('ashhusk', 0, -37, 2);
   });
+  add(15.5, (g) => {
+    g.spawn('ashhusk', -SIDE, 2, 2.7);
+    g.spawn('ashhusk', SIDE, 2, 4.9);
+  });
 
-  // W3 — pylons rise; darts thread the lanes.
+  // W3 — pylons rise; darts thread the lanes, one behind you.
   add(24, (g) => {
     g.wave(3);
     g.say('OPERATOR // Fixed emplacements rising. Do not stand in the projector lanes.', 'op3-pylon');
@@ -48,57 +57,78 @@ function build(): LevelEvent[] {
     g.spawn('pylon', 18, -12, 0.5);
   });
   for (let i = 0; i < 3; i++) {
-    add(26 + i * 1.2, (g) => g.spawn('dart', (i % 2 === 0 ? -1 : 1) * SIDE, -10 + i * 3, i * 1.4));
+    add(26 + i * 1.1, (g) => g.spawn('dart', (i % 2 === 0 ? -1 : 1) * SIDE, -10 + i * 3, i * 1.4));
   }
+  add(29, (g) => g.spawn('dart', SIDE, 10, 2.1));
+  add(30, (g) => {
+    g.spawn('ashhusk', -24, 34, 1.8);
+    g.spawn('ashhusk', 24, 34, 3.9);
+  });
 
-  // W4 — mines drift in while shades ambush.
-  add(37, (g) => g.wave(4));
+  // W4 — mines pinch from ahead and astern while shades ambush.
+  add(36, (g) => g.wave(4));
   for (let i = 0; i < 3; i++) {
-    add(37.4 + i * 0.7, (g) => g.spawn('sentinel', -20 + i * 20, -36, i * 1.3));
+    add(36.4 + i * 0.7, (g) => g.spawn('sentinel', -20 + i * 20, -36, i * 1.3));
   }
-  add(39, (g) => {
+  add(37.5, (g) => {
+    g.spawn('sentinel', -26, 34, 2.4);
+    g.spawn('sentinel', 26, 34, 4.7);
+  });
+  add(38.5, (g) => {
     g.spawn('shade', -12, -33, 2.2);
     g.spawn('shade', 12, -33, 4.4);
   });
 
-  // W5 — centre pylon holds the middle; darts stream the flanks.
-  add(49, (g) => {
+  // W5 — centre pylon holds the middle; darts and mines work the flanks.
+  add(47, (g) => {
     g.wave(5);
     g.spawn('pylon', 0, -10);
-    g.spawn('sentinel', -26, -36, 1);
-    g.spawn('sentinel', 26, -36, 3);
+    g.spawn('sentinel', -SIDE, -4, 1);
+    g.spawn('sentinel', SIDE, -4, 3);
   });
-  for (let i = 0; i < 4; i++) {
-    add(50.5 + i * 1.0, (g) => g.spawn('dart', (i % 2 === 0 ? 1 : -1) * SIDE, -14 + i * 2, i * 0.9));
+  for (let i = 0; i < 5; i++) {
+    add(48.5 + i * 0.9, (g) =>
+      g.spawn('dart', (i % 2 === 0 ? 1 : -1) * SIDE, i === 4 ? 12 : -14 + i * 3, i * 0.9),
+    );
   }
 
-  // W6 — shade pack ambush behind a rebuilt-husk line.
-  add(61, (g) => g.wave(6));
-  add(61.5, (g) => {
+  // W6 — shade pack ambush; rebuilt husks pour in from every edge.
+  add(58, (g) => g.wave(6));
+  add(58.5, (g) => {
     g.spawn('shade', -24, -34, 1.1);
     g.spawn('shade', 0, -36, 2.6);
     g.spawn('shade', 24, -34, 4.1);
   });
-  for (let i = 0; i < 3; i++) {
-    add(63 + i * 0.6, (g) => g.spawn('ashhusk', -14 + i * 14, -37, i * 0.8));
-  }
+  const pour: [number, number][] = [
+    [-14, -37],
+    [SIDE, -8],
+    [20, 34],
+    [-SIDE, -2],
+    [-20, 34],
+    [14, -37],
+  ];
+  pour.forEach(([x, y], i) => {
+    add(60 + i * 0.6, (g) => g.spawn('ashhusk', x, y, i * 0.8));
+  });
 
-  // W7 — final push: everything the blackout hides.
-  add(73, (g) => {
+  // W7 — final push: everything the blackout hides, from everywhere at once.
+  add(70, (g) => {
     g.wave(7);
     g.spawn('pylon', -20, -11);
     g.spawn('pylon', 20, -11, 0.5);
     g.spawn('shade', 0, -35, 1.9);
   });
-  for (let i = 0; i < 3; i++) {
-    add(74.5 + i * 0.9, (g) => g.spawn('dart', (i % 2 === 0 ? -1 : 1) * SIDE, -12 + i * 2, i * 1.2));
+  for (let i = 0; i < 4; i++) {
+    add(71.5 + i * 0.9, (g) =>
+      g.spawn('dart', (i % 2 === 0 ? -1 : 1) * SIDE, i === 3 ? 8 : -12 + i * 3, i * 1.2),
+    );
   }
-  add(76, (g) => {
-    g.spawn('sentinel', -12, -36, 2);
-    g.spawn('sentinel', 12, -36, 4);
+  add(73, (g) => {
+    g.spawn('sentinel', -12, 36, 2);
+    g.spawn('sentinel', 12, 36, 4);
   });
 
-  add(88, (g) =>
+  add(85, (g) =>
     g.say('OPERATOR // Sweep the stragglers. ...Something big is moving under the smog. On all fours.', 'op3-stragglers'),
   );
 

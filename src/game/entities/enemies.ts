@@ -138,51 +138,95 @@ function armMuzzle(e: Enemy, c: SimCtx, ix = 0): { x: number; y: number } {
   return muzzleArenaPos(g, ix) ?? { x: e.x, y: e.y };
 }
 
-/** Grunt: drifts down with a sine weave, lobs aimed single shots. */
+/** Grunt: sweeps across the arena with a sine weave, lobs aimed single
+ * shots. Spawns from any edge — the entry heading aims past the centre so
+ * side/bottom spawns cut through the field instead of hugging their edge. */
 function updateHusk(e: Enemy, c: SimCtx, _dt: number): void {
+  const a = e.ai;
+  if (a.hx === undefined) {
+    const tx = -e.x * 0.55 + Math.sin(e.seed * 7) * 10;
+    const ty = -e.y * 0.55 + Math.cos(e.seed * 5) * 6;
+    const d = Math.hypot(tx - e.x, ty - e.y) || 1;
+    a.hx = (tx - e.x) / d;
+    a.hy = (ty - e.y) / d;
+  }
   const settle = Math.min(1, e.t / 2.5);
-  e.vy = e.t > e.life ? 16 : 9 - 6 * settle;
-  e.vx = Math.sin(e.t * 1.4 + e.seed) * 6;
-  const inBand = e.y > -26 && e.y < 12;
+  const spd = e.t > e.life ? 16 : 9 - 6 * settle;
+  const weave = Math.sin(e.t * 1.4 + e.seed) * 6;
+  e.vx = a.hx * spd - a.hy * weave;
+  e.vy = a.hy * spd + a.hx * weave;
+  const inBand = Math.abs(e.x) < PLAY_X + 2 && Math.abs(e.y) < PLAY_Y + 2;
   // Raise the arm cannon ~0.7s before the shot — a readable tell.
-  e.gear.aimTarget = c.playerAlive && e.t < e.life && e.t > 0.9 && e.fireT > 1.4 && inBand ? 1 : 0;
-  if (c.playerAlive && e.fireT > 2.1 && e.t > 1.2 && inBand) {
+  e.gear.aimTarget = c.playerAlive && e.t < e.life && e.t > 0.9 && e.fireT > 1.2 && inBand ? 1 : 0;
+  if (c.playerAlive && e.fireT > 1.9 && e.t > 1.2 && inBand) {
     e.fireT = 0;
     e.muzzleT = 0.07;
     const m = armMuzzle(e, c);
-    emit(c.eb, m.x, m.y, aimAngle(e.x, e.y, c.px, c.py), 20, BK.shot);
+    emit(c.eb, m.x, m.y, aimAngle(e.x, e.y, c.px, c.py), 22, BK.shot);
+  }
+}
+
+/** Hold-point pick for gears that slide in from any edge and station just
+ * inside it: top spawns keep the classic upper band, side spawns hold their
+ * flank, bottom spawns squat behind the player row. */
+function stationFor(e: Enemy): { tx: number; ty: number } {
+  const fromSide = Math.abs(e.x) > PLAY_X;
+  const fromBottom = e.y > PLAY_Y;
+  const tx = Math.max(-34, Math.min(34, fromSide ? Math.sign(e.x) * 27 : e.x));
+  const ty = fromSide
+    ? Math.max(-20, Math.min(8, e.y))
+    : fromBottom
+      ? 12
+      : Math.min(e.y + 22, -8);
+  return { tx, ty };
+}
+
+/** Life expired: retreat toward the spawn edge (the way it came). */
+function retreat(e: Enemy, spd: number): void {
+  const dx = e.ai.sx - e.x;
+  const dy = e.ai.sy - e.y;
+  const d = Math.hypot(dx, dy);
+  if (d > 1) {
+    e.vx = (dx / d) * spd;
+    e.vy = (dy / d) * spd;
+  } else {
+    e.vx = 0;
+    e.vy = -spd;
   }
 }
 
 /** Mid-tier: slides to a hold point, strafes, alternates fans and rings. */
 function updateLancer(e: Enemy, c: SimCtx, dt: number): void {
-  if (e.ai.ty === undefined) {
-    e.ai.tx = e.x;
-    e.ai.ty = Math.min(e.y + 22, -8);
-    e.ai.ringT = 0;
+  const a = e.ai;
+  if (a.ty === undefined) {
+    const st = stationFor(e);
+    a.tx = st.tx;
+    a.ty = st.ty;
+    a.sx = e.x;
+    a.sy = e.y;
+    a.ringT = 0;
   }
   if (e.t > e.life) {
     e.gear.aimTarget = 0;
-    e.vy = -14; // leave the way it came
+    retreat(e, 14);
     return;
   }
-  const holdY = e.ai.ty;
-  e.vy = (holdY - e.y) * 1.4;
-  e.vx = Math.cos(e.t * 0.7 + e.seed) * 5;
-  e.ai.ringT += dt;
+  e.vy = (a.ty - e.y) * 1.4;
+  e.vx = (a.tx - e.x) * 1.4 + Math.cos(e.t * 0.7 + e.seed) * 5;
+  a.ringT += dt;
   // Cannon comes up ahead of the fan volley (rings fire from the frame).
-  e.gear.aimTarget = c.playerAlive && e.fireT > 2.0 && e.t > 1.4 ? 1 : 0;
+  e.gear.aimTarget = c.playerAlive && e.fireT > 1.8 && e.t > 1.4 ? 1 : 0;
   if (!c.playerAlive) return;
-  if (e.fireT > 2.7 && e.t > 2) {
+  if (e.fireT > 2.4 && e.t > 2) {
     e.fireT = 0;
     e.muzzleT = 0.07;
     const m = armMuzzle(e, c);
-    fan(c.eb, m.x, m.y, aimAngle(e.x, e.y, c.px, c.py), 5, 0.65, 17, BK.shot);
+    fan(c.eb, m.x, m.y, aimAngle(e.x, e.y, c.px, c.py), 5, 0.65, 18, BK.shot);
   }
-  if (e.ai.ringT > 4.6 && e.t > 3.2) {
-    e.ai.ringT = 0;
+  if (a.ringT > 4.1 && e.t > 3.2) {
+    a.ringT = 0;
     e.muzzleT = 0.07;
-    ring(c.eb, e.x, e.y, 16, 12.5, BK.orb, e.seed);
+    ring(c.eb, e.x, e.y, 16, 13, BK.orb, e.seed);
   }
 }
 
@@ -265,17 +309,20 @@ function updateBoss(e: Enemy, c: SimCtx, dt: number): void {
 // ---- Mission 02 hostiles ---------------------------------------------------
 
 /** Fast diver: cuts across the lane in a swooping strafe; one aimed 3-shot
- * trailing burst as it crosses the player's column. Teaches leading shots. */
+ * trailing burst as it crosses the player's column. Teaches leading shots.
+ * The spawn y picks the crossing band — scripts can send them behind the
+ * player row for a rear-lane slash. */
 function updateDart(e: Enemy, c: SimCtx, dt: number): void {
   const a = e.ai;
   if (a.dir === undefined) {
     a.dir = e.x < 0 ? 1 : -1;
+    a.band = Math.max(-18, Math.min(18, e.y));
     a.fired = 0;
     a.bn = 0;
     a.bt = 0;
   }
-  e.vx = a.dir * (24 + Math.sin(e.seed) * 4);
-  const holdY = -4 + Math.sin(e.t * 1.6 + e.seed) * 7;
+  e.vx = a.dir * (26 + Math.sin(e.seed) * 4);
+  const holdY = a.band + Math.sin(e.t * 1.6 + e.seed) * 7;
   e.vy = (holdY - e.y) * 2.2;
   const closing = Math.abs(e.x - c.px) < 16;
   e.gear.aimTarget = c.playerAlive && closing && a.fired === 0 ? 1 : 0;
@@ -291,7 +338,7 @@ function updateDart(e: Enemy, c: SimCtx, dt: number): void {
       a.bn--;
       e.muzzleT = 0.07;
       const m = armMuzzle(e, c);
-      emit(c.eb, m.x, m.y, aimAngle(e.x, e.y, c.px, c.py), 23, BK.shot);
+      emit(c.eb, m.x, m.y, aimAngle(e.x, e.y, c.px, c.py), 25, BK.shot);
     }
   }
 }
@@ -314,7 +361,7 @@ function updateMortar(e: Enemy, c: SimCtx, dt: number): void {
   if (!c.playerAlive) return;
   a.lobT -= dt;
   if (a.lobT <= 0 && e.t > 1.5) {
-    a.lobT = 4.4;
+    a.lobT = 3.8;
     a.gun = 1 - a.gun;
     a.evLob = 1; // GameScene: tube thoomp
     e.muzzleT = 0.09;
@@ -337,7 +384,7 @@ function updateSentinel(e: Enemy, c: SimCtx, dt: number): void {
     e.gear.root.userData.armed = false;
     return;
   }
-  const spd = Math.min(7.5, 2.5 + e.t * 0.55);
+  const spd = Math.min(9, 2.5 + e.t * 0.68);
   const k = Math.min(1, dt * 1.2);
   e.vx += ((dx / d) * spd + Math.sin(e.t * 2 + e.seed) * 2 - e.vx) * k;
   e.vy += ((dy / d) * spd - e.vy) * k;
@@ -356,35 +403,39 @@ function updateSentinel(e: Enemy, c: SimCtx, dt: number): void {
 function updateKai(e: Enemy, c: SimCtx, dt: number): void {
   const a = e.ai;
   if (a.ty === undefined) {
-    a.ty = Math.min(e.y + 22, -10);
+    const st = stationFor(e);
+    a.tx = st.tx;
+    a.ty = st.ty;
+    a.sx = e.x;
+    a.sy = e.y;
     a.spT = 0;
     a.sp = e.seed;
     a.spGap = 0;
   }
   if (e.t > e.life) {
     e.gear.aimTarget = 0;
-    e.vy = -14;
+    retreat(e, 14);
     return;
   }
   e.vy = (a.ty - e.y) * 1.4;
-  e.vx = Math.cos(e.t * 0.6 + e.seed) * 6;
-  e.gear.aimTarget = c.playerAlive && e.fireT > 1.9 && e.t > 1.3 ? 1 : 0;
+  e.vx = (a.tx - e.x) * 1.4 + Math.cos(e.t * 0.6 + e.seed) * 6;
+  e.gear.aimTarget = c.playerAlive && e.fireT > 1.7 && e.t > 1.3 ? 1 : 0;
   if (!c.playerAlive) return;
-  if (e.fireT > 2.5 && e.t > 1.8) {
+  if (e.fireT > 2.2 && e.t > 1.8) {
     e.fireT = 0;
     e.muzzleT = 0.07;
     const m = armMuzzle(e, c);
-    fan(c.eb, m.x, m.y, aimAngle(e.x, e.y, c.px, c.py), 6, 0.7, 18, BK.shot);
+    fan(c.eb, m.x, m.y, aimAngle(e.x, e.y, c.px, c.py), 7, 0.75, 19, BK.shot);
   }
   // Spiral burst window at the tail of each ~5.2s cycle.
   a.spT += dt;
   if (a.spT % 5.2 > 4.1 && e.t > 3) {
     a.spGap -= dt;
     if (a.spGap <= 0) {
-      a.spGap = 0.11;
+      a.spGap = 0.1;
       a.sp += 0.26;
-      emit(c.eb, e.x, e.y, a.sp, 13, BK.orb);
-      emit(c.eb, e.x, e.y, a.sp + Math.PI, 13, BK.orb);
+      emit(c.eb, e.x, e.y, a.sp, 14, BK.orb);
+      emit(c.eb, e.x, e.y, a.sp + Math.PI, 14, BK.orb);
     }
   }
 }
@@ -539,7 +590,7 @@ function updateShade(e: Enemy, c: SimCtx, dt: number): void {
     if (Math.abs(a.ty - e.y) < 1.5) {
       a.st = 1;
       a.tx = Math.max(-32, Math.min(32, c.px + (Math.random() - 0.5) * 40));
-      a.ty = -16 + Math.random() * 12;
+      a.ty = -18 + Math.random() * 28; // ambushes land beside — or behind — the player
     }
   } else if (a.st === 1) {
     // Cloaked repositioning dash.
@@ -572,14 +623,14 @@ function updateShade(e: Enemy, c: SimCtx, dt: number): void {
     e.vx = Math.sin(e.t * 3) * 2;
     e.vy = 0;
     a.timer -= dt;
-    if (c.playerAlive && a.volley < 2 && a.timer <= 0) {
+    if (c.playerAlive && a.volley < 3 && a.timer <= 0) {
       a.volley++;
       a.timer = 0.4;
       e.muzzleT = 0.07;
       const m = armMuzzle(e, c);
-      fan(c.eb, m.x, m.y, aimAngle(e.x, e.y, c.px, c.py), 3, 0.22, 24, BK.needle);
+      fan(c.eb, m.x, m.y, aimAngle(e.x, e.y, c.px, c.py), 3, 0.22, 26, BK.needle);
     }
-    if (a.volley >= 2 && a.timer <= 0) {
+    if (a.volley >= 3 && a.timer <= 0) {
       a.st = 4;
       e.gear.aimTarget = 0;
     }
@@ -589,7 +640,7 @@ function updateShade(e: Enemy, c: SimCtx, dt: number): void {
     if (a.cloak <= 0.13) {
       a.st = 1;
       a.tx = Math.max(-32, Math.min(32, c.px + (Math.random() - 0.5) * 40));
-      a.ty = -18 + Math.random() * 14;
+      a.ty = -18 + Math.random() * 28;
     }
   }
 }
@@ -630,12 +681,12 @@ function updatePylon(e: Enemy, c: SimCtx, dt: number): void {
   }
 
   a.cy += dt;
-  const CYCLE = 4.2;
+  const CYCLE = 3.7;
   // Eye flare through the last 1.2s before the stream opens.
   g.root.userData.charge = Math.max(0, Math.min(1, (a.cy - (CYCLE - 1.2)) / 1.2));
   if (a.cy >= CYCLE) {
     a.cy = 0;
-    a.streamT = 1.8;
+    a.streamT = 2.0;
   }
   if (a.streamT > 0) {
     a.streamT -= dt;
@@ -646,7 +697,7 @@ function updatePylon(e: Enemy, c: SimCtx, dt: number): void {
       a.gun = 1 - a.gun;
       e.muzzleT = 0.06;
       const m = muzzleArenaPos(g, a.gun) ?? { x: e.x, y: e.y };
-      emit(c.eb, m.x, m.y, Math.PI / 2, 9.5, BK.orb); // straight down the lane
+      emit(c.eb, m.x, m.y, Math.PI / 2, 10.5, BK.orb); // straight down the lane
     }
   }
 }
@@ -654,10 +705,11 @@ function updatePylon(e: Enemy, c: SimCtx, dt: number): void {
 /**
  * CERBERUS: giant three-headed strider. The heads are targetable parts
  * (GameScene owns their hit zones and break meters in e.ai.h0/h1/h2):
- *   alpha (centre) — the charge; broken = no more charges.
- *   beta (right) — rotary tracer fans.
- *   gamma (left) — fused mortar lobs onto marked deck points.
- * Pack-rage: everything ~15% faster per broken head (a.phase drives the
+ *   alpha (centre) — the charge, ending in a ground-slam shockwave ring.
+ *   beta (right) — rotary tracer fans (wider once the pack is wounded).
+ *   gamma (left) — fused mortar lobs onto marked deck points (twin shells
+ *   once the pack is wounded).
+ * Pack-rage: everything ~18% faster per broken head (a.phase drives the
  * existing boss phase banner/hitstop).
  */
 function updateCerberus(e: Enemy, c: SimCtx, dt: number): void {
@@ -669,7 +721,7 @@ function updateCerberus(e: Enemy, c: SimCtx, dt: number): void {
     a.h2 = 150;
     a.broken = 0;
     a.mode = 0; // 0 prowl · 1 telegraph · 2 charging · 3 recover
-    a.lungeT = 5;
+    a.lungeT = 4.2;
     a.fanT = 1.2;
     a.lobT = 3;
     a.timer = 0;
@@ -687,7 +739,7 @@ function updateCerberus(e: Enemy, c: SimCtx, dt: number): void {
   }
 
   a.phase = 1 + a.broken;
-  const rate = 1 + 0.15 * a.broken;
+  const rate = 1 + 0.18 * a.broken;
   const crouchTarget = a.mode === 1 ? 1 : 0;
   a.crouch = (a.crouch ?? 0) + (crouchTarget - (a.crouch ?? 0)) * Math.min(1, dt * 8);
   e.gear.root.userData.crouch = a.crouch;
@@ -709,8 +761,9 @@ function updateCerberus(e: Enemy, c: SimCtx, dt: number): void {
       const dx = c.px - e.x;
       const dy = c.py - e.y;
       const d = Math.hypot(dx, dy) || 1;
-      a.lx = (dx / d) * 52;
-      a.ly = (dy / d) * 52;
+      const spd = 52 + 4 * a.broken;
+      a.lx = (dx / d) * spd;
+      a.ly = (dy / d) * spd;
     }
   } else if (a.mode === 2) {
     e.vx = a.lx;
@@ -719,6 +772,12 @@ function updateCerberus(e: Enemy, c: SimCtx, dt: number): void {
     if (a.timer <= 0) {
       a.mode = 3;
       a.timer = 0.9;
+      // Ground slam: the pounce lands in a shockwave ring. The charge
+      // itself is the tell — dodging the hull means dodging the wave.
+      if (c.playerAlive) {
+        a.evSlam = 1; // GameScene: boom + shake
+        ring(c.eb, e.x, e.y, 14 + 4 * a.broken, 16, BK.orb, e.seed + e.t);
+      }
     }
   } else {
     // Recover: haul the hull back up to the band.
@@ -736,32 +795,37 @@ function updateCerberus(e: Enemy, c: SimCtx, dt: number): void {
     if (a.lungeT <= 0) {
       a.mode = 1;
       a.timer = 0.8;
-      a.lungeT = 5.2 / rate;
+      a.lungeT = 4.6 / rate;
     }
   }
 
-  // Beta: rotary tracer fans while prowling.
+  // Beta: rotary tracer fans while prowling — an extra barrel once wounded.
   if (a.h1 > 0 && a.mode === 0) {
     a.fanT -= dt * rate;
     if (a.fanT <= 0) {
-      a.fanT = 2.4;
+      a.fanT = 2.0;
       e.muzzleT = 0.07;
       const m = armMuzzle(e, c, 1);
-      fan(c.eb, m.x, m.y, aimAngle(e.x, e.y, c.px, c.py), 5, 0.6, 19 * rate, BK.shot);
+      const n = a.broken >= 1 ? 7 : 6;
+      fan(c.eb, m.x, m.y, aimAngle(e.x, e.y, c.px, c.py), n, 0.68, 20 * rate, BK.shot);
     }
   }
 
-  // Gamma: fused mortar arcs onto marked deck points.
+  // Gamma: fused mortar arcs onto marked deck points — twin shells once
+  // the pack is wounded, so the deck reads as two closing X marks.
   if (a.h2 > 0 && a.mode !== 2) {
     a.lobT -= dt * rate;
     if (a.lobT <= 0) {
-      a.lobT = 4.6;
+      a.lobT = 3.9;
       a.evLob = 1; // GameScene: tube thoomp
       e.muzzleT = 0.09;
       const m = armMuzzle(e, c, 2);
-      const tx = Math.max(-PLAY_X + 4, Math.min(PLAY_X - 4, c.px + (Math.random() - 0.5) * 12));
-      const ty = Math.max(0, Math.min(PLAY_Y - 2, c.py + (Math.random() - 0.5) * 9));
-      lob(c.eb, m.x, m.y, tx, ty, 1.6, BK.orb);
+      const shells = a.broken >= 1 ? 2 : 1;
+      for (let i = 0; i < shells; i++) {
+        const tx = Math.max(-PLAY_X + 4, Math.min(PLAY_X - 4, c.px + (Math.random() - 0.5) * 12));
+        const ty = Math.max(0, Math.min(PLAY_Y - 2, c.py + (Math.random() - 0.5) * 9));
+        lob(c.eb, m.x, m.y, tx, ty, 1.6 + i * 0.25, BK.orb);
+      }
     }
   }
 }

@@ -1,7 +1,10 @@
 // Mission 01 — Sector 7 Perimeter. A timed spawn script; once it runs dry
 // and the field is clear, GameScene triggers the WARNING card and the boss.
 
+import { PLAY_X } from '../../core/const';
 import type { LevelApi, LevelDef, LevelEvent } from './types';
+
+const SIDE = PLAY_X + 8; // flank entry column, just off-screen
 
 function build(): LevelEvent[] {
   const ev: LevelEvent[] = [];
@@ -16,53 +19,84 @@ function build(): LevelEvent[] {
 
   // W1 — first contact: a line of husks.
   add(3, (g) => g.wave(1));
-  for (let i = 0; i < 4; i++) {
-    add(3 + i * 0.4, (g) => g.spawn('husk', -27 + i * 18, -36, i * 1.7));
-  }
-
-  // W2 — staggered diagonal sweep.
-  add(10, (g) => g.wave(2));
   for (let i = 0; i < 5; i++) {
-    add(10 + i * 0.55, (g) => g.spawn('husk', -38 + i * 8, -36, i * 2.1));
+    add(3 + i * 0.4, (g) => g.spawn('husk', -30 + i * 15, -36, i * 1.7));
   }
 
-  // W3 — first lancer with escorts.
-  add(16.5, (g) => g.say('OPERATOR // Lancer-type signature. Watch the flak rings.', 'op-lancer'));
-  add(17.5, (g) => {
+  // W2 — diagonal sweep, and the first flankers slip in from the left.
+  add(9.5, (g) => {
+    g.wave(2);
+    g.say('OPERATOR // They are splitting up. Watch your flanks — arrows mark the blind sides.');
+  });
+  for (let i = 0; i < 5; i++) {
+    add(9.5 + i * 0.5, (g) => g.spawn('husk', -38 + i * 8, -36, i * 2.1));
+  }
+  for (let i = 0; i < 2; i++) {
+    add(11 + i * 0.9, (g) => g.spawn('husk', -SIDE, -12 + i * 9, 3 + i * 1.9));
+  }
+
+  // W3 — first lancer with escorts crossing from both sides.
+  add(16, (g) => g.say('OPERATOR // Lancer-type signature. Watch the flak rings.', 'op-lancer'));
+  add(17, (g) => {
     g.wave(3);
     g.spawn('lancer', 0, -34);
-    g.spawn('husk', -30, -36, 1);
-    g.spawn('husk', 30, -36, 4);
+    g.spawn('husk', -SIDE, -8, 1);
+    g.spawn('husk', SIDE, -8, 4);
+  });
+  add(19, (g) => {
+    g.spawn('husk', -30, -36, 2.3);
+    g.spawn('husk', 30, -36, 5.1);
   });
 
-  // W4 — twin lancers on the flanks.
-  add(29, (g) => {
+  // W4 — twin lancers ride the flanks; first contacts from behind.
+  add(27, (g) => {
     g.wave(4);
-    g.spawn('lancer', -26, -34);
-    g.spawn('lancer', 26, -34);
+    g.spawn('lancer', -SIDE - 3, -12);
+    g.spawn('lancer', SIDE + 3, -12);
   });
   for (let i = 0; i < 4; i++) {
-    add(30 + i * 0.5, (g) => g.spawn('husk', -12 + i * 8, -37, i * 1.3));
+    add(28 + i * 0.5, (g) => g.spawn('husk', -12 + i * 8, -37, i * 1.3));
   }
+  add(31, (g) => g.say('OPERATOR // Two signatures on your six. They are behind you, pilot!'));
+  add(31.5, (g) => {
+    g.spawn('husk', -28, 34, 1.4);
+    g.spawn('husk', 28, 34, 3.7);
+  });
 
-  // W5 — husk swarm.
-  add(42, (g) => g.wave(5));
-  for (let i = 0; i < 8; i++) {
-    add(42 + i * 0.65, (g) => g.spawn('husk', (i % 2 === 0 ? -1 : 1) * (14 + i * 3.4), -36, i));
-  }
+  // W5 — pinwheel swarm: husks pour in from every edge.
+  add(39, (g) => g.wave(5));
+  const swarm: [number, number][] = [
+    [-20, -36],
+    [SIDE, -10],
+    [24, 34],
+    [-SIDE, -14],
+    [8, -36],
+    [-24, 34],
+    [SIDE, 2],
+    [-8, -36],
+    [-SIDE, 6],
+    [20, -36],
+  ];
+  swarm.forEach(([x, y], i) => {
+    add(39 + i * 0.55, (g) => g.spawn('husk', x, y, i * 1.1));
+  });
 
-  // W6 — final push: lancer wall.
-  add(53, (g) => {
+  // W6 — final push: a lancer wall with a husk pincer.
+  add(50, (g) => {
     g.wave(6);
     g.spawn('lancer', 0, -36);
-    g.spawn('lancer', -29, -33);
-    g.spawn('lancer', 29, -33);
+    g.spawn('lancer', -SIDE - 3, -14);
+    g.spawn('lancer', SIDE + 3, -14);
   });
-  for (let i = 0; i < 4; i++) {
-    add(54 + i * 0.6, (g) => g.spawn('husk', -21 + i * 14, -37, i * 0.9));
+  for (let i = 0; i < 3; i++) {
+    add(51.5 + i * 0.5, (g) => g.spawn('husk', -18 + i * 18, -37, i * 0.9));
   }
+  add(53, (g) => {
+    g.spawn('husk', -26, 34, 2.2);
+    g.spawn('husk', 26, 34, 4.6);
+  });
 
-  add(64, (g) =>
+  add(62, (g) =>
     g.say(
       'OPERATOR // Sweep the stragglers. Something big is on your approach vector.',
       'op-stragglers',

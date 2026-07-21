@@ -847,6 +847,7 @@ function drawBattle(g: Ctx): void {
   // Standard HUD stands down while a camera cinematic holds the frame.
   if (hud.phase !== "intro" && hud.cineBars < 0.5) {
     drawMarks(g);
+    drawThreats(g);
     drawScore(g);
     drawMission(g);
     drawPilotCluster(g);
@@ -989,6 +990,32 @@ function drawMarks(g: Ctx): void {
     g.stroke();
     g.globalAlpha = 1;
   }
+}
+
+/** Edge chevrons for incoming and out-of-field hostiles. Enemies attack
+ * from every side; each contact pins a red double chevron to the point
+ * where its bearing crosses into the field, blinking until it shows up. */
+function drawThreats(g: Ctx): void {
+  const blink = Math.floor(hud.t * 9) % 2 === 0;
+  g.globalAlpha = blink ? 1 : 0.35;
+  g.strokeStyle = RED;
+  g.lineWidth = 3;
+  const s = 12;
+  for (const th of hud.threats) {
+    g.save();
+    g.translate(th.x, th.y);
+    g.rotate(th.ang);
+    g.beginPath();
+    g.moveTo(-3, -s);
+    g.lineTo(s * 0.8, 0);
+    g.lineTo(-3, s);
+    g.moveTo(-3 - s, -s);
+    g.lineTo(-3 - s + s * 0.8, 0);
+    g.lineTo(-3 - s, s);
+    g.stroke();
+    g.restore();
+  }
+  g.globalAlpha = 1;
 }
 
 function drawPopups(g: Ctx): void {

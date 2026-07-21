@@ -10,12 +10,14 @@ import {
   CHAIN,
   CULL_X,
   CULL_Y,
+  GRAZE,
   HI_KEY,
   PCAM,
   PLAY_X,
   PLAY_Y,
   PLAYER,
 } from '../../core/const';
+import { uiH, uiW } from '../../core/uiSize';
 import { setStageCursor } from '../../core/cursor';
 import { debugParam } from '../../core/debug';
 import {
@@ -97,6 +99,11 @@ import { addPopup, hud, popups, say, setPhase, settingsUi } from '../ui/state';
 import { hitTitleChrome, sliderValueAt } from '../ui/titleChrome';
 import { startWipe } from '../ui/wipe';
 
+/** Seconds a scripted spawn telegraphs (edge chevron) before the enemy
+ * materializes. Spawn points sit barely off the field, so without this
+ * lead the arrow and the enemy would arrive almost together. */
+const SPAWN_LEAD = 1.2;
+
 /** Real-time freeze frames on impact moments, seconds. */
 const HITSTOP = {
   husk: 0.035,
@@ -119,6 +126,7 @@ export class GameScene extends Phaser.Scene {
   private callsign = ROSTER[0].displayName;
   private level: LevelDef = currentLevel();
   private enemies: Enemy[] = [];
+  private pending: { kind: SpawnKind; x: number; y: number; seed?: number; t: number }[] = [];
   private eb: Bullet[] = []; // enemy bullets
   private pb: Bullet[] = []; // player bullets
   private purge: Bullet[] = []; // harmless shatter trails from BURST
@@ -158,6 +166,7 @@ export class GameScene extends Phaser.Scene {
       alive: true,
     };
     this.enemies = [];
+    this.pending = [];
     this.eb = [];
     this.pb = [];
     this.purge = [];
@@ -318,8 +327,10 @@ export class GameScene extends Phaser.Scene {
   }
 
   private api = {
+    // Scripted spawns telegraph first: the contact sits in `pending` (edge
+    // chevron blinking) for SPAWN_LEAD before the gear actually arrives.
     spawn: (kind: SpawnKind, x: number, y = -36, seed?: number) =>
-      void this.spawn(kind, x, y, seed),
+      void this.pending.push({ kind, x, y, seed, t: SPAWN_LEAD }),
     say,
     wave: (n: number) => {
       hud.wave = n;
@@ -578,7 +589,21 @@ export class GameScene extends Phaser.Scene {
         script[this.scriptIx].run(this.api);
         this.scriptIx++;
       }
-      if (this.scriptIx >= script.length && this.enemies.length === 0 && this.p.alive) {
+      // Telegraphed contacts materialize once their warning lead runs out.
+      for (let i = this.pending.length - 1; i >= 0; i--) {
+        const w = this.pending[i];
+        w.t -= dt;
+        if (w.t <= 0) {
+          this.pending.splice(i, 1);
+          this.spawn(w.kind, w.x, w.y, w.seed);
+        }
+      }
+      if (
+        this.scriptIx >= script.length &&
+        this.enemies.length === 0 &&
+        this.pending.length === 0 &&
+        this.p.alive
+      ) {
         setPhase('warning');
         this.eb.length = 0; // stage is clear for the reveal — no stray fire
         say(this.level.boss.warnSay, this.level.boss.warnVo);
@@ -770,6 +795,13 @@ export class GameScene extends Phaser.Scene {
         s.addShake(0.35);
         sfx('hound-lunge');
       }
+      if (e.ai.evSlam) {
+        e.ai.evSlam = 0;
+        s.addShake(0.5);
+        s.impact(0.005, 0.12);
+        s.fx.explode(e.x, e.y, 1.2);
+        sfx('mortar-boom', { jitter: true, throttleMs: 100 });
+      }
 
       // Pylons sink back under the deck when their life runs out.
       if (e.ai.despawn) {
@@ -881,16 +913,29 @@ export class GameScene extends Phaser.Scene {
 
     if (!p.alive || p.inv > 0 || hud.phase === 'intro') return;
 
-    // Enemy bullets vs the player core.
+    // Enemy bullets vs the player core — with a graze band outside it.
     for (let i = this.eb.length - 1; i >= 0; i--) {
       const b = this.eb[i];
       const rr = this.stats.hitR + b.r;
       const dx = p.x - b.x;
       const dy = p.y - b.y;
-      if (dx * dx + dy * dy < rr * rr) {
+      const d2 = dx * dx + dy * dy;
+      if (d2 < rr * rr) {
         this.eb.splice(i, 1);
         this.hitPlayer();
         return;
+      }
+      // A shave: points now, and the chain window tops back up. Each bullet
+      // pays once — holding your ground in a stream is worth something.
+      const gr = rr + GRAZE.r;
+      if (!b.grazed && d2 < gr * gr) {
+        b.grazed = true;
+        hud.score += GRAZE.score;
+        if (hud.comboT > 0) {
+          hud.comboT = Math.min(CHAIN.window, hud.comboT + GRAZE.chainRefill);
+        }
+        Stage3D.I.fx.spark(b.x, b.y);
+        sfx('ui-tick', { throttleMs: 70 });
       }
     }
 
@@ -1160,6 +1205,41 @@ export class GameScene extends Phaser.Scene {
       if (!b.mark || b.fuse === undefined) continue;
       const ui = s.uiPoint(b.mark.x, b.mark.y, 0.2);
       hud.marks.push({ x: ui.x, y: ui.y, frac: b.fuse / (b.fuse0 ?? 1) });
+    }
+
+    // Threat chevrons: telegraphed contacts (pending spawns) plus live
+    // hostiles still outside the field. Tested against ARENA bounds, not
+    // the projected frame — the perspective camera sees well past the play
+    // area on the flanks, so side spawns are technically "on screen" as a
+    // few edge pixels. The arrow pins to the point where the contact's
+    // bearing crosses into the field.
+    hud.threats.length = 0;
+    if (hud.phase === 'battle' || hud.phase === 'boss') {
+      const MX = PLAY_X + 2;
+      const MY = PLAY_Y + 2;
+      const pushThreat = (x: number, y: number) => {
+        const at = s.uiPoint(Math.max(-MX, Math.min(MX, x)), Math.max(-MY, Math.min(MY, y)));
+        const to = s.uiPoint(x, y);
+        const m = 46;
+        const cx = Math.max(m, Math.min(uiW - m, at.x));
+        const cy = Math.max(m, Math.min(uiH - m, at.y));
+        hud.threats.push({ x: cx, y: cy, ang: Math.atan2(to.y - cy, to.x - cx) });
+      };
+      for (const w of this.pending) pushThreat(w.x, w.y);
+      for (const e of this.enemies) {
+        if (e === this.boss) continue; // the reveal is its own warning
+        if (e.t > e.life) continue; // leaving the field — no longer a threat
+        if (e.ai.seen) continue; // already spotted — the arrow's job is done
+        const to = s.uiPoint(e.x, e.y);
+        const IN = 8;
+        if (to.x > IN && to.x < uiW - IN && to.y > IN && to.y < uiH - IN) {
+          // Latch the moment the gear shows up in frame, so the chevron
+          // never sits touching a unit the player can already see.
+          e.ai.seen = 1;
+          continue;
+        }
+        pushThreat(e.x, e.y);
+      }
     }
 
     s.bullets.sync([this.eb, this.pb, this.purge], dt);
