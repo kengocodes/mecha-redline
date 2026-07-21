@@ -1,5 +1,5 @@
 // BUG: the mission-end hi-score write is the only unguarded localStorage
-// access in the codebase — and it sits inside Phaser's update loop.
+// access in the codebase — and it sits inside the game's update loop.
 //
 // src/game/scenes/GameScene.ts:685-687 (runs inside sim() when endT
 // expires, on every mission win AND loss):
@@ -13,13 +13,13 @@
 //   - settings.ts saveSettings wraps its setItem in try/catch
 //
 // In storage-blocked browsers (Safari private mode, cookies disabled,
-// some embedded WebViews) setItem throws. Phaser's RAF loop re-schedules
-// the next frame only AFTER the step callback returns
-// (phaser/src/dom/RequestAnimationFrame.js), so the throw permanently
-// stops the game loop on the win/lose card — and `this.timescale = 1`
-// is skipped, leaving the death path frozen at 0.35× speed anyway.
+// some embedded WebViews) setItem throws. The RAF loop (src/core/scene.ts)
+// re-schedules the next frame only AFTER the frame callback returns, so
+// the throw permanently stops the game loop on the win/lose card — and
+// `this.timescale = 1` is skipped, leaving the death path frozen at
+// 0.35× speed anyway.
 //
-// GameScene can't be imported in plain Node (Phaser + Three scene graph),
+// GameScene can't be imported in plain Node (Three scene graph + DOM),
 // so this is a source-contract test: it locates the exact write and
 // asserts the guard the rest of the codebase already uses.
 
@@ -42,7 +42,7 @@ describe('hi-score persistence guard', () => {
 
   it('the mission-end hi-score write is guarded the same way', () => {
     // FAILS today: GameScene.ts:686 calls localStorage.setItem(HI_KEY, ...)
-    // with no try/catch, inside Phaser's update loop.
+    // with no try/catch, inside the update loop.
     expect(gameScene).toMatch(/try\s*\{[\s\S]{0,300}localStorage\.setItem\(HI_KEY/);
   });
 

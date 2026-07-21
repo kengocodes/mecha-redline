@@ -1,7 +1,6 @@
 // Title: PS1-arcade hangar attract mode — the roster cycles on the launch
 // pad under the keyed logo while the overlay dresses it as cabinet chrome.
 
-import Phaser from 'phaser';
 import { applyAudioSettings, music, sfx } from '../../core/audio';
 import { setStageCursor } from '../../core/cursor';
 import {
@@ -14,6 +13,7 @@ import {
 import { SOCIAL_LINKS } from '../../core/links';
 import { desktopPlayable } from '../../core/platform';
 import { audioSettings, setBus, toggleMuted, type BusId } from '../../core/settings';
+import { Scene } from '../../core/scene';
 import { isLegalOpen, openLegal } from '../../legal/overlay';
 import { animateGear, buildGear, type Gear, setGearFlash } from '../../render/gearFactory';
 import { Stage3D } from '../../render/stage3d';
@@ -41,7 +41,7 @@ function isBusFocus(id: string | null): id is BusId {
   return id === 'master' || id === 'music' || id === 'sfx' || id === 'voice';
 }
 
-export class TitleScene extends Phaser.Scene {
+export class TitleScene extends Scene {
   private gear!: Gear;
   private baseScale = 1;
   private yaw = 0;
@@ -65,7 +65,7 @@ export class TitleScene extends Phaser.Scene {
     music('title');
     sfx('logo-slam'); // lands with the logo overscale hit
     setStageCursor('aim');
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+    this.onShutdown(() => {
       setStageCursor('auto');
       settingsUi.open = false;
       this.dragBus = null;
@@ -86,7 +86,7 @@ export class TitleScene extends Phaser.Scene {
     s.setShowcaseAura(def.gear.palette.glow);
     if (flash) {
       setGearFlash(this.gear, true);
-      this.time.delayedCall(110, () => setGearFlash(this.gear, false));
+      this.after(110, () => setGearFlash(this.gear, false));
     }
   }
 

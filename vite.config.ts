@@ -6,6 +6,6 @@ export default defineConfig({
   },
   build: {
     target: 'es2022',
-    chunkSizeWarningLimit: 2400, // phaser + three dominate the bundle
+    chunkSizeWarningLimit: 1200, // three.js dominates the bundle
   },
 });

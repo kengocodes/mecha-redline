@@ -2,7 +2,6 @@
 // 2D overlay dresses it as a sortie briefing — CRT pilot still, doctrine,
 // stat bars, roster strip. Confirm plays a launch cut-in, then the mission.
 
-import Phaser from 'phaser';
 import { music, PILOT_VO, sfx, vo } from '../../core/audio';
 import { setStageCursor } from '../../core/cursor';
 import {
@@ -14,6 +13,7 @@ import {
 } from '../../core/input';
 import { animateGear, buildGear, type Gear, setGearFlash } from '../../render/gearFactory';
 import { Stage3D } from '../../render/stage3d';
+import { Scene } from '../../core/scene';
 import { selectLevel } from '../levels';
 import { ROSTER, selectPilot, selectedPilot } from '../roster';
 import {
@@ -36,7 +36,7 @@ const ARRIVE_YAW = 0.42;
 /** Coin-op select countdown, seconds; auto-confirms on expiry. */
 const SELECT_T = 35;
 
-export class SelectScene extends Phaser.Scene {
+export class SelectScene extends Scene {
   private gear!: Gear;
   private baseScale = 1;
   private yaw = 0;
@@ -64,7 +64,7 @@ export class SelectScene extends Phaser.Scene {
     music('title'); // hold the title bed through hangar select
     vo('op-select-gear');
     setStageCursor('aim');
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+    this.onShutdown(() => {
       setStageCursor('auto');
       clearMenuFocus();
     });
@@ -99,7 +99,7 @@ export class SelectScene extends Phaser.Scene {
     selectPilot(sel.ix);
     Stage3D.I.addShake(0.45);
     setGearFlash(this.gear, true);
-    this.time.delayedCall(120, () => setGearFlash(this.gear, false));
+    this.after(120, () => setGearFlash(this.gear, false));
     sfx('ui-confirm');
     sfx('launch');
     vo(`${PILOT_VO[ROSTER[sel.ix].id]}-launch`);

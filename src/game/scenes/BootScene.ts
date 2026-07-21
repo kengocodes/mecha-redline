@@ -1,10 +1,10 @@
 // Waits for the pixel font (Latin + JP subsets), builds the three.js
 // stage, then hands off to the title (or straight to battle with ?debug).
 
-import Phaser from 'phaser';
 import { initAudio } from '../../core/audio';
 import { HI_KEY } from '../../core/const';
 import { debugParam } from '../../core/debug';
+import { Scene } from '../../core/scene';
 import { loadSettings } from '../../core/settings';
 import { Stage3D } from '../../render/stage3d';
 import { selectLevel } from '../levels';
@@ -12,7 +12,7 @@ import { loadPilotArt } from '../ui/pilotArt';
 import { loadTitleArt } from '../ui/titleArt';
 import { hud, setPhase } from '../ui/state';
 
-export class BootScene extends Phaser.Scene {
+export class BootScene extends Scene {
   constructor() {
     super('boot');
   }

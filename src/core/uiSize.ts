@@ -5,7 +5,7 @@
 import { UI_H, UI_W } from './const';
 import { desktopPlayable } from './platform';
 
-/** Logical UI width (Phaser / overlay / pointer space). */
+/** Logical UI width (overlay / pointer space). */
 export let uiW = UI_W;
 /** Logical UI height. */
 export let uiH = UI_H;
@@ -39,7 +39,7 @@ export function touchGap(): number {
 
 /**
  * Sync uiW/uiH from the window.
- * @returns true when the logical size changed (Phaser / HUD must resize).
+ * @returns true when the logical size changed (stage / HUD must resize).
  */
 export function syncUiSize(): boolean {
   const prevW = uiW;

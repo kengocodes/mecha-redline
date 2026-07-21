@@ -1,16 +1,15 @@
 // Composites the 2D UI above the three.js world. Uses a dedicated DOM
-// canvas (not a Phaser texture) so the buffer can match CSS size × DPR —
-// Phaser's Scale Manager keeps resolution at 1, which softens HUD text
-// when the 1280×720 game canvas is stretched on retina / large windows.
+// canvas sized to CSS size × DPR, so HUD text stays sharp when the
+// 1280×720 logical stage is stretched on retina / large windows.
 
-import Phaser from 'phaser';
+import { Scene } from '../../core/scene';
 import { uiH, uiW } from '../../core/uiSize';
 import { drawUI } from '../ui/overlay';
 
 /** Cap backing-store density; 2× covers retina without 3× memory spikes. */
 const MAX_DPR = 2;
 
-export class HudScene extends Phaser.Scene {
+export class HudScene extends Scene {
   private canvas!: HTMLCanvasElement;
   private ctx!: CanvasRenderingContext2D;
 

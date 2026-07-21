@@ -61,9 +61,10 @@ Two stacked canvases inside a letterboxed 16:9 `#stage`:
   canvas the browser upscales with `image-rendering: pixelated`. An
   orthographic camera tilted 60° over the ground plane gives the 2.5D read.
   Gameplay lives on a 2D plane; arena `(x, y)` maps to world `(x, height, z=y)`.
-- **Phaser 4** (`src/game/`) owns the game loop, the simulation (player,
-  enemies, bullets, collisions, mission flow) and paints the entire HUD onto
-  one transparent canvas above the 3D layer.
+- **A tiny scene manager** (`src/core/scene.ts`, `src/game/`) owns the RAF
+  loop, the scene stack and the simulation (player, enemies, bullets,
+  collisions, mission flow); the HUD paints onto a DPR-backed DOM canvas
+  above the 3D layer.
 
 Battle content is generated at runtime. Mecha are built from flat-shaded boxes
 and tapered "frustum" prisms by one parametric humanoid factory
@@ -79,11 +80,12 @@ pixel lettering (Latin + Japanese), loaded before first paint.
 
 ```
 src/
-  main.ts                 stage sizing + Phaser bootstrap
+  main.ts                 stage sizing + scene-loop bootstrap
   style.css               letterbox + pixelated canvas
   core/
     const.ts              tuning, coordinate conventions, bullet kinds
     input.ts              raw keyboard/pointer, UI-space pointer mapping
+    scene.ts              scene stack + RAF loop (replaces the Phaser core)
   render/
     stage3d.ts            camera, lights, backdrop switching, aim raycast
     backdrops/            per-mission environments (space / wake / city)

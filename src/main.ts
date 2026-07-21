@@ -1,8 +1,8 @@
-// MECHA REDLINE — bootstrap: stage sizing, raw input, Phaser game.
+// MECHA REDLINE — bootstrap: stage sizing, raw input, scene loop.
 
-import Phaser from 'phaser';
 import { resumeAudio, suspendAudio } from './core/audio';
 import { initInput } from './core/input';
+import { bootScene, getScene, registerScenes, startLoop } from './core/scene';
 import { portraitAttract, syncUiSize, uiH, uiW } from './core/uiSize';
 import { BootScene } from './game/scenes/BootScene';
 import { GameScene } from './game/scenes/GameScene';
@@ -44,35 +44,28 @@ fitStage();
 initLegalOverlay();
 initInput(stage);
 
-const game = new Phaser.Game({
-  type: Phaser.AUTO,
-  parent: 'stage',
-  width: uiW,
-  height: uiH,
-  transparent: true,
-  banner: false,
-  // All audio goes through core/audio.ts — don't let Phaser spin up a second AudioContext.
-  audio: { noAudio: true },
-  scale: {
-    mode: Phaser.Scale.FIT,
-    autoCenter: Phaser.Scale.CENTER_BOTH,
-  },
-  scene: [BootScene, TitleScene, SelectScene, GameScene, HudScene],
-});
+// Update order = registration order: main scenes tick before the HUD draws.
+registerScenes([
+  new BootScene(),
+  new TitleScene(),
+  new SelectScene(),
+  new GameScene(),
+  new HudScene(),
+]);
+bootScene('boot');
+startLoop();
 
 function applyLayout(): void {
   const changed = syncUiSize();
   fitStage();
   if (changed) {
-    game.scale.resize(uiW, uiH);
     // BootScene constructs Stage3D; skip until then.
     const s3d = (Stage3D as unknown as { I?: Stage3D }).I;
     s3d?.applyUiAspect();
   }
   // HUD is a DPR-backed DOM canvas — resync whenever the stage CSS box moves.
-  const hud = game.scene.getScene('hud');
+  const hud = getScene('hud');
   if (hud instanceof HudScene) hud.syncCanvas();
-  game.scale.refresh();
 }
 
 window.addEventListener('resize', applyLayout);
@@ -82,7 +75,7 @@ window.addEventListener('orientationchange', applyLayout);
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden') {
     suspendAudio();
-    const battle = game.scene.getScene('game');
+    const battle = getScene('game');
     if (battle instanceof GameScene) battle.pauseForBackground();
   } else {
     resumeAudio();

@@ -1,6 +1,6 @@
-/* MECHA REDLINE — stage chrome. Three stacked canvases inside #stage:
-   three.js (low-res, pixelated) below, transparent Phaser (game loop only),
-   then a DPR-backed HUD canvas on top. Everything is sharp-cornered. */
+/* MECHA REDLINE — stage chrome. Two stacked canvases inside #stage:
+   three.js (low-res, pixelated) below, then a DPR-backed HUD canvas on
+   top. Everything is sharp-cornered. */
 
 html,
 body {
@@ -44,12 +44,6 @@ body {
 
 #stage canvas.world.hidden {
   visibility: hidden;
-}
-
-/* Phaser canvas: transparent game-loop host (no HUD pixels). */
-#stage canvas:not(.world):not(.hud) {
-  position: absolute;
-  z-index: 2;
 }
 
 /* HUD: CSS fills the stage; HudScene sizes the buffer to CSS × DPR. */

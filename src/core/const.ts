@@ -5,7 +5,7 @@
 // its ground plane as (x, height, z = y), with a perspective camera pitched
 // ~65° over a scrolling deck so battles read as forward flight.
 
-/** Logical UI resolution (Phaser canvas). */
+/** Logical UI resolution (stage space). */
 export const UI_W = 1280;
 export const UI_H = 720;
 

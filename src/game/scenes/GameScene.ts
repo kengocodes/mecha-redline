@@ -1,7 +1,6 @@
 // The battle sim. Owns the player, enemies, bullet arrays, collisions and
 // mission flow; pushes positions into the three.js stage every frame.
 
-import Phaser from 'phaser';
 import type { Object3D } from 'three';
 import { applyAudioSettings, music, PILOT_VO, sfx, sfxLoopStart, sfxLoopStop, vo } from '../../core/audio';
 import {
@@ -34,6 +33,7 @@ import {
   takeTap,
 } from '../../core/input';
 import { audioSettings, setBus, toggleMuted, type BusId } from '../../core/settings';
+import { Scene } from '../../core/scene';
 import { isLegalOpen } from '../../legal/overlay';
 import {
   clearMenuFocus,
@@ -119,7 +119,7 @@ function easeInOut(p: number): number {
   return t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2;
 }
 
-export class GameScene extends Phaser.Scene {
+export class GameScene extends Scene {
   private p = { x: 0, y: 0, vx: 0, vy: 0, aim: -Math.PI / 2, inv: 0, fireCd: 0, alive: true };
   private pGear!: Gear;
   private stats: PilotStats = ROSTER[0].stats;
@@ -232,7 +232,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     setStageCursor('aim');
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+    this.onShutdown(() => {
       hud.paused = false;
       settingsUi.open = false;
       settingsUi.confirmExit = false;
@@ -1058,7 +1058,7 @@ export class GameScene extends Phaser.Scene {
       s.impact(0.014, 0.4);
       // Chain of blasts across the hull, then the mission wrap-up.
       for (let i = 0; i < 6; i++) {
-        this.time.delayedCall(i * 220, () => {
+        this.after(i * 220, () => {
           s.fx.explode(e.x + (Math.random() - 0.5) * 8, e.y + (Math.random() - 0.5) * 6, 2.2);
           s.addShake(0.7);
           s.impact(0.006, 0.18);
@@ -1079,7 +1079,7 @@ export class GameScene extends Phaser.Scene {
         );
       }
       if (heavy) {
-        this.time.delayedCall(110, () =>
+        this.after(110, () =>
           s.fx.explode(e.x + (Math.random() - 0.5) * 3, e.y - 1, 0.8),
         );
       }
@@ -1110,7 +1110,7 @@ export class GameScene extends Phaser.Scene {
       s.fx.spark(purged[i].x, purged[i].y);
     }
     setGearFlash(this.pGear, true);
-    this.time.delayedCall(120, () => {
+    this.after(120, () => {
       if (this.p.alive) setGearFlash(this.pGear, false);
     });
     sfx('burst');
