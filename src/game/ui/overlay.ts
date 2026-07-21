@@ -856,12 +856,19 @@ function drawBattle(g: Ctx): void {
     drawCombo(g);
   }
   if (hud.phase === "battle") drawWaveBanner(g);
+  if (hud.phase === "battle" && hud.duetMax > 0 && hud.cineBars < 0.5) drawDuetBar(g);
+  if (hud.phase === "battle") drawPhaseBanner(g); // OPHANIM interlock slam
   if (hud.phase === "boss") drawPhaseBanner(g);
-  if (hud.phase === "boss" && hud.t > 0.55 && hud.t < 2.95) drawBossCard(g);
-  if (hud.phase === "boss" && hud.bossMax > 0 && hud.t > 2.9) drawBossBar(g);
+  // Keyed to bossCardT, not phase time — the finale reveals a second form
+  // mid-phase and the card/bar must replay for it.
+  if (hud.phase === "boss" && hud.bossCardT > 0.55 && hud.bossCardT < 2.95) drawBossCard(g);
+  if (hud.phase === "boss" && hud.bossMax > 0 && hud.bossCardT > 2.9) drawBossBar(g);
   if (hud.phase === "warning") drawWarning(g, t);
   if (hud.phase === "intro") drawIntro(g, t);
-  if (hud.phase === "complete") drawEndCard(g, true);
+  if (hud.phase === "complete") {
+    if (currentLevel().finale) drawEnding(g);
+    else drawEndCard(g, true);
+  }
   if (hud.phase === "failed") drawEndCard(g, false);
 
   // damage vignette
@@ -1082,19 +1089,43 @@ function drawWaveBanner(g: Ctx): void {
 }
 
 /** Boss reveal card — name slam + class tag in the lower third while the
- * camera holds the descending hull. */
+ * camera holds the descending hull. KYRIE's card runs gold, not red. */
 function drawBossCard(g: Ctx): void {
-  const t = hud.t - 0.55;
+  const t = hud.bossCardT - 0.55;
   const inA = Math.min(1, t / 0.15);
-  const out = hud.t > 2.55 ? Math.max(0, 1 - (hud.t - 2.55) / 0.4) : 1;
+  const out = hud.bossCardT > 2.55 ? Math.max(0, 1 - (hud.bossCardT - 2.55) / 0.4) : 1;
   const pop = 1 + Math.max(0, 1 - t / 0.25) ** 2 * 0.6;
   const [name, tag] = hud.bossName.split(" ── ");
+  const gold = name === "KYRIE";
   g.globalAlpha = inA * out;
-  tx(g, name ?? hud.bossName, uiW / 2, 470, 64 * pop, RED, "center", 18);
+  tx(g, name ?? hud.bossName, uiW / 2, 470, 64 * pop, gold ? AMBER : RED, "center", 18);
   if (tag) tx(g, tag, uiW / 2, 516, 20, FG, "center", 8);
-  rule(g, uiW / 2 - 240, 540, 480, RED);
-  tx(g, currentLevel().boss.classLine, uiW / 2, 562, 13, DIM, "center", 4);
+  rule(g, uiW / 2 - 240, 540, 480, gold ? AMBER : RED);
+  tx(g, hud.bossClass, uiW / 2, 562, 13, DIM, "center", 4);
   g.globalAlpha = 1;
+}
+
+/** OPHANIM linked-fate bar — the duet shares one gold bar mid-mission. */
+function drawDuetBar(g: Ctx): void {
+  const w = 520;
+  const x = uiW / 2 - w / 2;
+  panel(g, x - 16, 20, w + 32, 54);
+  tx(g, hud.duetName, x, 38, 12, AMBER, "left", 2);
+  const frac = hud.duetMax > 0 ? hud.duetHp / hud.duetMax : 0;
+  g.fillStyle = "rgba(255, 181, 74, 0.15)";
+  g.fillRect(x, 50, w, 12);
+  g.fillStyle = AMBER;
+  g.fillRect(x, 50, w * frac, 12);
+  g.strokeStyle = "rgba(255, 181, 74, 0.6)";
+  g.lineWidth = 1;
+  for (let i = 1; i < 16; i++) {
+    const sx = x + (w / 16) * i + 0.5;
+    g.beginPath();
+    g.moveTo(sx, 50);
+    g.lineTo(sx, 62);
+    g.stroke();
+  }
+  g.strokeRect(x + 0.5, 50.5, w - 1, 11);
 }
 
 /** Boss phase card under the boss bar: red slam + urgent blink. */
@@ -1116,7 +1147,7 @@ function drawMission(g: Ctx): void {
   tx(g, `MISSION ${lvl.missionNo} ── ${lvl.hudTag}`, uiW - 40, 40, 13, DIM, "right", 2);
   const inBoss = hud.bossMax > 0; // stays true through the boss end cards
   const label = inBoss
-    ? `TARGET: ${lvl.boss.name}`
+    ? `TARGET: ${hud.bossName.split(" ── ")[0] || lvl.boss.name}`
     : `WAVE ${String(hud.wave).padStart(2, "0")} / ${String(lvl.waveCount).padStart(2, "0")}`;
   tx(g, label, uiW - 40, 66, 20, inBoss ? RED : CYAN, "right", 2);
 }
@@ -1387,4 +1418,67 @@ function drawEndCard(g: Ctx, won: boolean): void {
       4,
     );
   }
+}
+
+/**
+ * The campaign ending — the finale's complete card. Built on silence: the
+ * first two seconds hold a near-black frame with nothing on it at all (the
+ * song is gone; the delayed clear jingle lands at t=2), then the title
+ * card, the operator's last line verbatim from comms, a short arcade staff
+ * roll, and the final tallies. No cutscene reel — hold the quiet.
+ */
+function drawEnding(g: Ctx): void {
+  const t = hud.t;
+  // Deeper fade than the standard card — the void wins this one.
+  g.fillStyle = `rgba(2, 4, 9, ${Math.min(0.94, t * 0.9)})`;
+  g.fillRect(0, 0, uiW, uiH);
+  if (t < 2) return; // hold the silence
+
+  const a = (from: number, dur = 0.5): number =>
+    Math.max(0, Math.min(1, (t - from) / dur));
+
+  g.globalAlpha = a(2);
+  const pop = 1 + Math.max(0, 1 - (t - 2) / 0.3) ** 2 * 0.3;
+  tx(g, "EVENSONG", uiW / 2, 136, 54 * pop, AMBER, "center", 16);
+  tx(g, "終焉の聖歌", uiW / 2, 182, 18, FG, "center", 12);
+  g.globalAlpha = a(2.6);
+  tx(g, "THE SONG HAS ENDED", uiW / 2, 218, 15, DIM, "center", 6);
+  rule(g, uiW / 2 - 210, 238, 420, AMBER);
+
+  // The operator's last line, exactly as it came over comms.
+  if (hud.msg) {
+    g.globalAlpha = a(3.2);
+    tx(g, hud.msg, uiW / 2, 270, 13, CYAN, "center", 1);
+  }
+
+  // Staff roll — the cabinet takes its bow.
+  const roll: [string, string][] = [
+    ["GARRISON OPERATOR", "ALICE"],
+    ...ROSTER.map((p) => [`${p.callsign} PILOT`, p.pilot] as [string, string]),
+    ["GEAR DESIGN", "HANGAR BAY 03"],
+    ["SOUND", "THE CHOIR"],
+    ["CAMPAIGN", "SECTOR 7 SURVIVORS"],
+  ];
+  const y0 = 308;
+  for (let i = 0; i < roll.length; i++) {
+    g.globalAlpha = a(3.8 + i * 0.3);
+    tx(g, roll[i][0], uiW / 2 - 20, y0 + i * 26, 12, DIM, "right", 2);
+    tx(g, roll[i][1], uiW / 2 + 20, y0 + i * 26, 13, FG, "left", 2);
+  }
+  g.globalAlpha = a(3.8 + roll.length * 0.3);
+  tx(g, "© 1998 MECHA REDLINE PROJECT", uiW / 2, y0 + roll.length * 26 + 16, 11, DIM, "center", 3);
+
+  const ty = y0 + roll.length * 26 + 56;
+  g.globalAlpha = a(5.4);
+  tx(g, `SCORE  ${String(hud.score).padStart(8, "0")}`, uiW / 2, ty, 20, FG, "center", 3);
+  if (hud.comboBest >= 2) {
+    tx(g, `BEST CHAIN  ${String(hud.comboBest).padStart(2, "0")} HITS`, uiW / 2, ty + 28, 13, CYAN, "center", 3);
+  }
+  tx(g, `HI     ${String(hud.hi).padStart(8, "0")}`, uiW / 2, ty + 54, 15, AMBER, "center", 3);
+
+  if (t > 6 && Math.floor(t * 1.6) % 2 === 0) {
+    g.globalAlpha = 1;
+    tx(g, "CLICK ── RETURN TO BASE", uiW / 2, uiH - 50, 16, CYAN, "center", 4);
+  }
+  g.globalAlpha = 1;
 }

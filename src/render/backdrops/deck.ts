@@ -25,7 +25,10 @@ export interface DeckTheme {
 
 /** Keys match the mission `backdrop` ids. All kept low-contrast — under the
  * grazing camera a bright line reads as a hard horizon. */
-export const DECK_THEMES: Record<'space' | 'wake' | 'city', DeckTheme> = {
+export const DECK_THEMES: Record<
+  'space' | 'wake' | 'city' | 'garden' | 'voidhall',
+  DeckTheme
+> = {
   // Mission 01 — orbital carrier plating: cool blue-black steel, teal lanes
   // (not hazard-amber: under the cold key light amber curdles into olive).
   space: {
@@ -52,6 +55,25 @@ export const DECK_THEMES: Record<'space' | 'wake' | 'city', DeckTheme> = {
     seamMinor: 'rgba(110, 90, 170, 0.2)',
     chevron: 'rgba(200, 90, 240, 0.06)',
     rivet: 'rgba(130, 120, 150, 0.26)',
+  },
+  // Mission 04 act A — the White Choir garden: pale bone plating, the one
+  // deliberately light floor in the campaign (inverted palette). Runs the
+  // brightest pigments of any theme so it still reads pale, not grey,
+  // under the cold key light — but stays flat enough to keep bullets loud.
+  garden: {
+    base: '#2d2921',
+    seamMajor: 'rgba(238, 228, 202, 0.44)',
+    seamMinor: 'rgba(238, 228, 202, 0.32)',
+    chevron: 'rgba(255, 240, 200, 0.14)',
+    rivet: 'rgba(226, 211, 181, 0.38)',
+  },
+  // Mission 04 act B — the Listener's approach: gold seams on near-black.
+  voidhall: {
+    base: '#0a0806',
+    seamMajor: 'rgba(210, 165, 80, 0.32)',
+    seamMinor: 'rgba(210, 165, 80, 0.24)',
+    chevron: 'rgba(255, 200, 100, 0.08)',
+    rivet: 'rgba(180, 150, 100, 0.3)',
   },
 };
 

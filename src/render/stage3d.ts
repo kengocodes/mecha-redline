@@ -14,7 +14,7 @@ import { HangarShowcase } from './hangarShowcase';
 import { DECK_THEMES, DeckBackdrop } from './backdrops/deck';
 import { SpaceBackdrop } from './backdrops/space';
 
-export type BackdropId = 'space' | 'wake' | 'city';
+export type BackdropId = 'space' | 'wake' | 'city' | 'garden' | 'voidhall';
 
 const CAM_DIST = 100;
 /** Orthographic camera elevation for the hangar showcase, degrees. */
@@ -22,6 +22,8 @@ const SHOWCASE_ELEV = 16;
 const VOID = 0x02050c;
 const WAKE_VOID = 0x0a0509; // warm rust-black for the Mission 02 field
 const CITY_VOID = 0x06050f; // blackout violet-navy for the Mission 03 rain
+const GARDEN_VOID = 0x24211a; // pale bone haze — the white choir's lit fog
+const HALL_VOID = 0x040302; // near-total black beyond the redline
 
 // PS1 vertex snap: quantize every projected vertex to the internal pixel grid
 // so geometry subtly swims as it rotates. Appended to the shared chunk before
@@ -285,16 +287,34 @@ export class Stage3D {
     this.space.group.visible = false;
     this.deck.setTheme(DECK_THEMES[id]);
     this.deck.group.visible = true;
-    const voidCol = id === 'wake' ? WAKE_VOID : id === 'city' ? CITY_VOID : VOID;
+    const VOIDS: Record<BackdropId, number> = {
+      space: VOID,
+      wake: WAKE_VOID,
+      city: CITY_VOID,
+      garden: GARDEN_VOID,
+      voidhall: HALL_VOID,
+    };
+    const voidCol = VOIDS[id];
     this.renderer.setClearColor(voidCol);
     // Fog starts just past the player row so the deck inks out into the
-    // void ahead (and on low-angle cine horizons).
-    this.scene.fog = new THREE.Fog(voidCol, 80, 165);
+    // void ahead (and on low-angle cine horizons). The garden fogs closer —
+    // a bright milky haze instead of a black drop-off.
+    this.scene.fog =
+      id === 'garden'
+        ? new THREE.Fog(voidCol, 65, 150)
+        : new THREE.Fog(voidCol, 80, 165);
     // Arena spill: threat-red in space, furnace-amber over the wake,
-    // neon-magenta under the blackout rain.
-    const spill = id === 'wake' ? 0xff9a3c : id === 'city' ? 0xd94aff : 0xff3b53;
-    this.redSpill.color.setHex(spill);
-    this.redSpill.intensity = id === 'space' ? 1.05 : 1.25;
+    // neon-magenta under the blackout rain, pale halo-light in the garden,
+    // gold god-light in the listener's hall.
+    const SPILLS: Record<BackdropId, number> = {
+      space: 0xff3b53,
+      wake: 0xff9a3c,
+      city: 0xd94aff,
+      garden: 0xfff2cc,
+      voidhall: 0xffc45c,
+    };
+    this.redSpill.color.setHex(SPILLS[id]);
+    this.redSpill.intensity = id === 'space' ? 1.05 : id === 'voidhall' ? 1.4 : 1.25;
   }
 
   /** Tint the showcase pad aura (title/select) to a pilot's glow colour. */

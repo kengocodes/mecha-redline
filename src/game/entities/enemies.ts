@@ -3,7 +3,7 @@
 
 import { BK, type Bullet, PLAY_X, PLAY_Y, SCORE } from '../../core/const';
 import { type Gear, muzzleArenaPos } from '../../render/gearFactory';
-import { aimAngle, emit, fan, lob, ring } from '../systems/patterns';
+import { aimAngle, cage, emit, fan, lob, ring } from '../systems/patterns';
 
 export type EnemyKind =
   | 'husk'
@@ -17,7 +17,24 @@ export type EnemyKind =
   | 'ashhusk'
   | 'shade'
   | 'pylon'
-  | 'cerberus';
+  | 'cerberus'
+  | 'cherub'
+  | 'psalm'
+  | 'grigori'
+  | 'ophanim'
+  | 'magnificat'
+  | 'kyrie';
+
+/** End-of-mission bosses: WARNING flow, entrance armour, kill spectacle. */
+export function isBossKind(kind: EnemyKind): boolean {
+  return (
+    kind === 'boss' ||
+    kind === 'seraph' ||
+    kind === 'cerberus' ||
+    kind === 'magnificat' ||
+    kind === 'kyrie'
+  );
+}
 
 /** Hit-flash timing. The refractory gap keeps sustained fire (~30 hits/s on
  * the boss) from pinning the flash on — worst case is a ~8Hz strobe. */
@@ -98,6 +115,18 @@ export function makeEnemy(
       return { ...base, kind, hp: 20, maxHp: 20, hitR: 2.0, score: SCORE.pylon, life: 24 };
     case 'cerberus':
       return { ...base, kind, hp: 660, maxHp: 660, hitR: 3.6, score: SCORE.cerberus, life: Infinity };
+    case 'cherub':
+      return { ...base, kind, hp: 4, maxHp: 4, hitR: 1.1, score: SCORE.cherub, life: 26 };
+    case 'psalm':
+      return { ...base, kind, hp: 26, maxHp: 26, hitR: 1.9, score: SCORE.psalm, life: 28 };
+    case 'grigori':
+      return { ...base, kind, hp: 130, maxHp: 130, hitR: 2.9, score: SCORE.grigori, life: 45 };
+    case 'ophanim':
+      return { ...base, kind, hp: 380, maxHp: 380, hitR: 3.4, score: SCORE.ophanim, life: Infinity };
+    case 'magnificat':
+      return { ...base, kind, hp: 720, maxHp: 720, hitR: 5.0, score: SCORE.magnificat, life: Infinity };
+    case 'kyrie':
+      return { ...base, kind, hp: 800, maxHp: 800, hitR: 4.0, score: SCORE.kyrie, life: Infinity };
   }
 }
 
@@ -115,6 +144,12 @@ export function updateEnemy(e: Enemy, c: SimCtx, dt: number): void {
   else if (e.kind === 'shade') updateShade(e, c, dt);
   else if (e.kind === 'pylon') updatePylon(e, c, dt);
   else if (e.kind === 'cerberus') updateCerberus(e, c, dt);
+  else if (e.kind === 'cherub') updateCherub(e, c, dt);
+  else if (e.kind === 'psalm') updatePsalm(e, c, dt);
+  else if (e.kind === 'grigori') updateGrigori(e, c, dt);
+  else if (e.kind === 'ophanim') updateOphanim(e, c, dt);
+  else if (e.kind === 'magnificat') updateMagnificat(e, c, dt);
+  else if (e.kind === 'kyrie') updateKyrie(e, c, dt);
   else updateBoss(e, c, dt);
   e.x += e.vx * dt;
   e.y += e.vy * dt;
@@ -826,6 +861,505 @@ function updateCerberus(e: Enemy, c: SimCtx, dt: number): void {
         const ty = Math.max(0, Math.min(PLAY_Y - 2, c.py + (Math.random() - 0.5) * 9));
         lob(c.eb, m.x, m.y, tx, ty, 1.6 + i * 0.25, BK.orb);
       }
+    }
+  }
+}
+
+// ---- Mission 04 hostiles ---------------------------------------------------
+
+/**
+ * CHERUB: a fist-sized autonomous wing-blade. Swarms orbit a drifting
+ * anchor near the player's band and take turns diving with a short needle
+ * trail. The dive is the danger; the orbit teaches crowd spacing.
+ */
+function updateCherub(e: Enemy, c: SimCtx, dt: number): void {
+  const a = e.ai;
+  if (a.st === undefined) {
+    a.st = 0; // 0 orbit · 1 dive · 2 recover
+    a.ax = e.x * 0.5;
+    a.ay = Math.max(-16, Math.min(-4, e.y + 20));
+    a.orb = e.seed * 2.1;
+    a.diveT = 2.5 + (e.seed % 1) * 4; // seeded so a swarm staggers its turns
+    a.timer = 0;
+    a.shots = 0;
+  }
+  if (e.t > e.life) {
+    e.vy = -18; // flutters back up into the gantries
+    e.vx = Math.sin(e.t * 3) * 4;
+    return;
+  }
+
+  if (a.st === 0) {
+    // The anchor shadows the player at a respectful distance.
+    a.ax += (c.px * 0.55 - a.ax) * Math.min(1, dt * 0.7);
+    a.ay += (Math.min(-4, c.py - 16) - a.ay) * Math.min(1, dt * 0.7);
+    a.orb += dt * (1.4 + (e.seed % 1) * 0.5);
+    const r = 7 + Math.sin(e.seed * 3 + e.t) * 2;
+    const tx = a.ax + Math.cos(a.orb) * r;
+    const ty = a.ay + Math.sin(a.orb) * r * 0.6;
+    e.vx = (tx - e.x) * 4;
+    e.vy = (ty - e.y) * 4;
+    if (c.playerAlive) {
+      a.diveT -= dt;
+      if (a.diveT <= 0) {
+        a.st = 1;
+        a.timer = 0.85;
+        a.shots = 2;
+        const ang = aimAngle(e.x, e.y, c.px, c.py);
+        e.vx = Math.cos(ang) * 34;
+        e.vy = Math.sin(ang) * 34;
+        a.dx = e.vx;
+        a.dy = e.vy;
+      }
+    }
+  } else if (a.st === 1) {
+    // Committed dive along the locked heading, seeding needles behind it.
+    e.vx = a.dx;
+    e.vy = a.dy;
+    a.timer -= dt;
+    if (c.playerAlive && a.shots > 0 && a.timer < 0.62 - (2 - a.shots) * 0.24) {
+      a.shots--;
+      e.muzzleT = 0.06;
+      emit(c.eb, e.x, e.y, Math.atan2(a.dy, a.dx), 24, BK.needle);
+    }
+    if (a.timer <= 0) {
+      a.st = 2;
+      a.timer = 0.7;
+    }
+  } else {
+    // Swing wide and rejoin the wheel.
+    e.vx *= Math.max(0, 1 - dt * 3);
+    e.vy *= Math.max(0, 1 - dt * 3);
+    a.timer -= dt;
+    if (a.timer <= 0) {
+      a.st = 0;
+      a.diveT = 4.5 + (e.seed % 1) * 3.5;
+    }
+  }
+}
+
+/**
+ * PSALM: a hymn pillar. Slides to its station and holds it (noFace), then
+ * cycles: the collar charges (the tell), then pours a slow two-arm rotating
+ * curtain for a few seconds. Pairs weave corridors; the lesson is walking
+ * them, not out-shooting them.
+ */
+function updatePsalm(e: Enemy, c: SimCtx, dt: number): void {
+  const a = e.ai;
+  if (a.ty === undefined) {
+    a.ty = Math.min(e.y + 20, -10);
+    a.cy = 1.4 + (e.seed % 1);
+    a.rot = e.seed;
+    a.streamT = 0;
+    a.gap = 0;
+  }
+  if (e.t > e.life) {
+    e.gear.root.userData.charge = 0;
+    e.vy = -12; // drawn back up toward the gantries
+    return;
+  }
+  e.vx = 0;
+  e.vy = (a.ty - e.y) * 1.5;
+  if (!c.playerAlive) {
+    e.gear.root.userData.charge = 0;
+    return;
+  }
+
+  a.cy += dt;
+  const CYCLE = 4.6;
+  // Collar flare through the last 1.2s before the curtain opens.
+  e.gear.root.userData.charge = Math.max(0, Math.min(1, (a.cy - (CYCLE - 1.2)) / 1.2));
+  if (a.cy >= CYCLE && e.t > 1.6) {
+    a.cy = 0;
+    a.streamT = 2.6;
+  }
+  if (a.streamT > 0) {
+    a.streamT -= dt;
+    e.gear.root.userData.charge = 0;
+    a.gap -= dt;
+    if (a.gap <= 0) {
+      a.gap = 0.3;
+      a.rot += 0.24;
+      e.muzzleT = 0.08;
+      // Two slow arms sweeping like a censer — the curtain.
+      emit(c.eb, e.x, e.y, a.rot, 9.5, BK.needle);
+      emit(c.eb, e.x, e.y, a.rot + Math.PI, 9.5, BK.needle);
+    }
+  }
+}
+
+/**
+ * GRIGORI: a seraph that never finished growing. Fights with degraded M02
+ * patterns — a stuttering dash instead of the clean reposition, thin slow
+ * fans, no curtains, no mirror, no counter-burst. A rematch the player now
+ * wins easily: the measure of how far they've come.
+ */
+function updateGrigori(e: Enemy, c: SimCtx, dt: number): void {
+  const a = e.ai;
+  if (a.ty === undefined) {
+    a.ty = Math.min(e.y + 22, -14);
+    a.dashT = 1.5;
+    a.holdX = e.x;
+    a.stut = 0;
+    a.ringT = 3.5;
+  }
+  if (e.t > e.life) {
+    e.gear.aimTarget = 0;
+    e.vy = -13; // limps back into the fog
+    e.vx = 0;
+    return;
+  }
+
+  e.vy = (a.ty + Math.sin(e.t * 0.7) * 1.5 - e.y) * 1.3;
+  // The dash stutters: drive comes in coughs, not the M02 glide.
+  a.dashT -= dt;
+  if (a.dashT <= 0) {
+    a.dashT = 3.6;
+    a.holdX = Math.max(-30, Math.min(30, c.px + (Math.random() - 0.5) * 36));
+    a.evDash = 1; // the old whoosh, weaker in the mix
+  }
+  a.stut += dt;
+  const drive = Math.sin(a.stut * 9) > -0.3 ? 1 : 0.15;
+  e.vx = Math.max(-26, Math.min(26, (a.holdX - e.x) * 2.2 * drive));
+
+  if (!c.playerAlive) return;
+  e.gear.aimTarget = e.fireT > 2.0 ? 1 : 0;
+  if (e.fireT > 2.8 && e.t > 1.6) {
+    e.fireT = 0;
+    e.muzzleT = 0.07;
+    const m = armMuzzle(e, c, 0);
+    fan(c.eb, m.x, m.y, aimAngle(e.x, e.y, c.px, c.py), 3, 0.5, 18, BK.needle);
+  }
+  // A half-remembered ring, slow and sparse.
+  a.ringT -= dt;
+  if (a.ringT <= 0 && e.t > 3) {
+    a.ringT = 7.5;
+    e.muzzleT = 0.07;
+    ring(c.eb, e.x, e.y, 12, 10, BK.needle, e.seed + e.t);
+  }
+}
+
+/**
+ * OPHANIM: ring-class, always a pair with linked-fate HP (GameScene mirrors
+ * damage across both wheels).
+ *   P1 — counterpoint: each wheel owns a flank and answers the other's
+ *   volley half a phrase later.
+ *   P2 (<52%) — the interlock: both wheels drive to centre, overspin into a
+ *   gyroscope and pour the rotating cage — one moving gap to ride.
+ */
+function updateOphanim(e: Enemy, c: SimCtx, dt: number): void {
+  const a = e.ai;
+  if (a.side === undefined) {
+    a.side = e.x < 0 ? -1 : 1;
+    a.mode = 1;
+    a.volT = 1.6 + (a.side < 0 ? 0 : 1.6); // call, then response
+    a.gapA = e.seed;
+    a.cageT = 0;
+    a.spun = 0;
+  }
+  const frac = e.hp / e.maxHp;
+  const interlock = frac < 0.52;
+  a.phase = interlock ? 2 : 1; // GameScene slams the phase banner
+
+  if (!interlock) {
+    // Counterpoint stations: each wheel works its flank.
+    const tx = a.side * (19 + Math.sin(e.t * 0.5 + a.side) * 5);
+    const ty = -14 + Math.sin(e.t * 0.8 + a.side * 2) * 4;
+    e.vx = (tx - e.x) * 2.2;
+    e.vy = (ty - e.y) * 2.2;
+    e.gear.root.userData.spin = 0.7;
+    if (!c.playerAlive) return;
+    a.volT -= dt;
+    if (a.volT <= 0 && e.t > 1.2) {
+      a.volT = 3.2;
+      e.muzzleT = 0.08;
+      const m = armMuzzle(e, c, 0);
+      const ang = aimAngle(e.x, e.y, c.px, c.py);
+      fan(c.eb, m.x, m.y, ang, 4, 0.42, 22, BK.needle);
+      fan(c.eb, m.x, m.y, ang, 5, 1.1, 12, BK.orb);
+    }
+  } else {
+    // The gyroscope: both wheels crowd the centre and overspin.
+    const tx = a.side * 2.4;
+    const ty = -13 + a.side * 1.6;
+    e.vx = (tx - e.x) * 2.6;
+    e.vy = (ty - e.y) * 2.6;
+    e.gear.root.userData.spin = 3.4;
+    if (!a.spun) {
+      a.spun = 1;
+      a.evSpin = 1; // GameScene: interlock clunk + shockwave
+    }
+    if (!c.playerAlive) return;
+    // Only the lead wheel pours the cage — density stays a dodge, not a wall.
+    if (a.side < 0) {
+      a.cageT -= dt;
+      if (a.cageT <= 0) {
+        a.cageT = 0.62;
+        a.gapA += 0.42;
+        e.muzzleT = 0.06;
+        cage(c.eb, 0, -12, 26, 10.5, BK.orb, [a.gapA], 0.5, a.gapA * 0.35);
+      }
+    } else {
+      // The follower keeps the duet honest with aimed triples.
+      a.volT -= dt;
+      if (a.volT <= 0) {
+        a.volT = 2.6;
+        e.muzzleT = 0.07;
+        const m = armMuzzle(e, c, 0);
+        fan(c.eb, m.x, m.y, aimAngle(e.x, e.y, c.px, c.py), 3, 0.3, 24, BK.needle);
+      }
+    }
+  }
+}
+
+/**
+ * MAGNIFICAT: the cathedral hull — fortress-scale volume fire, a deliberate
+ * Golgotha callback at twice the density. The two launch bays are
+ * targetable parts (break meters in e.ai.b0/b1, GameScene owns the zones);
+ * while a bay lives it keeps pouring cherubs onto the field.
+ */
+function updateMagnificat(e: Enemy, c: SimCtx, dt: number): void {
+  const a = e.ai;
+  if (a.state === undefined) {
+    a.state = 0; // 0 = entering
+    a.b0 = 80;
+    a.b1 = 80;
+    a.cycle = 0;
+    a.burst = 0;
+    a.spiral = 0;
+    a.spiralT = 0;
+    a.l0 = 4;
+    a.l1 = 7;
+  }
+
+  if (a.state === 0) {
+    e.vy = Math.max(4, Math.min(14, (-18 - e.y) * 2.0));
+    e.vx = 0;
+    if (e.y > -18.6) {
+      a.state = 1;
+      a.cycle = -1.1;
+    }
+    return;
+  }
+
+  const frac = e.hp / e.maxHp;
+  const phase = frac < 0.3 ? 3 : frac < 0.62 ? 2 : 1;
+  a.phase = phase;
+  const rate = phase === 3 ? 1.18 : 1;
+
+  // A cathedral does not strafe; it drifts, and the deck feels it.
+  e.vx = Math.sin(e.t * 0.32) * 5.5;
+  e.vy = (-18 + Math.sin(e.t * 0.55) * 1.6 - e.y) * 1.1;
+
+  if (!c.playerAlive) return;
+
+  // Volume fire: three twin-cannon volleys, then a double ring off the rose.
+  a.cycle += dt * rate;
+  if (a.cycle > 4.4) {
+    a.cycle = 0;
+    a.burst = 0;
+  }
+  if (a.burst < 3 && a.cycle > 0.4 + a.burst * 0.5) {
+    a.burst++;
+    e.muzzleT = 0.08;
+    const m = armMuzzle(e, c, a.burst % 2);
+    const n = phase === 1 ? 7 : 9;
+    fan(c.eb, m.x, m.y, aimAngle(e.x, e.y, c.px, c.py), n, 0.9, 19 * rate, BK.shot);
+  }
+  if (a.burst === 3 && a.cycle > 2.5) {
+    a.burst = 4;
+    e.muzzleT = 0.08;
+    const m = armMuzzle(e, c, 2);
+    const n = phase === 3 ? 32 : 26;
+    ring(c.eb, m.x, m.y, n, 12.5 * rate, BK.orb, a.cycle + e.t);
+    ring(c.eb, m.x, m.y, n, 9.5 * rate, BK.orb, a.cycle + e.t + Math.PI / n);
+  }
+
+  // Twin spiral arms once wounded — the Golgotha quote, doubled.
+  if (phase >= 2) {
+    a.spiralT += dt;
+    const gap = phase === 3 ? 0.08 : 0.1;
+    while (a.spiralT > gap) {
+      a.spiralT -= gap;
+      a.spiral += 0.24;
+      emit(c.eb, e.x, e.y, a.spiral, 14 * rate, BK.orb);
+      emit(c.eb, e.x, e.y, a.spiral + Math.PI, 14 * rate, BK.orb);
+    }
+  }
+
+  // Launch bays: while a bay lives it keeps growing wings. GameScene reads
+  // evLaunch (1|2 = bay index + 1) and spawns the cherubs at the mouth.
+  if (a.b0 > 0) {
+    a.l0 -= dt;
+    if (a.l0 <= 0) {
+      a.l0 = 8.5;
+      a.evLaunch = 1;
+      e.muzzleT = 0.09;
+    }
+  }
+  if (a.b1 > 0) {
+    a.l1 -= dt;
+    if (a.l1 <= 0) {
+      a.l1 = 8.5;
+      a.evLaunch = 2;
+      e.muzzleT = 0.09;
+    }
+  }
+}
+
+/**
+ * KYRIE: the first voice — the only true-last-boss in the campaign, fought
+ * with the whole campaign's vocabulary reflected back:
+ *   SERAPH's aimed volleys and movement mirror, its wing curtains and
+ *   counter-burst; OPHANIM's rotating cage; CERBERUS's rage-scaling as hp
+ *   falls. Desperation at <10%: the final hymn — a held radial score with
+ *   two singable safe lanes.
+ */
+function updateKyrie(e: Enemy, c: SimCtx, dt: number): void {
+  const a = e.ai;
+  if (a.state === undefined) {
+    a.state = 0; // 0 = entering
+    a.cycle = -1.2;
+    a.volley = 0;
+    a.curT = 0;
+    a.curSide = 0;
+    a.cageCd = 5;
+    a.cageN = 0;
+    a.cageT = 0;
+    a.gapA = 0;
+    a.purgeCd = 4;
+    a.hymn = 0; // 0 armed · 1 singing · 2 spent (rearms on a cooldown)
+    a.hymnT = 0;
+    a.laneA = 0;
+  }
+
+  if (a.state === 0) {
+    e.vy = Math.max(4, Math.min(15, (-14 - e.y) * 2.0));
+    e.vx = 0;
+    if (e.y > -14.6) {
+      a.state = 1;
+      a.cycle = -1.2;
+    }
+    return;
+  }
+
+  const frac = e.hp / e.maxHp;
+  // The pack-rage lesson, made continuous: the lower the voice, the faster
+  // the song. Phase thresholds still slam the banner cards.
+  const rate = 1 + 0.45 * (1 - frac);
+  a.phase = frac < 0.28 ? 3 : frac < 0.58 ? 2 : 1;
+
+  // The mirror: KYRIE shadows the player's lane with a half-beat of lag.
+  a.holdX = Math.max(-30, Math.min(30, c.px * 0.85));
+  e.vx = Math.max(-46, Math.min(46, (a.holdX - e.x) * 2.2));
+  e.vy = (-14 + Math.sin(e.t * 0.7) * 2 - e.y) * 1.4;
+
+  if (!c.playerAlive) return;
+
+  // ---- desperation: the final hymn ----
+  if (a.hymn === 0 && frac < 0.1) {
+    a.hymn = 1;
+    a.hymnT = 10;
+    a.laneA = aimAngle(e.x, e.y, c.px, c.py); // open a lane where the player stands
+    a.evHymn = 1; // GameScene: operator call + choir swell + gold flash
+  }
+  if (a.hymn === 1) {
+    a.hymnT -= dt;
+    a.laneA += dt * 0.12; // the lanes drift — hold them, don't camp them
+    a.cageT -= dt;
+    if (a.cageT <= 0) {
+      a.cageT = 0.17;
+      e.muzzleT = 0.06;
+      cage(c.eb, e.x, e.y, 20, 13, BK.needle, [a.laneA, a.laneA + Math.PI], 0.46, a.hymnT * 2.3);
+    }
+    if (a.hymnT <= 0) {
+      a.hymn = 2;
+      a.cageCd = 6;
+    }
+    return; // the hymn is everything — no other voice while it holds
+  }
+  if (a.hymn === 2) {
+    // Spent: a long exhausted beat, then the score rearms.
+    a.cageCd -= dt;
+    if (a.cageCd <= 0) a.hymn = 0;
+  }
+
+  // ---- SERAPH's aimed volleys, three to a phrase ----
+  a.cycle += dt * rate;
+  if (a.cycle > 3.6) {
+    a.cycle = 0;
+    a.volley = 0;
+  }
+  if (a.volley < 3 && a.cycle > 0.5 + a.volley * 0.5) {
+    a.volley++;
+    e.muzzleT = 0.07;
+    const m = armMuzzle(e, c, 0);
+    fan(c.eb, m.x, m.y, aimAngle(e.x, e.y, c.px, c.py), a.phase === 1 ? 5 : 7, 0.5, 25 * rate, BK.needle);
+  }
+
+  // ---- SERAPH's wing curtains, mirrored into the player's lane ----
+  if (frac < 0.8) {
+    a.curT += dt;
+    const gap = 0.24 / rate;
+    while (a.curT > gap) {
+      a.curT -= gap;
+      a.curSide = 1 - a.curSide;
+      const m = armMuzzle(e, c, 1 + a.curSide);
+      const drift = Math.sin(e.t * 0.9 + a.curSide * Math.PI) * 0.35;
+      emit(c.eb, m.x, m.y, Math.PI / 2 + drift, 10 * rate, BK.needle);
+    }
+  }
+
+  // ---- OPHANIM's cage, quoted in bursts of three ----
+  if (frac < 0.62) {
+    a.cageCd -= dt * rate;
+    if (a.cageCd <= 0 && a.cageN === 0) {
+      a.cageN = 3;
+      a.cageT = 0;
+      a.gapA = aimAngle(e.x, e.y, c.px, c.py);
+      a.cageCd = 7.5;
+    }
+    if (a.cageN > 0) {
+      a.cageT -= dt;
+      if (a.cageT <= 0) {
+        a.cageT = 0.6;
+        a.cageN--;
+        a.gapA += 0.45;
+        e.muzzleT = 0.06;
+        cage(c.eb, e.x, e.y, 24, 10.5, BK.orb, [a.gapA], 0.52, a.gapA * 0.4);
+      }
+    }
+  }
+
+  // ---- SERAPH's counter-burst, unforgotten ----
+  if (frac < 0.45) {
+    a.purgeCd = Math.max(0, a.purgeCd - dt);
+    let near = 0;
+    for (const b of c.pb) {
+      if ((b.x - e.x) ** 2 + (b.y - e.y) ** 2 < 144) near++;
+    }
+    if (a.purgeCd <= 0 && near >= 8) {
+      a.purgeCd = 6;
+      for (let i = c.pb.length - 1; i >= 0; i--) {
+        const b = c.pb[i];
+        const d2 = (b.x - e.x) ** 2 + (b.y - e.y) ** 2;
+        if (d2 < 196) {
+          c.pb.splice(i, 1);
+          const len = Math.sqrt(d2) || 1;
+          c.purge.push({
+            ...b,
+            vx: ((b.x - e.x) / len) * 55,
+            vy: ((b.y - e.y) / len) * 55,
+            life: 0.38,
+            scale: 1,
+          });
+        }
+      }
+      a.evPurge = 1;
+      e.flashT = 0.25;
+      const off = Math.random() * 6;
+      ring(c.eb, e.x, e.y, 22, 16 * rate, BK.needle, off);
+      ring(c.eb, e.x, e.y, 22, 12 * rate, BK.needle, off + 0.14);
     }
   }
 }

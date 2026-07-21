@@ -24,6 +24,10 @@ export type MusicId =
   | 'boss2'
   | 'battle3'
   | 'boss3'
+  | 'battle4'
+  | 'ophanim'
+  | 'magnificat'
+  | 'kyrie'
   | 'clear'
   | 'failed';
 
@@ -57,7 +61,10 @@ export type SfxId =
   | 'decloak'
   | 'hound-howl'
   | 'hound-rage'
-  | 'hound-lunge';
+  | 'hound-lunge'
+  | 'choir-swell'
+  | 'ring-spin'
+  | 'hull-crack';
 
 export type VoId = string; // 'op-*' | '<pilot>-{select,launch,burst,hit,clear}'
 
@@ -93,6 +100,9 @@ const SFX_GAIN: Partial<Record<SfxId, number>> = {
   'hound-howl': 0.62,
   'hound-rage': 0.6,
   'hound-lunge': 0.58,
+  'choir-swell': 0.62,
+  'ring-spin': 0.55,
+  'hull-crack': 0.7,
 };
 
 /** Soften shouty / select lines; operator stays a hair higher for radio clarity. */
@@ -120,7 +130,7 @@ const SFX_ALL: SfxId[] = [
   'expl-big', 'expl-boss', 'hit-armor', 'burst', 'launch', 'warning',
   'thruster', 'gear-arrive', 'mortar-lob', 'mortar-boom', 'mine-beep',
   'seraph-dash', 'seraph-purge', 'seraph-choir', 'decloak', 'hound-howl',
-  'hound-rage', 'hound-lunge',
+  'hound-rage', 'hound-lunge', 'choir-swell', 'ring-spin', 'hull-crack',
 ];
 const VO_ALL = [
   ...['select-gear', 'mission-start', 'weapons-free', 'lancer',
@@ -132,6 +142,10 @@ const VO_ALL = [
   ...['mission-start', 'entry', 'rebuilt', 'shade', 'pylon',
     'stragglers', 'cerberus', 'cerberus-kill',
   ].map((s) => `op3-${s}`),
+  ...['mission-start', 'garden', 'cherub', 'psalm', 'grigori', 'ophanim',
+    'ophanim-kill', 'cathedral', 'magnificat', 'fakeout', 'kyrie', 'hymn',
+    'kyrie-kill',
+  ].map((s) => `op4-${s}`),
   ...['kira', 'ren', 'sera', 'juno'].flatMap((p) =>
     ['select', 'launch', 'burst', 'hit', 'hit2', 'hit3', 'clear'].map((s) => `${p}-${s}`),
   ),

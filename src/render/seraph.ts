@@ -11,24 +11,59 @@
 import * as THREE from 'three';
 import { frustumBox, type Gear } from './gearFactory';
 
-const BONE = 0xe6e1d4;
-const DARK = 0x2e3138;
-const GOLD = 0xc9a44a;
-const TRIM = 0xaab0bc;
-const CYAN = 0x9ffcff;
-const HALO = 0xffd98a;
-const VIOLET = 0x8a6cff;
-
-// Per-instance materials: disposeGear frees them with the boss, and a fresh
-// build after a restart gets fresh GPU resources.
-function lam(color: number): THREE.MeshLambertMaterial {
-  return new THREE.MeshLambertMaterial({
-    color,
-    flatShading: true,
-    emissive: color,
-    emissiveIntensity: 0.16,
-  });
+/** Palette + presence knobs — the frame is shared across the campaign's
+ * whole seraph lineage (M02 duel-class, M04 grigori and KYRIE). */
+export interface SeraphVariant {
+  bone: number;
+  dark: number;
+  gold: number;
+  trim: number;
+  cyan: number; // optics / light strips
+  halo: number;
+  violet: number; // drive plume
+  scale: number;
+  /** Armor self-glow — KYRIE is luminous, grigori is dead metal. */
+  emissive: number;
 }
+
+/** The M02 duel-class: bone-white and gold, the bright thing in the wake. */
+export const SERAPH_WHITE: SeraphVariant = {
+  bone: 0xe6e1d4,
+  dark: 0x2e3138,
+  gold: 0xc9a44a,
+  trim: 0xaab0bc,
+  cyan: 0x9ffcff,
+  halo: 0xffd98a,
+  violet: 0x8a6cff,
+  scale: 1,
+  emissive: 0.16,
+};
+
+/** GRIGORI — a seraph that never finished growing: ashen, dim, halo cold. */
+export const SERAPH_ASHEN: SeraphVariant = {
+  bone: 0x76726a,
+  dark: 0x24262b,
+  gold: 0x6e6046,
+  trim: 0x5c616a,
+  cyan: 0x9aa8ac,
+  halo: 0x8a7a55,
+  violet: 0x5a5470,
+  scale: 0.88,
+  emissive: 0.08,
+};
+
+/** KYRIE — the first voice: giant, gold, lit from within. */
+export const SERAPH_GOLD: SeraphVariant = {
+  bone: 0xf2e6c4,
+  dark: 0x4a3c22,
+  gold: 0xffd98a,
+  trim: 0xd8c084,
+  cyan: 0xfff2cc,
+  halo: 0xffe0a0,
+  violet: 0xffc45c,
+  scale: 1.55,
+  emissive: 0.42,
+};
 function glo(color: number): THREE.MeshBasicMaterial {
   return new THREE.MeshBasicMaterial({ color });
 }
@@ -76,11 +111,21 @@ function muzzle(parent: THREE.Object3D, x: number, y: number, z: number): THREE.
   return m;
 }
 
-export function buildSeraph(): Gear {
-  const bone = lam(BONE);
-  const dark = lam(DARK);
-  const gold = lam(GOLD);
-  const trim = lam(TRIM);
+export function buildSeraph(v: SeraphVariant = SERAPH_WHITE): Gear {
+  const lam = (color: number): THREE.MeshLambertMaterial =>
+    new THREE.MeshLambertMaterial({
+      color,
+      flatShading: true,
+      emissive: color,
+      emissiveIntensity: v.emissive,
+    });
+  const bone = lam(v.bone);
+  const dark = lam(v.dark);
+  const gold = lam(v.gold);
+  const trim = lam(v.trim);
+  const CYAN = v.cyan;
+  const HALO = v.halo;
+  const VIOLET = v.violet;
 
   const root = new THREE.Group();
   const att = new THREE.Group();
@@ -252,6 +297,8 @@ export function buildSeraph(): Gear {
       Math.sin(t * 2.4) > 0.7 ? 0xffffff : CYAN,
     );
   };
+
+  root.scale.setScalar(v.scale);
 
   const lit: THREE.Mesh[] = [];
   root.traverse((obj) => {

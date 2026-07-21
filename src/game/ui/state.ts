@@ -30,6 +30,15 @@ export interface HudState {
   bossHp: number;
   bossMax: number;
   bossName: string;
+  /** Reveal-card class line for the current boss form. */
+  bossClass: string;
+  /** Seconds since the current boss reveal began — drives the name card and
+   * the bar's entry delay for both forms (a fake-out re-zeroes it). */
+  bossCardT: number;
+  /** OPHANIM linked-pair bar (mid-boss set piece); duetMax 0 = hidden. */
+  duetName: string;
+  duetHp: number;
+  duetMax: number;
   combo: number; // current kill chain, 0 = none
   comboT: number; // seconds left in the chain window
   comboBest: number; // longest chain this mission, for the end card
@@ -64,6 +73,11 @@ export const hud: HudState = {
   bossHp: 0,
   bossMax: 0,
   bossName: "",
+  bossClass: "",
+  bossCardT: 99,
+  duetName: "",
+  duetHp: 0,
+  duetMax: 0,
   combo: 0,
   comboT: 0,
   comboBest: 0,

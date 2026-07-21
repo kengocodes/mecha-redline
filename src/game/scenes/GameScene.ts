@@ -2,7 +2,7 @@
 // mission flow; pushes positions into the three.js stage every frame.
 
 import type { Object3D } from 'three';
-import { applyAudioSettings, music, PILOT_VO, sfx, sfxLoopStart, sfxLoopStop, vo } from '../../core/audio';
+import { applyAudioSettings, music, type MusicId, PILOT_VO, sfx, sfxLoopStart, sfxLoopStop, vo } from '../../core/audio';
 import {
   BK,
   type Bullet,
@@ -71,21 +71,24 @@ import {
   SHADE,
 } from '../../render/gearFactory';
 import { buildCerberus } from '../../render/cerberus';
+import { buildCherub, buildOphanim, buildPsalm } from '../../render/choir';
+import { buildMagnificat } from '../../render/magnificat';
 import { buildPylon } from '../../render/pylon';
 import { buildSentinel } from '../../render/sentinel';
-import { buildSeraph } from '../../render/seraph';
-import { Stage3D } from '../../render/stage3d';
+import { buildSeraph, SERAPH_ASHEN, SERAPH_GOLD } from '../../render/seraph';
+import { type BackdropId, Stage3D } from '../../render/stage3d';
 import { type PilotStats, ROSTER, selectedPilot } from '../roster';
 import {
   type Enemy,
   type EnemyKind,
   FLASH_DUR,
   FLASH_GAP,
+  isBossKind,
   makeEnemy,
   sentinelRing,
   updateEnemy,
 } from '../entities/enemies';
-import { advanceLevel, currentLevel, type LevelDef, type SpawnKind } from '../levels';
+import { advanceLevel, currentLevel, type LevelApi, type LevelDef, type SpawnKind } from '../levels';
 import {
   BURST,
   createBurstState,
@@ -144,6 +147,12 @@ export class GameScene extends Scene {
   private clearVoDone = false;
   private lastHitLine = 0;
   private dragBus: BusId | null = null;
+  /** M04 fake-out: 0 idle · 1 the false kill · 2 the wreck splits · then
+   * the true form spawns and the standard boss flow resumes. */
+  private finaleStage = 0;
+  private finaleT = 0;
+  private wreckX = 0;
+  private wreckY = 0;
 
   constructor() {
     super('game');
@@ -179,6 +188,8 @@ export class GameScene extends Scene {
     this.bossPhase = 1;
     this.bossCineT = 99;
     this.bossEngaged = false;
+    this.finaleStage = 0;
+    this.finaleT = 0;
 
     s.setBackdrop(this.level.backdrop);
 
@@ -188,11 +199,15 @@ export class GameScene extends Scene {
     this.burst = createBurstState(this.stats.burst);
     this.voPfx = PILOT_VO[pilot.id] ?? 'kira';
     this.clearVoDone = false;
-    music(this.level.music.battle);
-    // Queued: the pilot's launch line from the select cut-in may still be going.
-    vo(this.level.introVo, { queue: true });
-    sfxLoopStart('thruster');
-    sfx('gear-arrive', { gain: 0.55 }); // servo settle under the hero shot
+    const dbg = debugParam();
+    const skipToEnding = dbg === 'ending';
+    if (!skipToEnding) {
+      music(this.level.music.battle);
+      // Queued: the pilot's launch line from the select cut-in may still be going.
+      vo(this.level.introVo, { queue: true });
+      sfxLoopStart('thruster');
+      sfx('gear-arrive', { gain: 0.55 }); // servo settle under the hero shot
+    }
 
     this.pGear = buildGear(pilot.gear);
     s.battleGroup.add(this.pGear.root);
@@ -206,6 +221,10 @@ export class GameScene extends Scene {
     hud.burstFlashT = 0;
     hud.wave = 0;
     hud.bossMax = 0;
+    hud.bossClass = '';
+    hud.bossCardT = 99;
+    hud.duetMax = 0;
+    hud.duetHp = 0;
     hud.combo = 0;
     hud.comboT = 0;
     hud.comboBest = 0;
@@ -221,14 +240,45 @@ export class GameScene extends Scene {
     setPhase('intro');
     resetAimMode();
 
-    // Dev-only: ?debug=boss / boss2 jumps straight to the boss fight.
-    if (debugParam()?.startsWith('boss')) {
+    // Dev-only: ?debug=boss / boss2 jumps straight to the boss fight; a
+    // trailing x (boss4x) softens boss hp so end-flows are reachable fast.
+    if (dbg?.startsWith('boss')) {
+      // Fast-forward the wave script with spawns and comms stubbed so the
+      // mission state (wave counter, theatre — M04's act shift) matches a
+      // real arrival at the boss.
+      const ff: LevelApi = {
+        spawn: () => {},
+        say: () => {},
+        wave: (n) => void (hud.wave = n),
+        music: () => {}, // the boss theme below owns the bed
+        backdrop: (id) => Stage3D.I.setBackdrop(id),
+        callsign: this.callsign,
+      };
+      for (const evt of this.level.events) evt.run(ff);
       this.scriptIx = this.level.events.length;
       this.levelT = 999;
       setPhase('warning');
       // Mirror the real battle→warning transition or the fight runs silent.
       music(this.level.music.boss, { fade: 1.4 });
       sfx('warning');
+    }
+
+    // Dev-only: ?debug=ending — silence, operator's last line, staff roll.
+    if (skipToEnding && this.level.finale) {
+      s.setBackdrop('voidhall');
+      this.scriptIx = this.level.events.length;
+      this.levelT = 999;
+      hud.wave = this.level.waveCount;
+      hud.score = 199800;
+      hud.comboBest = 12;
+      setPhase('complete');
+      const form2 = this.level.boss.form2;
+      say(
+        form2?.killSay(this.callsign) ?? '',
+        form2?.killVo,
+      );
+      // Match the real Kyrie-kill flow: two seconds of nothing, then clear.
+      this.after(2000, () => music('clear', { loop: false }));
     }
 
     setStageCursor('aim');
@@ -284,6 +334,18 @@ export class GameScene extends Scene {
       gear = buildSentinel();
     } else if (kind === 'seraph') {
       gear = buildSeraph();
+    } else if (kind === 'grigori') {
+      gear = buildSeraph(SERAPH_ASHEN);
+    } else if (kind === 'kyrie') {
+      gear = buildSeraph(SERAPH_GOLD);
+    } else if (kind === 'cherub') {
+      gear = buildCherub();
+    } else if (kind === 'psalm') {
+      gear = buildPsalm();
+    } else if (kind === 'ophanim') {
+      gear = buildOphanim();
+    } else if (kind === 'magnificat') {
+      gear = buildMagnificat();
     } else if (kind === 'pylon') {
       gear = buildPylon();
     } else if (kind === 'cerberus') {
@@ -336,6 +398,15 @@ export class GameScene extends Scene {
       hud.wave = n;
       hud.waveBannerT = 1.5;
       sfx('gear-arrive', { gain: 0.3 });
+    },
+    // M04's two-act shift: a slow bed crossfade, and the theatre retints
+    // under one white beat (the garden burning gold into the void).
+    music: (id: MusicId) => music(id, { fade: 2.4 }),
+    backdrop: (id: BackdropId) => {
+      const s = Stage3D.I;
+      s.setBackdrop(id);
+      s.impact(0.005, 0.45, 0xfff2cc);
+      s.addShake(0.35);
     },
     get callsign() {
       return selectedPilot().displayName;
@@ -506,23 +577,27 @@ export class GameScene extends Scene {
     const dt = hud.paused || this.hitstop > 0 ? 0 : raw * this.timescale;
     hud.t += raw;
     hud.msgT += raw;
+    hud.bossCardT = Math.min(99, hud.bossCardT + raw);
     hud.flashT = Math.max(0, hud.flashT - raw);
     hud.burstFlashT = Math.max(0, hud.burstFlashT - raw);
     hud.waveBannerT = Math.max(0, hud.waveBannerT - raw);
     hud.phaseBannerT = Math.max(0, hud.phaseBannerT - raw);
 
-    // Pilot signs off once the operator's kill call has had its beat.
+    // Pilot signs off once the operator's kill call has had its beat. On the
+    // finale the operator's "come home" owns the channel — the pilot's line
+    // queues behind it instead of cutting in.
     if (hud.phase === 'complete' && hud.t > 1.6 && !this.clearVoDone) {
       this.clearVoDone = true;
-      vo(`${this.voPfx}-clear`);
+      vo(`${this.voPfx}-clear`, { queue: this.level.finale });
     }
 
     // End-state input. A win rolls into the next mission when one exists.
+    // The finale holds its card longer — the silence and the roll get read.
     if (hud.phase === 'failed' && hud.t > 1 && takeTap()) {
       startWipe(() => this.scene.restart());
       return;
     }
-    if (hud.phase === 'complete' && hud.t > 2 && takeTap()) {
+    if (hud.phase === 'complete' && hud.t > (this.level.finale ? 6 : 2) && takeTap()) {
       if (advanceLevel()) {
         sfx('ui-confirm');
         startWipe(() => this.scene.restart());
@@ -556,17 +631,25 @@ export class GameScene extends Scene {
       const zoom = 3.0 + 0.4 * Math.min(1, t / 1.5);
       s.setCine(this.p.x, this.p.y - 5, 2.6, zoom, 24, w);
       bars = w;
+    } else if (this.finaleStage > 0) {
+      // The fake-out: stage 1 plays as a normal kill (no bars — the player
+      // believes it), then the letterbox slams back in as the wreck splits.
+      const w = this.finaleStage === 2 ? Math.min(1, (this.finaleT - 2.0) / 0.3) : 0;
+      s.setCine(this.wreckX, this.wreckY + 3, 5, 1.5, 42, w);
+      bars = w;
     } else if (this.boss && this.bossCineT < 3.2) {
       const t = this.bossCineT;
       const w = t < 0.6 ? easeInOut(t / 0.6) : t < 2.3 ? 1 : 1 - easeInOut((t - 2.3) / 0.9);
       // SERAPH is three gears tall — pull the reveal wider and look higher.
+      // KYRIE is that again half over; MAGNIFICAT fills the frame sideways.
       const tall = this.boss.kind === 'seraph';
-      const wide = this.boss.kind === 'cerberus';
+      const giant = this.boss.kind === 'kyrie';
+      const wide = this.boss.kind === 'cerberus' || this.boss.kind === 'magnificat';
       s.setCine(
         this.boss.x,
         this.boss.y + 3,
-        tall ? 8 : wide ? 4.5 : 5,
-        tall ? 1.3 : wide ? 1.45 : 1.65,
+        giant ? 11 : tall ? 8 : wide ? 4.5 : 5,
+        giant ? 1.1 : tall ? 1.3 : wide ? 1.35 : 1.65,
         42,
         w,
       );
@@ -614,10 +697,70 @@ export class GameScene extends Scene {
     } else if (hud.phase === 'warning' && hud.t > 2.8) {
       setPhase('boss');
       this.boss = this.spawn(this.level.boss.kind, 0, -44);
+      if (debugParam()?.endsWith('x')) this.boss.hp = 40;
       this.bossCineT = 0;
       hud.bossName = `${this.level.boss.name} ── ${this.level.boss.tag}`;
+      hud.bossClass = this.level.boss.classLine;
+      hud.bossCardT = 0;
       hud.bossMax = this.boss.maxHp;
       hud.bossHp = this.boss.maxHp;
+    }
+
+    // The fake-out timeline: false kill → the song swells and the wreck
+    // splits → the true form descends into the standard boss flow.
+    if (this.finaleStage > 0) {
+      const form2 = this.level.boss.form2;
+      this.finaleT += dt;
+      const s = Stage3D.I;
+      if (this.finaleStage === 1 && this.finaleT > 2.0 && form2) {
+        this.finaleStage = 2;
+        // The kill fanfare never lands — the song swells over it instead.
+        sfx('choir-swell');
+        sfx('hull-crack');
+        music(null, { fade: 0.5 });
+        s.addShake(1.2);
+        s.addPunch(0.7);
+        s.impact(0.012, 0.4, 0xffd98a);
+        s.fx.nova(this.wreckX, this.wreckY, 0xffd98a, 0xfff2cc);
+        for (let i = 0; i < 4; i++) {
+          this.after(i * 260, () => {
+            s.fx.explode(this.wreckX + (Math.random() - 0.5) * 10, this.wreckY + (Math.random() - 0.5) * 6, 1.8);
+            s.addShake(0.5);
+          });
+        }
+        say(form2.revealSay, form2.revealVo);
+      } else if (this.finaleStage === 2 && this.finaleT > 3.6 && form2) {
+        this.finaleStage = 0;
+        const kyrie = this.spawn(form2.kind, Math.max(-20, Math.min(20, this.wreckX)), -42);
+        if (debugParam()?.endsWith('x')) kyrie.hp = 60;
+        this.boss = kyrie;
+        this.bossCineT = 0;
+        this.bossPhase = 1;
+        this.bossEngaged = false;
+        hud.bossName = `${form2.name} ── ${form2.tag}`;
+        hud.bossClass = form2.classLine;
+        hud.bossCardT = 0;
+        hud.bossMax = kyrie.maxHp;
+        hud.bossHp = kyrie.maxHp;
+        music(form2.music, { fade: 1.6 });
+        sfx('warning', { gain: 0.35 });
+        sfx('seraph-choir');
+      }
+    }
+
+    // OPHANIM duet bar: the pair shares one fate, so one bar serves both.
+    {
+      let duet: Enemy | null = null;
+      for (const e of this.enemies) {
+        if (e.kind === 'ophanim') duet = e;
+      }
+      if (duet) {
+        hud.duetName = 'OPHANIM ── 輪環級敵性ギア';
+        hud.duetMax = duet.maxHp;
+        hud.duetHp = Math.max(0, duet.hp);
+      } else {
+        hud.duetMax = 0;
+      }
     }
 
     // Chain window drains in sim time (hitstop freezes it with the action).
@@ -677,6 +820,11 @@ export class GameScene extends Scene {
           setPhase('failed');
           music('failed', { loop: false });
           vo('op-failed', { queue: true });
+        } else if (this.level.finale) {
+          // Hold the silence: two full seconds of nothing before the clear
+          // jingle — the campaign's last sting is the song NOT being there.
+          setPhase('complete');
+          this.after(2000, () => music('clear', { loop: false }));
         } else {
           setPhase('complete');
           music('clear', { loop: false });
@@ -806,6 +954,50 @@ export class GameScene extends Scene {
         s.fx.explode(e.x, e.y, 1.2);
         sfx('mortar-boom', { jitter: true, throttleMs: 100 });
       }
+      if (e.ai.evSpin) {
+        e.ai.evSpin = 0;
+        this.stop(HITSTOP.bossPhase);
+        s.addShake(0.7);
+        s.addPunch(0.4);
+        s.impact(0.008, 0.24, 0xffd98a);
+        s.fx.nova(0, -12, 0xffd98a, 0xfff2cc);
+        sfx('ring-spin');
+        hud.phaseBanner = 'INTERLOCK ── 輪唱';
+        hud.phaseBannerT = 1.8;
+      }
+      if (e.ai.evHymn) {
+        e.ai.evHymn = 0;
+        this.stop(HITSTOP.bossPhase);
+        s.addShake(0.9);
+        s.impact(0.01, 0.32, 0xffd98a);
+        s.fx.nova(e.x, e.y, 0xffd98a, 0xfff2cc);
+        sfx('choir-swell');
+        hud.phaseBanner = 'THE FINAL HYMN ── 終焉の聖歌';
+        hud.phaseBannerT = 2.2;
+        say('OPERATOR // It is pouring everything into one final hymn! Two gaps in the score — hold the quiet lanes, pilot!', 'op4-hymn');
+      }
+      if (e.ai.evLaunch) {
+        // A living bay grows two more wings. Capped so the swarm pressures
+        // the bay-first strategy without walling the screen.
+        const bay = e.ai.evLaunch - 1;
+        e.ai.evLaunch = 0;
+        let cherubs = 0;
+        for (const other of this.enemies) {
+          if (other.kind === 'cherub') cherubs++;
+        }
+        const anchors = e.gear.root.userData.bayAnchors as Object3D[] | undefined;
+        if (cherubs < 6 && anchors) {
+          e.gear.root.position.set(e.x, 0, e.y);
+          const a = Math.atan2(this.p.y - e.y, this.p.x - e.x);
+          e.gear.root.rotation.y = Math.atan2(Math.cos(a), Math.sin(a));
+          const at = objectArenaPos(anchors[bay]);
+          for (const off of [-1.6, 1.6]) {
+            this.spawn('cherub', at.x + off, at.y + 1.5, Math.random() * 10);
+          }
+          s.fx.spark(at.x, at.y);
+          sfx('seraph-dash', { jitter: true, throttleMs: 200 });
+        }
+      }
 
       // Pylons sink back under the deck when their life runs out.
       if (e.ai.despawn) {
@@ -879,8 +1071,45 @@ export class GameScene extends Scene {
       for (let i = this.pb.length - 1; i >= 0; i--) {
         const b = this.pb[i];
         for (const e of this.enemies) {
-          const isBoss = e.kind === 'boss' || e.kind === 'seraph' || e.kind === 'cerberus';
+          const isBoss = isBossKind(e.kind);
           if (isBoss && e.ai.state === 0) continue; // entrance armour
+          if (e.kind === 'magnificat') {
+            // Part-targeted: bays are break zones, the hull soaks the rest.
+            const part = this.magnificatPartHit(e, b.x, b.y, b.r);
+            if (part === null) continue;
+            this.pb.splice(i, 1);
+            e.hp -= 1;
+            Stage3D.I.fx.spark(b.x, b.y);
+            if (part >= 0) {
+              const key = `b${part}`;
+              if (e.ai[key] > 0) {
+                e.ai[key] -= 1;
+                if (e.ai[key] <= 0) this.breakMagnificatBay(e, part);
+              }
+            }
+            if (e.hp > 0 && e.flashT <= -FLASH_GAP) e.flashT = FLASH_DUR;
+            if (e.hp <= 0) this.killEnemy(e);
+            break;
+          }
+          if (e.kind === 'ophanim') {
+            // Linked fate: a hit on either wheel drains both. The pair dies
+            // as one — the duet does not survive a solo.
+            const rr = e.hitR + b.r;
+            const dx = e.x - b.x;
+            const dy = e.y - b.y;
+            if (dx * dx + dy * dy >= rr * rr) continue;
+            this.pb.splice(i, 1);
+            Stage3D.I.fx.spark(b.x, b.y);
+            const rings = this.enemies.filter((o) => o.kind === 'ophanim');
+            for (const o of rings) {
+              o.hp -= 1;
+              if (o.hp > 0 && o.flashT <= -FLASH_GAP) o.flashT = FLASH_DUR;
+            }
+            if (e.hp <= 0) {
+              for (const o of rings) this.killEnemy(o);
+            }
+            break;
+          }
           if (e.kind === 'cerberus') {
             // Part-targeted: heads are break zones, the hull soaks the rest.
             const part = this.cerberusPartHit(e, b.x, b.y, b.r);
@@ -952,6 +1181,13 @@ export class GameScene extends Scene {
         }
         continue;
       }
+      if (e.kind === 'magnificat') {
+        if (e.ai.state !== 0 && this.magnificatPartHit(e, p.x, p.y, this.stats.hitR + 0.4) !== null) {
+          this.hitPlayer();
+          return;
+        }
+        continue;
+      }
       const rr = e.hitR + this.stats.hitR + 0.4;
       const dx = p.x - e.x;
       const dy = p.y - e.y;
@@ -1017,6 +1253,59 @@ export class GameScene extends Scene {
     // The existing phase watcher slams the banner: ai.phase = 1 + broken.
   }
 
+  /**
+   * MAGNIFICAT hit test. Returns the bay index (0/1) for a bay strike, -1
+   * for a hull strike, null for a miss. Bay zones are projected along the
+   * camera line (objectArenaPos) so hits land where the player SEES them —
+   * the same plumbing as the CERBERUS heads.
+   */
+  private magnificatPartHit(e: Enemy, x: number, y: number, r: number): number | null {
+    const g = e.gear;
+    g.root.position.set(e.x, 0, e.y);
+    const a = Math.atan2(this.p.y - e.y, this.p.x - e.x);
+    g.root.rotation.y = Math.atan2(Math.cos(a), Math.sin(a));
+    const anchors = g.root.userData.bayAnchors as Object3D[] | undefined;
+    if (anchors) {
+      for (let ix = 0; ix < anchors.length; ix++) {
+        if (e.ai[`b${ix}`] <= 0) continue; // burned-out bays are dead stone
+        const bp = objectArenaPos(anchors[ix]);
+        const br = 2.6 + r;
+        if ((bp.x - x) ** 2 + (bp.y - y) ** 2 < br * br) return ix;
+      }
+    }
+    // Hull: nave prow + main mass along the facing axis.
+    const fx = Math.cos(a);
+    const fy = Math.sin(a);
+    for (const [off, cr] of [[3.6, 3.6], [-1.2, 5.4]] as [number, number][]) {
+      const cx = e.x + fx * off;
+      const cy = e.y + fy * off;
+      const rr = cr + r;
+      if ((cx - x) ** 2 + (cy - y) ** 2 < rr * rr) return -1;
+    }
+    return null;
+  }
+
+  /** A launch bay's meter emptied: part-death beat — no more wings grow. */
+  private breakMagnificatBay(e: Enemy, ix: number): void {
+    const setDead = e.gear.root.userData.setBayDead as ((i: number) => void) | undefined;
+    setDead?.(ix);
+    const anchors = e.gear.root.userData.bayAnchors as Object3D[] | undefined;
+    const at = anchors ? objectArenaPos(anchors[ix]) : { x: e.x, y: e.y };
+    const s = Stage3D.I;
+    s.fx.explode(at.x, at.y, 1.5);
+    for (let i = 0; i < 8; i++) {
+      s.fx.spark(at.x + (Math.random() - 0.5) * 3, at.y + (Math.random() - 0.5) * 2.5);
+    }
+    s.addShake(0.7);
+    s.addPunch(0.4);
+    s.impact(0.008, 0.2, 0xffd98a);
+    this.stop(HITSTOP.bossPhase);
+    e.flashT = 0.3;
+    sfx('expl-big');
+    hud.phaseBanner = 'LAUNCH BAY DOWN ── 翼の炉、沈黙';
+    hud.phaseBannerT = 1.8;
+  }
+
   private killEnemy(e: Enemy): void {
     const ix = this.enemies.indexOf(e);
     if (ix < 0) return;
@@ -1036,11 +1325,12 @@ export class GameScene extends Scene {
 
     const s = Stage3D.I;
     const ui = s.uiPoint(e.x, e.y);
-    const isBoss = e.kind === 'boss' || e.kind === 'seraph' || e.kind === 'cerberus';
-    if (isBoss) {
+    const isBoss = isBossKind(e.kind);
+    if (isBoss || e.kind === 'ophanim') {
       addPopup(ui.x, ui.y - 20, `+${pts}`, '#ffffff', 30);
     } else {
-      const small = e.kind === 'husk' || e.kind === 'dart' || e.kind === 'sentinel';
+      const small =
+        e.kind === 'husk' || e.kind === 'dart' || e.kind === 'sentinel' || e.kind === 'cherub';
       addPopup(ui.x, ui.y - 14, `+${pts}`, mult > 1 ? '#7ffbff' : '#ffb54a', small ? 15 : 19);
     }
     if (mult > prevMult) {
@@ -1065,12 +1355,57 @@ export class GameScene extends Scene {
         });
       }
       this.eb.length = 0; // mercy-clear the screen
-      this.endT = 1.9;
-      say(this.level.boss.killSay(this.callsign), this.level.boss.killVo);
-      sfx('expl-boss');
+      const form2 = this.level.boss.form2;
+      if (e.kind === 'magnificat' && form2) {
+        // The fake-out. Everything a real kill would do — the chained
+        // blasts, the "confirmed kill" beginning on comms — except the
+        // wrap-up never comes: the finale timeline takes over from here.
+        this.finaleStage = 1;
+        this.finaleT = 0;
+        this.wreckX = e.x;
+        this.wreckY = e.y;
+        hud.bossMax = 0; // the bar dies with the "kill"
+        say(form2.fakeKillSay, form2.fakeKillVo);
+        sfx('expl-boss');
+      } else if (e.kind === 'kyrie' && this.level.finale) {
+        // The song ends mid-note. No fanfare here — the silence IS the
+        // victory sting; the clear jingle waits two full seconds (endT
+        // flow), and the ending card holds the quiet.
+        music(null, { fade: 0.15 });
+        this.endT = 2.1;
+        say(this.level.boss.form2?.killSay(this.callsign) ?? '', this.level.boss.form2?.killVo);
+        sfx('expl-boss');
+      } else {
+        this.endT = 1.9;
+        say(this.level.boss.killSay(this.callsign), this.level.boss.killVo);
+        sfx('expl-boss');
+      }
+    } else if (e.kind === 'ophanim') {
+      // Mid-boss beat: half the duet falling silent — big, but the sortie
+      // continues. Both wheels come through here back to back.
+      s.fx.explode(e.x, e.y, 2.0);
+      s.fx.nova(e.x, e.y, 0xffd98a, 0xfff2cc);
+      for (let i = 0; i < 8; i++) {
+        s.fx.spark(e.x + (Math.random() - 0.5) * 6, e.y + (Math.random() - 0.5) * 4);
+      }
+      s.addShake(0.9);
+      s.addPunch(0.5);
+      s.impact(0.009, 0.24, 0xffd98a);
+      this.stop(HITSTOP.bossPhase);
+      sfx('expl-big');
+      // The whole duet is down — the operator marks the turn toward the void.
+      if (!this.enemies.some((o) => o.kind === 'ophanim') && this.level.duet) {
+        say(this.level.duet.killSay, this.level.duet.killVo);
+      }
     } else {
-      // Heavies (lancer / mortar / kai) get the big shredding; grunts pop.
-      const heavy = e.kind === 'lancer' || e.kind === 'mortar' || e.kind === 'kai';
+      // Heavies (lancer / mortar / kai / psalm / grigori) get the big
+      // shredding; grunts pop.
+      const heavy =
+        e.kind === 'lancer' ||
+        e.kind === 'mortar' ||
+        e.kind === 'kai' ||
+        e.kind === 'psalm' ||
+        e.kind === 'grigori';
       s.fx.explode(e.x, e.y, heavy ? 1.5 : 1);
       for (let i = 0; i < (heavy ? 10 : 5); i++) {
         s.fx.spark(
@@ -1118,6 +1453,9 @@ export class GameScene extends Scene {
   }
 
   private hitPlayer(): void {
+    // Dev-only: a trailing g (?debug=battle4g) flies the survey run
+    // invulnerable so full-mission visuals can be tuned hands-off.
+    if (debugParam()?.endsWith('g')) return;
     const p = this.p;
     hud.armor -= 1;
     hud.flashT = 0.45;

@@ -70,6 +70,12 @@ export const SCORE = {
   shade: 400,
   pylon: 500,
   cerberus: 20000,
+  cherub: 150,
+  psalm: 550,
+  grigori: 3000,
+  ophanim: 6000,
+  magnificat: 20000,
+  kyrie: 30000,
 };
 
 /** Kill-chain scoring: kills inside `window` seconds keep the chain alive;

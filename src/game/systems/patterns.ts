@@ -74,6 +74,40 @@ export function lob(
   });
 }
 
+/**
+ * A ring with singable gaps: n bullets evenly around the circle, skipping
+ * any within `gapHalf` radians of a gap centre. Emitted repeatedly with a
+ * drifting gap it builds the rotating cage — the OPHANIM set piece, quoted
+ * again by KYRIE's final hymn.
+ */
+export function cage(
+  arr: Bullet[],
+  x: number,
+  y: number,
+  n: number,
+  speed: number,
+  kind: BK,
+  gapCentres: number[],
+  gapHalf: number,
+  offset = 0,
+): void {
+  const TAU = Math.PI * 2;
+  for (let i = 0; i < n; i++) {
+    const a = offset + (i / n) * TAU;
+    let inGap = false;
+    for (const g of gapCentres) {
+      let d = (a - g) % TAU;
+      if (d > Math.PI) d -= TAU;
+      if (d < -Math.PI) d += TAU;
+      if (Math.abs(d) < gapHalf) {
+        inGap = true;
+        break;
+      }
+    }
+    if (!inGap) emit(arr, x, y, a, speed, kind);
+  }
+}
+
 /** n bullets fanned across `spread` radians, centred on `ang`. */
 export function fan(
   arr: Bullet[],

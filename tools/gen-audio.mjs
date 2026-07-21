@@ -97,6 +97,30 @@ const MUSIC = [
       'Late-90s console giant-machine boss theme: relentless hunting percussion with a tom-heavy galloping rhythm, low brass-like synth stabs, snarling distorted bass, a driving aggressive lead motif over mechanical clank accents. A colossal three-headed war machine running down its prey through city rain — primal menace with unstoppable momentum, clearly rhythmic. Instrumental, seamless loop.',
   },
   {
+    id: 'battle4',
+    ms: 120_000,
+    prompt:
+      'Late-90s Japanese console combat theme, final-mission garden variation: sparse and hymn-like — slow luminous pads like distant glass organ, a fragile music-box melodic motif, a quiet steady sequenced pulse far behind, faint wordless choir-like synth breaths drifting in and out. Fighting through a silent white orbital garden where war machines are grown — sacred, beautiful, wrong; the quietest combat track in the game, hushed but never stopping. Instrumental, seamless loop.',
+  },
+  {
+    id: 'ophanim',
+    ms: 100_000,
+    prompt:
+      'Late-90s console twin-boss theme: two interleaved melodic synth voices in strict call-and-response counterpoint over a driving measured pulse, rotating arpeggios that circle each other, bright bell accents, dark rolling bass. Two great ringed war machines singing a duet as they spin a cage of light — hypnotic, mathematical, relentless forward motion. Instrumental, seamless loop.',
+  },
+  {
+    id: 'magnificat',
+    ms: 100_000,
+    prompt:
+      'Late-90s console cathedral-boss theme: a massive organ-like synth wall in slow crushing chords, deep war-drum pulse, low choir-like synth voices in sustained harmony, a grim ascending motif that quotes a fortress-battle groove at twice the weight, metallic cathedral-bell strikes. A cathedral-class mothership answering the song — overwhelming sacred dread with a heavy measured groove, loud and oppressive, never a static drone. Instrumental, seamless loop.',
+  },
+  {
+    id: 'kyrie',
+    ms: 110_000,
+    prompt:
+      'Late-90s console true-final-boss theme: the song itself finally foregrounded — soaring ethereal wordless choir-like synth voices carrying a beautiful tragic melody at full combat tempo, driving sequenced drums and urgent rolling bass underneath, shimmering arpeggios, moments where the choir lifts alone above the rhythm before the drums crash back. The first voice, the thing that taught machines to sing, fighting for its life — transcendent, heartbreaking, propulsive. Instrumental, seamless loop.',
+  },
+  {
     id: 'clear',
     ms: 18_000,
     prompt:
@@ -142,6 +166,9 @@ const SFX = [
   { id: 'hound-howl', dur: 3.0, text: 'Colossal mechanical war-horn roar, distorted klaxon bellow of a giant war machine announcing itself, terrifying, echoing over a city' },
   { id: 'hound-rage', dur: 1.6, text: 'Furious grinding servo roar burst, giant mech damage bellow with metal shriek, aggressive, punchy' },
   { id: 'hound-lunge', dur: 0.8, text: 'Massive mech charge launch: hydraulic release clunk then thundering acceleration whoosh, short, powerful' },
+  { id: 'choir-swell', dur: 4.0, text: 'Enormous angelic choir swell rising from silence to an overwhelming radiant sacred chord, awe and terror, wordless voices blooming outward, smooth, no harsh highs' },
+  { id: 'ring-spin', dur: 2.2, text: 'Two huge metallic rings spinning up and interlocking, accelerating gyroscope whir with deep resonant hum and a heavy clunk as they lock together, mechanical, smooth' },
+  { id: 'hull-crack', dur: 2.6, text: 'Colossal metal hull splitting open: deep groaning stressed-metal shear, cascading structural cracks, then a vast hollow boom, slow and massive, no piercing highs' },
 ];
 
 // [bracket] cues shape eleven_v3 delivery. kind selects the finishing chain:
@@ -179,6 +206,21 @@ const VO = [
   { id: 'op3-stragglers', v: 'operator', kind: 'op', text: 'Sweep the stragglers. [pause] [unnerved] Something big is moving under the smog. On all fours.' },
   { id: 'op3-cerberus', v: 'operator', kind: 'op', text: '[alarmed] Ground contact. Hound-class walker — three heads. [steady] It hunts in kill order, pilot. Choose yours.' },
   { id: 'op3-cerberus-kill', v: 'operator', kind: 'op', text: 'Confirmed kill. [relieved] The pack is down. The capital holds — bring your gear home.' },
+
+  // Mission 04 — Evensong.
+  { id: 'op4-mission-start', v: 'operator', kind: 'op', tempo: 1.1, text: 'Mission four. Evensong. We triangulated the song — it leads off every map we have. The garrison commits everything. Finish this, pilot.' },
+  { id: 'op4-garden', v: 'operator', kind: 'op', text: '[hushed] Contact... it is a garden. Those gantries are growing seraph frames. [quiet] Weapons free. Quietly.' },
+  { id: 'op4-cherub', v: 'operator', kind: 'op', text: '[hushed] Small wings, in swarms. Cherub-types — they dive in turns. Watch your spacing.' },
+  { id: 'op4-psalm', v: 'operator', kind: 'op', text: '[hushed] Singing pillars ahead. The curtains weave — walk the corridors, do not fight them.' },
+  { id: 'op4-grigori', v: 'operator', kind: 'op', text: '[unsettled] A grey seraph frame... half-grown. It fights like the one over the wake. [quiet] They are made, pilot. They were always made.' },
+  { id: 'op4-ophanim', v: 'operator', kind: 'op', text: '[alarmed] Two ring-class contacts — wheels of blades, singing to each other. [steady] It is a duet. Break the harmony.' },
+  { id: 'op4-ophanim-kill', v: 'operator', kind: 'op', text: 'Rings down. [quiet] The garden is dying, pilot... the petals are burning gold. Something beyond the redline is pulling them home.' },
+  { id: 'op4-cathedral', v: 'operator', kind: 'op', text: '[hushed] Reading one contact ahead. [unnerved] Pilot... that is not a ship. That is a cathedral. And it is listening.' },
+  { id: 'op4-magnificat', v: 'operator', kind: 'op', text: '[alarmed] Cathedral-class hostile. Its launch bays are still growing wings — burn the bays first. [steady] Everything we have, pilot. Now.' },
+  { id: 'op4-fakeout', v: 'operator', kind: 'op', text: 'Confirmed kill. Cathedral down. [relieved] The song is— [alarmed] pilot. Pilot, the song is getting louder—' },
+  { id: 'op4-kyrie', v: 'operator', kind: 'op', text: '[awed, quiet] The wreck is opening. That light... that is the listener. The first voice — the thing that taught them to sing. [steady] End the song, pilot.' },
+  { id: 'op4-hymn', v: 'operator', kind: 'op', text: '[urgent] It is pouring everything into one final hymn! Two gaps in the score — hold the quiet lanes, pilot!' },
+  { id: 'op4-kyrie-kill', v: 'operator', kind: 'op', text: '[long pause] ...Silence. Confirmed. The song has ended. [gentle] Come home, pilot. Come home.' },
 
   { id: 'kira-select', v: 'kira', kind: 'pilot', tempo: 1.15, text: 'Checklist done. Launching.' },
   { id: 'kira-launch', v: 'kira', kind: 'pilot', tempo: 1.15, text: 'Valkyr, taking the rail. [exhales] Steady... go.' },

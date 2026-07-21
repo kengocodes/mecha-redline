@@ -56,10 +56,16 @@ export class BootScene extends Scene {
     this.scene.launch('hud');
     // Dev-only: ?debug=battle|boss[N] skips the title (stripped in
     // production); a trailing digit jumps to that mission (battle3, boss2…).
+    // Suffixes: x (boss4x) softens boss hp to reach end-flows fast, g
+    // (battle4g) flies invulnerable for visual survey runs.
+    // ?debug=ending jumps to Mission 04's staff-roll card.
     const dbg = debugParam();
-    const m = dbg?.match(/^(battle|boss)(\d?)$/);
+    const m = dbg?.match(/^(battle|boss)(\d?)[gx]?$/);
     if (m) {
       selectLevel(m[2] ? Number.parseInt(m[2], 10) - 1 : 0);
+      this.scene.start('game');
+    } else if (dbg === 'ending') {
+      selectLevel(3);
       this.scene.start('game');
     } else {
       setPhase('title');

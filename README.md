@@ -125,8 +125,10 @@ Title art lives in `public/branding/` (galaxy plate + magenta-keyed logo).
 
 Available with `npm run dev`. Production builds ignore these.
 
-- `?debug=battleN` (battle, battle2, battle3) — skip the title, start Mission N.
-- `?debug=bossN` (boss, boss2, boss3) — jump straight to that mission's boss.
+- `?debug=battleN` (battle, battle2, battle3, battle4) — skip the title, start Mission N.
+- `?debug=bossN` (boss, boss2, boss3, boss4) — jump straight to that mission's boss.
+- `?debug=boss4x` — Mission 04 boss with softened HP (fake-out → Kyrie → ending).
+- `?debug=ending` — jump straight to Mission 04's staff-roll ending card.
 
 ## Not yet in this MVP
 
