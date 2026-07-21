@@ -87,6 +87,7 @@ src/
     input.ts              raw keyboard/pointer, UI-space pointer mapping
   render/
     stage3d.ts            camera, lights, plain base deck, arena border, aim raycast
+    backdrops/            per-level environments (space.ts — layered starfield)
     gearFactory.ts        procedural low-poly mecha + unit palettes
     bullets3d.ts          instanced bullet pools
     fx3d.ts               instanced explosions + hit sparks
@@ -106,7 +107,9 @@ src/
       overlay.ts          all 2D HUD drawing
       titleArt.ts         chroma-keyed title logo
     levels/
-      level1.ts           Mission 01 spawn script
+      types.ts            LevelDef contract — script, boss card, mission copy
+      index.ts            mission registry + current-level selection
+      level1.ts           Mission 01 — Sector 7 Perimeter
 ```
 
 Title art lives in `public/branding/` (galaxy plate + magenta-keyed logo).

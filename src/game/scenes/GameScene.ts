@@ -50,7 +50,7 @@ import {
   makeEnemy,
   updateEnemy,
 } from '../entities/enemies';
-import { BOSS_NAME, BOSS_TAG, LEVEL1 } from '../levels/level1';
+import { currentLevel, type LevelDef } from '../levels';
 import {
   BURST,
   createBurstState,
@@ -84,6 +84,7 @@ export class GameScene extends Phaser.Scene {
   private pGear!: Gear;
   private stats: PilotStats = ROSTER[0].stats;
   private callsign = ROSTER[0].displayName;
+  private level: LevelDef = currentLevel();
   private enemies: Enemy[] = [];
   private eb: Bullet[] = []; // enemy bullets
   private pb: Bullet[] = []; // player bullets
@@ -112,6 +113,7 @@ export class GameScene extends Phaser.Scene {
     s.clearBattle();
     s.setMode('battle');
 
+    this.level = currentLevel();
     this.p = {
       x: PLAYER.startX,
       y: PLAYER.startY,
@@ -176,7 +178,7 @@ export class GameScene extends Phaser.Scene {
 
     // Dev-only: ?debug=boss jumps straight to the fortress fight.
     if (debugParam() === 'boss') {
-      this.scriptIx = LEVEL1.length;
+      this.scriptIx = this.level.events.length;
       this.levelT = 999;
       setPhase('warning');
       // Mirror the real battle→warning transition or the fight runs silent.
@@ -397,14 +399,15 @@ export class GameScene extends Phaser.Scene {
     if (hud.phase === 'battle' || hud.phase === 'boss') this.levelT += dt;
 
     if (hud.phase === 'battle') {
-      while (this.scriptIx < LEVEL1.length && LEVEL1[this.scriptIx].at <= this.levelT) {
-        LEVEL1[this.scriptIx].run(this.api);
+      const script = this.level.events;
+      while (this.scriptIx < script.length && script[this.scriptIx].at <= this.levelT) {
+        script[this.scriptIx].run(this.api);
         this.scriptIx++;
       }
-      if (this.scriptIx >= LEVEL1.length && this.enemies.length === 0 && this.p.alive) {
+      if (this.scriptIx >= script.length && this.enemies.length === 0 && this.p.alive) {
         setPhase('warning');
         this.eb.length = 0; // stage is clear for the reveal — no stray fire
-        say('OPERATOR // Fortress-class contact. That is a Golgotha. Good luck, pilot.', 'op-warning');
+        say(this.level.boss.warnSay, this.level.boss.warnVo);
         sfx('warning');
         music('boss', { fade: 1.4 });
       }
@@ -412,7 +415,7 @@ export class GameScene extends Phaser.Scene {
       setPhase('boss');
       this.boss = this.spawn('boss', 0, -44);
       this.bossCineT = 0;
-      hud.bossName = `${BOSS_NAME} ── ${BOSS_TAG}`;
+      hud.bossName = `${this.level.boss.name} ── ${this.level.boss.tag}`;
       hud.bossMax = this.boss.maxHp;
       hud.bossHp = this.boss.maxHp;
     }
@@ -673,10 +676,7 @@ export class GameScene extends Phaser.Scene {
       }
       this.eb.length = 0; // mercy-clear the screen
       this.endT = 1.9;
-      say(
-        `OPERATOR // Confirmed kill. Sector 7 holds. Bring the ${this.callsign} home.`,
-        'op-boss-kill',
-      );
+      say(this.level.boss.killSay(this.callsign), this.level.boss.killVo);
       sfx('expl-boss');
     } else {
       const lancer = e.kind === 'lancer';

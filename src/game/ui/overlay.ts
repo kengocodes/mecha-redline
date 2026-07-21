@@ -12,6 +12,7 @@ import {
   uiH,
   uiW,
 } from "../../core/uiSize";
+import { currentLevel } from "../levels";
 import { ROSTER, selectedPilot } from "../roster";
 import { getPilotArt } from "./pilotArt";
 import { attract, hud, LAUNCH_T, popups, sel, settingsUi } from "./state";
@@ -1013,12 +1014,13 @@ function drawPhaseBanner(g: Ctx): void {
 }
 
 function drawMission(g: Ctx): void {
+  const lvl = currentLevel();
   panel(g, uiW - 284, 20, 260, 64);
-  tx(g, "MISSION 01 ── SECTOR 7", uiW - 40, 40, 13, DIM, "right", 2);
+  tx(g, `MISSION ${lvl.missionNo} ── ${lvl.hudTag}`, uiW - 40, 40, 13, DIM, "right", 2);
   const inBoss = hud.bossMax > 0; // stays true through the boss end cards
   const label = inBoss
-    ? "TARGET: GOLGOTHA"
-    : `WAVE ${String(hud.wave).padStart(2, "0")} / 06`;
+    ? `TARGET: ${lvl.boss.name}`
+    : `WAVE ${String(hud.wave).padStart(2, "0")} / ${String(lvl.waveCount).padStart(2, "0")}`;
   tx(g, label, uiW - 40, 66, 20, inBoss ? RED : CYAN, "right", 2);
 }
 
@@ -1180,7 +1182,7 @@ function drawWarning(g: Ctx, t: number): void {
   tx(g, "WARNING", uiW / 2, 358, 76, RED, "center", 22);
   tx(g, "警告", uiW / 2 + 330, 360, 46, RED, "center", 8);
   g.globalAlpha = 1;
-  tx(g, "FORTRESS-CLASS GEAR ON APPROACH", uiW / 2, 424, 16, FG, "center", 6);
+  tx(g, currentLevel().boss.approachLine, uiW / 2, 424, 16, FG, "center", 6);
 }
 
 function drawIntro(g: Ctx, t: number): void {
@@ -1188,12 +1190,13 @@ function drawIntro(g: Ctx, t: number): void {
   const a =
     Math.min(1, Math.max(0, (t - 1.3) / 0.4)) *
     (t > 3.0 ? Math.max(0, 1 - (t - 3.0) / 0.6) : 1);
+  const lvl = currentLevel();
   g.globalAlpha = a;
-  tx(g, "MISSION 01", uiW / 2, 292, 56, FG, "center", 14);
+  tx(g, `MISSION ${lvl.missionNo}`, uiW / 2, 292, 56, FG, "center", 14);
   rule(g, uiW / 2 - 250, 330, 500, RED);
   tx(
     g,
-    "SECTOR 7 PERIMETER ── 第七区画防衛線",
+    `${lvl.title} ── ${lvl.titleJa}`,
     uiW / 2,
     366,
     22,
@@ -1201,7 +1204,7 @@ function drawIntro(g: Ctx, t: number): void {
     "center",
     4,
   );
-  tx(g, "DESTROY ALL HOSTILE GEARS", uiW / 2, 404, 15, DIM, "center", 5);
+  tx(g, lvl.objective, uiW / 2, 404, 15, DIM, "center", 5);
   const p = selectedPilot();
   tx(
     g,

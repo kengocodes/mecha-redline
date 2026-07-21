@@ -1,19 +1,7 @@
 // Mission 01 — Sector 7 Perimeter. A timed spawn script; once it runs dry
 // and the field is clear, GameScene triggers the WARNING card and the boss.
 
-export interface LevelApi {
-  husk(x: number, y?: number, seed?: number): void;
-  lancer(x: number, y?: number): void;
-  say(text: string, voId?: string): void;
-  wave(n: number): void;
-  /** Selected gear's display name, for operator chatter. */
-  callsign: string;
-}
-
-export interface LevelEvent {
-  at: number;
-  run: (g: LevelApi) => void;
-}
+import type { LevelApi, LevelDef, LevelEvent } from './types';
 
 function build(): LevelEvent[] {
   const ev: LevelEvent[] = [];
@@ -84,7 +72,23 @@ function build(): LevelEvent[] {
   return ev.sort((a, b) => a.at - b.at);
 }
 
-export const LEVEL1 = build();
-
-export const BOSS_NAME = 'GOLGOTHA';
-export const BOSS_TAG = '要塞級敵性ギア'; // "fortress-class hostile gear"
+export const LEVEL_1: LevelDef = {
+  id: 'sector7',
+  missionNo: '01',
+  title: 'SECTOR 7 PERIMETER',
+  titleJa: '第七区画防衛線',
+  hudTag: 'SECTOR 7',
+  objective: 'DESTROY ALL HOSTILE GEARS',
+  waveCount: 6,
+  events: build(),
+  boss: {
+    name: 'GOLGOTHA',
+    tag: '要塞級敵性ギア', // "fortress-class hostile gear"
+    approachLine: 'FORTRESS-CLASS GEAR ON APPROACH',
+    warnSay: 'OPERATOR // Fortress-class contact. That is a Golgotha. Good luck, pilot.',
+    warnVo: 'op-warning',
+    killSay: (callsign) =>
+      `OPERATOR // Confirmed kill. Sector 7 holds. Bring the ${callsign} home.`,
+    killVo: 'op-boss-kill',
+  },
+};

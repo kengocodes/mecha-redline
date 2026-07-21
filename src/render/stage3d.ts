@@ -9,7 +9,7 @@ import { Bullets3D } from './bullets3d';
 import { Fx3D } from './fx3d';
 import { disposeGear } from './gearFactory';
 import { HangarShowcase } from './hangarShowcase';
-import { SpaceBackdrop } from './spaceBackdrop';
+import { SpaceBackdrop } from './backdrops/space';
 
 const CAM_DIST = 100;
 const VOID = 0x02050c;
