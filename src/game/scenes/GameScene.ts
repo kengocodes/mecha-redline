@@ -53,6 +53,7 @@ import {
 } from '../systems/burst';
 import { emit } from '../systems/patterns';
 import { hud, say, setPhase } from '../ui/state';
+import { startWipe } from '../ui/wipe';
 
 /** Real-time freeze frames on impact moments, seconds. */
 const HITSTOP = {
@@ -185,11 +186,11 @@ export class GameScene extends Phaser.Scene {
 
     // End-state input.
     if (hud.phase === 'failed' && hud.t > 1 && takeTap()) {
-      this.scene.restart();
+      startWipe(() => this.scene.restart());
       return;
     }
     if (hud.phase === 'complete' && hud.t > 2 && takeTap()) {
-      this.scene.start('title');
+      startWipe(() => this.scene.start('title'));
       return;
     }
 

@@ -12,6 +12,54 @@ import { SpaceBackdrop } from './spaceBackdrop';
 const CAM_DIST = 100;
 const VOID = 0x02050c;
 
+// PS1 vertex snap: quantize every projected vertex to the internal pixel grid
+// so geometry subtly swims as it rotates. Appended to the shared chunk before
+// any material compiles, so gears, bullets, fx and dust all pick it up.
+THREE.ShaderChunk.project_vertex = `${THREE.ShaderChunk.project_vertex}
+gl_Position.xy = floor(gl_Position.xy / gl_Position.w * vec2(${RES_W / 2}.0, ${RES_H / 2}.0) + 0.5) / vec2(${RES_W / 2}.0, ${RES_H / 2}.0) * gl_Position.w;
+`;
+
+// Full-screen finishing pass: the scene renders linear into a low-res target,
+// then this shader plays PS1 framebuffer (sRGB encode, ordered dither, 15-bit
+// crush) and CRT glass (interlaced scanlines, slow rolling band) over it.
+const POST_VERT = `
+varying vec2 vUv;
+void main() {
+  vUv = uv;
+  gl_Position = vec4(position.xy, 0.0, 1.0);
+}
+`;
+
+const POST_FRAG = `
+uniform sampler2D tSrc;
+uniform float uTime;
+uniform float uParity;
+varying vec2 vUv;
+
+vec3 srgb(vec3 c) {
+  return mix(c * 12.92, 1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055, step(vec3(0.0031308), c));
+}
+
+void main() {
+  vec3 c = srgb(texture2D(tSrc, vUv).rgb);
+
+  // 4x4 Bayer ordered dither, then crush to 15-bit colour (32 levels/channel).
+  const mat4 B = mat4(
+     0.0, 12.0,  3.0, 15.0,
+     8.0,  4.0, 11.0,  7.0,
+     2.0, 14.0,  1.0, 13.0,
+    10.0,  6.0,  9.0,  5.0) / 16.0;
+  ivec2 px = ivec2(mod(floor(gl_FragCoord.xy), 4.0));
+  c = floor(c * 31.0 + B[px.x][px.y]) / 31.0;
+
+  // CRT glass: faint interlaced scanlines + a slow rolling brightness band.
+  c *= 1.0 - 0.07 * mod(floor(gl_FragCoord.y) + uParity, 2.0);
+  c *= 1.0 + 0.02 * sin((vUv.y + uTime * 0.05) * 26.0);
+
+  gl_FragColor = vec4(c, 1.0);
+}
+`;
+
 export class Stage3D {
   static I: Stage3D;
 
@@ -25,15 +73,17 @@ export class Stage3D {
 
   private space!: SpaceBackdrop;
   private hangar!: HangarShowcase;
-  private arena!: THREE.Group;
-  private redlineMat!: THREE.MeshBasicMaterial;
-  private arenaT = 0;
   private shake = 0;
   private elev = (CAM_ELEV * Math.PI) / 180;
   private lookTarget = new THREE.Vector3(0, 0, 0);
   private ray = new THREE.Raycaster();
   private aimPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -2.2);
   private worldEl: HTMLCanvasElement;
+  private rt!: THREE.WebGLRenderTarget;
+  private postScene = new THREE.Scene();
+  private postCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+  private postMat!: THREE.ShaderMaterial;
+  private postT = 0;
 
   constructor(container: HTMLElement) {
     Stage3D.I = this;
@@ -56,7 +106,7 @@ export class Stage3D {
     this.scene.add(this.battleGroup);
 
     // Underlit base: dim cool ambient, steel key, cold rim, faint under-wash,
-    // weak red spill so the arena reads as the warm threat.
+    // weak red spill so the fight floor still reads as a warm threat.
     this.scene.add(new THREE.HemisphereLight(0x3a4a66, 0x0a0c12, 0.55));
     const key = new THREE.DirectionalLight(0xb8c8e0, 1.45);
     key.position.set(-30, 70, 40);
@@ -76,58 +126,24 @@ export class Stage3D {
     this.scene.add(this.space.group);
     this.hangar = new HangarShowcase();
     this.scene.add(this.hangar.group);
-    this.buildArena();
 
     this.bullets = new Bullets3D(this.scene);
     this.fx = new Fx3D(this.scene);
-  }
 
-  /**
-   * The battlefield floor: THE redline — a pulsing red perimeter marking the
-   * arena against the void.
-   */
-  private buildArena(): void {
-    this.arena = new THREE.Group();
-
-    const RL = 0xff3b53;
-    const X = 44.5; // just outside the player clamp (43 × 25)
-    const Y = 25.8;
-    // fog:false so the far edge (screen-top) doesn't wash into the void.
-    const matOpts = { color: RL, transparent: true, fog: false, depthWrite: false } as const;
-    this.redlineMat = new THREE.MeshBasicMaterial({ ...matOpts, opacity: 0.28 });
-    const dimMat = new THREE.MeshBasicMaterial({ ...matOpts, opacity: 0.1 });
-    const bar = (
-      mat: THREE.MeshBasicMaterial,
-      w: number,
-      d: number,
-      x: number,
-      z: number,
-    ): void => {
-      const m = new THREE.Mesh(new THREE.BoxGeometry(w, 0.04, d), mat);
-      m.position.set(x, 0.1, z);
-      m.renderOrder = 2;
-      this.arena.add(m);
-    };
-    // Inner frame (pulsing) + a still outer echo.
-    bar(this.redlineMat, X * 2, 0.22, 0, -Y);
-    bar(this.redlineMat, X * 2, 0.22, 0, Y);
-    bar(this.redlineMat, 0.22, Y * 2, -X, 0);
-    bar(this.redlineMat, 0.22, Y * 2, X, 0);
-    bar(dimMat, (X + 0.8) * 2, 0.14, 0, -Y - 0.8);
-    bar(dimMat, (X + 0.8) * 2, 0.14, 0, Y + 0.8);
-    bar(dimMat, 0.14, (Y + 0.8) * 2, -X - 0.8, 0);
-    bar(dimMat, 0.14, (Y + 0.8) * 2, X + 0.8, 0);
-    // Corner ticks — quiet accents, not chrome.
-    const cornerMat = new THREE.MeshBasicMaterial({ ...matOpts, opacity: 0.4 });
-    for (const sx of [-1, 1]) {
-      for (const sz of [-1, 1]) {
-        bar(cornerMat, 2.4, 0.28, sx * (X - 1.2), sz * Y);
-        bar(cornerMat, 0.28, 2.4, sx * X, sz * (Y - 1.2));
-      }
-    }
-
-    this.arena.visible = false;
-    this.scene.add(this.arena);
+    this.rt = new THREE.WebGLRenderTarget(RES_W, RES_H, {
+      minFilter: THREE.NearestFilter,
+      magFilter: THREE.NearestFilter,
+    });
+    this.postMat = new THREE.ShaderMaterial({
+      uniforms: { tSrc: { value: this.rt.texture }, uTime: { value: 0 }, uParity: { value: 0 } },
+      vertexShader: POST_VERT,
+      fragmentShader: POST_FRAG,
+      depthTest: false,
+      depthWrite: false,
+    });
+    const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), this.postMat);
+    quad.frustumCulled = false;
+    this.postScene.add(quad);
   }
 
   /**
@@ -142,7 +158,6 @@ export class Stage3D {
     this.lookTarget.set(0, showcase ? 5.4 : 0, showcase ? 2.6 : 0);
     this.camera.updateProjectionMatrix();
     this.hangar.group.visible = showcase;
-    this.arena.visible = !showcase;
     // Stars stay up on title — deep void behind the hangar set.
     this.space.group.visible = true;
     // Camera sits ~CAM_DIST (100) from the gear — fog must start past that
@@ -212,11 +227,15 @@ export class Stage3D {
 
     this.space.update(dt);
     this.hangar.update(dt);
-    if (this.arena.visible) {
-      this.arenaT += dt;
-      this.redlineMat.opacity = 0.22 + 0.08 * Math.sin(this.arenaT * 2.2);
-    }
     this.fx.update(dt);
+
+    // Scene → low-res target, then the PS1/CRT finishing pass to the canvas.
+    this.postT += dt;
+    this.postMat.uniforms.uTime.value = this.postT;
+    this.postMat.uniforms.uParity.value = 1 - this.postMat.uniforms.uParity.value;
+    this.renderer.setRenderTarget(this.rt);
     this.renderer.render(this.scene, this.camera);
+    this.renderer.setRenderTarget(null);
+    this.renderer.render(this.postScene, this.postCam);
   }
 }

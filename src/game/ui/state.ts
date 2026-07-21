@@ -63,12 +63,18 @@ export interface SelectState {
   hover: number; // pointer-hovered roster slot, -1 = none
   swapT: number; // seconds since the selection changed (drives glitch/type-on)
   confirmT: number; // -1 idle; >= 0 counts up through the launch sequence
+  timer: number; // coin-op select countdown; auto-confirms at zero
 }
 
-export const sel: SelectState = { ix: 0, hover: -1, swapT: 9, confirmT: -1 };
+export const sel: SelectState = { ix: 0, hover: -1, swapT: 9, confirmT: -1, timer: 35 };
 
 /** Title attract carousel: TitleScene advances it, the overlay paints it. */
 export const attract = { ix: 0, swapT: 9 };
+
+/** Launch cut-in length (confirm tap → fade to black), seconds. */
+export const LAUNCH_T = 1.15;
+/** Fake NOW LOADING dwell after the cut-in, before the mission starts. */
+export const LOAD_T = 1.7;
 
 export function setPhase(p: Phase): void {
   hud.phase = p;

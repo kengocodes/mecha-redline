@@ -168,11 +168,13 @@ export class HangarShowcase {
     this.t += dt;
 
     // Aura: slow breathing pulse, plus a bright flare that decays after swaps.
+    // Levels are set for the post pass, which sums additive layers in linear
+    // space — hotter than the old direct sRGB blend, so these sit low.
     this.flare = Math.max(0, this.flare - dt * 2.6);
     const pulse = 0.8 + 0.2 * Math.sin(this.t * 2.3);
-    this.pillarMat.opacity = 0.2 * pulse + 0.3 * this.flare;
-    this.discMat.opacity = 0.5 * pulse + 0.4 * this.flare;
-    this.glow.intensity = 0.9 + 1.5 * this.flare;
+    this.pillarMat.opacity = 0.1 * pulse + 0.16 * this.flare;
+    this.discMat.opacity = 0.28 * pulse + 0.22 * this.flare;
+    this.glow.intensity = 0.9 + 1.0 * this.flare;
     this.pillar.rotation.y += dt * 0.16;
     const pos = this.dust.geometry.getAttribute('position') as THREE.BufferAttribute;
     for (let i = 0; i < pos.count; i++) {

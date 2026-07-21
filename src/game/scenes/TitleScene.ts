@@ -7,6 +7,7 @@ import { animateGear, buildGear, type Gear, setGearFlash } from '../../render/ge
 import { Stage3D } from '../../render/stage3d';
 import { ROSTER } from '../roster';
 import { attract, hud, setPhase } from '../ui/state';
+import { startWipe } from '../ui/wipe';
 
 /** Seconds each roster gear holds the pad before the carousel advances. */
 const SWAP_EVERY = 7;
@@ -72,7 +73,7 @@ export class TitleScene extends Phaser.Scene {
     Stage3D.I.update(dt);
 
     if (hud.t > 0.5 && takeTap()) {
-      this.scene.start('select');
+      startWipe(() => this.scene.start('select'));
     }
   }
 }

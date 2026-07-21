@@ -8,13 +8,14 @@ import { animateGear, buildGear, type Gear, setGearFlash } from '../../render/ge
 import { Stage3D } from '../../render/stage3d';
 import { ROSTER, selectPilot, selectedPilot } from '../roster';
 import { selectSlotRect } from '../ui/overlay';
-import { hud, sel, setPhase } from '../ui/state';
-
-/** Seconds from confirm tap to mission start (overlay animates against this). */
-const LAUNCH_T = 1.15;
+import { hud, LAUNCH_T, LOAD_T, sel, setPhase } from '../ui/state';
+import { startWipe, wipeActive } from '../ui/wipe';
 
 /** Arrival pose: a slight three-quarter turn (rifle side), not dead-on. */
 const ARRIVE_YAW = 0.42;
+
+/** Coin-op select countdown, seconds; auto-confirms on expiry. */
+const SELECT_T = 35;
 
 export class SelectScene extends Phaser.Scene {
   private gear!: Gear;
@@ -33,8 +34,9 @@ export class SelectScene extends Phaser.Scene {
     clearTap();
     sel.ix = ROSTER.findIndex((p) => p.id === selectedPilot().id);
     sel.hover = -1;
-    sel.swapT = 9; // no glitch-in on entry
+    sel.swapT = 0; // run the spec-sheet fill on entry too
     sel.confirmT = -1;
+    sel.timer = SELECT_T;
     this.spawnGear();
   }
 
@@ -79,16 +81,17 @@ export class SelectScene extends Phaser.Scene {
       const c = sel.confirmT;
       boost = 1.2 + c * 1.6;
       if (c > 0.3) this.gear.hover += dt * (c - 0.3) * 42;
-      if (c >= LAUNCH_T) {
+      // Cut-in, then the fake NOW LOADING dwell, then the mission proper.
+      if (c >= LAUNCH_T + LOAD_T) {
         this.scene.start('game');
         return;
       }
-    } else {
+    } else if (!wipeActive()) {
       // Roster input — one-shot keys move, slot clicks pick, the rest launches.
       if (takeKey('ArrowLeft') || takeKey('KeyA')) this.pick(sel.ix - 1);
       if (takeKey('ArrowRight') || takeKey('KeyD')) this.pick(sel.ix + 1);
       if (takeKey('Escape')) {
-        this.scene.start('title');
+        startWipe(() => this.scene.start('title'));
         return;
       }
 
@@ -100,14 +103,21 @@ export class SelectScene extends Phaser.Scene {
         }
       }
 
-      // Enter/Space always launch; a bare tap launches unless it lands on
-      // an unselected roster slot (then it picks that slot instead).
+      // Enter/Space launch; taps only pick a slot or re-confirm the current
+      // one — bare clicks on the briefing / void must not sortie you.
       if (takeKey('Enter') || takeKey('Space')) {
         takeTap(); // eat the latch those keys also set
         this.confirm();
       } else if (takeTap()) {
-        if (sel.hover >= 0 && sel.hover !== sel.ix) this.pick(sel.hover);
-        else this.confirm();
+        if (sel.hover === sel.ix) this.confirm();
+        else if (sel.hover >= 0) this.pick(sel.hover);
+      }
+
+      // Coin-op clock: no dithering in the hangar — expiry launches you.
+      sel.timer -= dt;
+      if (sel.timer <= 0) {
+        sel.timer = 0;
+        this.confirm();
       }
     }
 

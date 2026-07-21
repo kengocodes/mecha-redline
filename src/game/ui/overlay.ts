@@ -2,19 +2,20 @@
 // Design language: sharp corners only, 1px hairlines, corner ticks,
 // DotGothic16 with katakana accents. Clean over the low-res 3D world.
 
-import { UI_H, UI_W } from '../../core/const';
-import { ROSTER, selectedPilot } from '../roster';
-import { getPilotArt } from './pilotArt';
-import { attract, hud, sel } from './state';
-import { getTitleArt } from './titleArt';
+import { UI_H, UI_W } from "../../core/const";
+import { ROSTER, selectedPilot } from "../roster";
+import { getPilotArt } from "./pilotArt";
+import { attract, hud, LAUNCH_T, sel } from "./state";
+import { getTitleArt } from "./titleArt";
+import { drawWipe } from "./wipe";
 
-const CYAN = '#7ffbff';
-const RED = '#ff3b53';
-const AMBER = '#ffb54a';
-const FG = '#e8ecf4';
-const DIM = '#93a0b4';
-const PANEL = 'rgba(6, 10, 18, 0.78)';
-const LINE = 'rgba(127, 251, 255, 0.28)';
+const CYAN = "#7ffbff";
+const RED = "#ff3b53";
+const AMBER = "#ffb54a";
+const FG = "#e8ecf4";
+const DIM = "#93a0b4";
+const PANEL = "rgba(6, 10, 18, 0.78)";
+const LINE = "rgba(127, 251, 255, 0.28)";
 
 type Ctx = CanvasRenderingContext2D;
 
@@ -25,17 +26,17 @@ function tx(
   y: number,
   size: number,
   color: string,
-  align: CanvasTextAlign = 'left',
+  align: CanvasTextAlign = "left",
   ls = 0,
 ): void {
   g.font = `${size}px DotGothic16, monospace`;
   g.fillStyle = color;
   g.textAlign = align;
-  g.textBaseline = 'middle';
+  g.textBaseline = "middle";
   const anyG = g as Ctx & { letterSpacing?: string };
   anyG.letterSpacing = `${ls}px`;
   g.fillText(s, x, y);
-  anyG.letterSpacing = '0px';
+  anyG.letterSpacing = "0px";
 }
 
 function panel(g: Ctx, x: number, y: number, w: number, h: number): void {
@@ -76,17 +77,18 @@ export function drawUI(g: Ctx): void {
   frameNow = now;
   g.clearRect(0, 0, UI_W, UI_H);
   switch (hud.phase) {
-    case 'boot':
+    case "boot":
       break;
-    case 'title':
+    case "title":
       drawTitle(g);
       break;
-    case 'select':
+    case "select":
       drawSelect(g);
       break;
     default:
       drawBattle(g);
   }
+  drawWipe(g, frameDt);
 }
 
 // ---- title ---------------------------------------------------------------
@@ -116,10 +118,10 @@ function drawTitle(g: Ctx): void {
   }
 
   // Cabinet header — ranking left, free-play right.
-  tx(g, 'HI-SCORE', 36, 26, 11, DIM, 'left', 3);
-  tx(g, String(hud.hi).padStart(8, '0'), 36, 46, 18, AMBER, 'left', 2);
-  tx(g, 'フリープレイ', UI_W - 36, 26, 12, DIM, 'right', 2);
-  if (blink) tx(g, 'FREE PLAY', UI_W - 36, 46, 16, CYAN, 'right', 3);
+  tx(g, "HI-SCORE", 36, 26, 11, DIM, "left", 3);
+  tx(g, String(hud.hi).padStart(8, "0"), 36, 46, 18, AMBER, "left", 2);
+  tx(g, "フリープレイ", UI_W - 36, 26, 12, DIM, "right", 2);
+  if (blink) tx(g, "FREE PLAY", UI_W - 36, 46, 16, CYAN, "right", 3);
 
   // Logo slam: overscale + white flash, then settle (OP title hit).
   const slam = Math.min(1, t / 0.55);
@@ -138,39 +140,49 @@ function drawTitle(g: Ctx): void {
     g.drawImage(art.logo, lx, ly, logoW, logoH);
     if (flash > 0.02) {
       g.globalAlpha = flash;
-      g.globalCompositeOperation = 'lighter';
+      g.globalCompositeOperation = "lighter";
       g.drawImage(art.logo, lx, ly, logoW, logoH);
-      g.globalCompositeOperation = 'source-over';
+      g.globalCompositeOperation = "source-over";
     }
     g.globalAlpha = 1;
     if (t > 1.2) drawLogoSheen(g, art.logo, lx, ly, logoW, logoH, t);
   } else {
-    tx(g, 'MECHA REDLINE', UI_W / 2, 96, 36, FG, 'center', 8);
+    tx(g, "MECHA REDLINE", UI_W / 2, 96, 36, FG, "center", 8);
   }
 
   // Attract spec card: the unit holding the pad, typed in on each swap.
   const ca = Math.min(1, Math.max(0, (attract.swapT - 0.08) * 3.5));
   g.globalAlpha = ca;
-  tx(g, `UNIT ${def.unitNo}`, 84, 396, 12, DIM, 'left', 4);
-  tx(g, def.callsign, 84, 428, 30, FG, 'left', 6);
-  tx(g, def.kana, 84, 458, 13, CYAN, 'left', 4);
-  tx(g, def.role, 84, 482, 12, DIM, 'left', 2);
+  tx(g, `UNIT ${def.unitNo}`, 84, 396, 12, DIM, "left", 4);
+  tx(g, def.callsign, 84, 428, 30, FG, "left", 6);
+  tx(g, def.kana, 84, 458, 13, CYAN, "left", 4);
+  tx(g, def.role, 84, 482, 12, DIM, "left", 2);
   rule(g, 84, 500, 190, RED);
-  tx(g, `PILOT ── ${def.pilot}`, 84, 522, 11, DIM, 'left', 2);
+  tx(g, `PILOT ── ${def.pilot}`, 84, 522, 11, DIM, "left", 2);
   g.globalAlpha = 1;
 
   if (t > 0.7) {
     rule(g, UI_W / 2 - 190, 640, 380, LINE);
-    if (blink) tx(g, 'PRESS START BUTTON', UI_W / 2, 664, 20, CYAN, 'center', 5);
-    tx(g, 'ゲームスタート ── ボタンを押せ', UI_W / 2, 688, 11, DIM, 'center', 3);
+    if (blink)
+      tx(g, "PRESS START BUTTON", UI_W / 2, 664, 20, CYAN, "center", 5);
+    tx(
+      g,
+      "ゲームスタート ── ボタンを押せ",
+      UI_W / 2,
+      688,
+      11,
+      DIM,
+      "center",
+      3,
+    );
   }
 
   // Scrolling cabinet ticker along the very bottom.
-  g.font = '11px DotGothic16, monospace';
+  g.font = "11px DotGothic16, monospace";
   const tick =
-    '© NEO-KYOTO GARRISON 1998 ── SECTOR 7 PERIMETER STATUS: RED ── 第七区画防衛線 ── ALL GEAR PILOTS REPORT TO HANGAR BAY 03 ── FREE PLAY ── フリープレイ ── INSERT CREDIT // ';
+    "© MECHA REDLINE 1998 ── SECTOR 7 PERIMETER STATUS: RED ── 第七区画防衛線 ── ALL GEAR PILOTS REPORT TO HANGAR BAY 03 ── FREE PLAY ── フリープレイ ── INSERT CREDIT // ";
   const tw = g.measureText(tick).width;
-  tx(g, tick, UI_W - ((t * 55) % (tw + UI_W)), 708, 11, DIM, 'left', 1);
+  tx(g, tick, UI_W - ((t * 55) % (tw + UI_W)), 708, 11, DIM, "left", 1);
 
   crtScanlines(g);
 }
@@ -187,37 +199,42 @@ function drawLogoSheen(
   h: number,
   t: number,
 ): void {
-  const u = ((t % 6) / 6) / 0.2; // sweep runs the first 20% of each 6s cycle
+  const u = (t % 6) / 6 / 0.2; // sweep runs the first 20% of each 6s cycle
   if (u > 1) return;
-  if (!sheenBuf) sheenBuf = document.createElement('canvas');
+  if (!sheenBuf) sheenBuf = document.createElement("canvas");
   const bw = Math.ceil(w);
   const bh = Math.ceil(h);
   if (sheenBuf.width !== bw || sheenBuf.height !== bh) {
     sheenBuf.width = bw;
     sheenBuf.height = bh;
   }
-  const sc = sheenBuf.getContext('2d');
+  const sc = sheenBuf.getContext("2d");
   if (!sc) return;
-  sc.globalCompositeOperation = 'source-over';
+  sc.globalCompositeOperation = "source-over";
   sc.clearRect(0, 0, bw, bh);
   sc.drawImage(logo, 0, 0, bw, bh);
   const bx = (u * 1.5 - 0.25) * bw;
   const grad = sc.createLinearGradient(bx - bw * 0.16, 0, bx + bw * 0.16, 0);
-  grad.addColorStop(0, 'rgba(255, 255, 255, 0)');
-  grad.addColorStop(0.5, 'rgba(255, 255, 255, 0.6)');
-  grad.addColorStop(1, 'rgba(255, 255, 255, 0)');
-  sc.globalCompositeOperation = 'source-in';
+  grad.addColorStop(0, "rgba(255, 255, 255, 0)");
+  grad.addColorStop(0.5, "rgba(255, 255, 255, 0.6)");
+  grad.addColorStop(1, "rgba(255, 255, 255, 0)");
+  sc.globalCompositeOperation = "source-in";
   sc.fillStyle = grad;
   sc.fillRect(0, 0, bw, bh);
-  g.globalCompositeOperation = 'lighter';
+  g.globalCompositeOperation = "lighter";
   g.drawImage(sheenBuf, x, y);
-  g.globalCompositeOperation = 'source-over';
+  g.globalCompositeOperation = "source-over";
 }
 
 // ---- hangar select -------------------------------------------------------
 
 /** Roster strip geometry — shared with SelectScene for pointer hit-tests. */
-export function selectSlotRect(i: number): { x: number; y: number; w: number; h: number } {
+export function selectSlotRect(i: number): {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+} {
   return { x: 36 + i * 304, y: 648, w: 296, h: 52 };
 }
 
@@ -228,7 +245,7 @@ function easeOutCubic(p: number): number {
 /** Soft CRT scanlines over the whole frame (title/select treatment). */
 function crtScanlines(g: Ctx): void {
   g.globalAlpha = 0.055;
-  g.fillStyle = '#02050c';
+  g.fillStyle = "#02050c";
   for (let y = 0; y < UI_H; y += 3) g.fillRect(0, y, UI_W, 1);
   g.globalAlpha = 1;
 }
@@ -245,19 +262,45 @@ function drawSelect(g: Ctx): void {
   const blink = Math.floor(hud.t * 1.5) % 2 === 0;
 
   // Header + callsign block, top-center above the turntable.
-  tx(g, 'SELECT GEAR ── 機体選択', UI_W / 2, 36, 21, FG, 'center', 6);
+  tx(g, "SELECT GEAR ── 機体選択", UI_W / 2, 36, 21, FG, "center", 6);
   rule(g, UI_W / 2 - 148, 54, 296, RED);
-  tx(g, `${p.unitNo} ── ${p.callsign}`, UI_W / 2, 98, 34, CYAN, 'center', 8);
-  tx(g, p.kana, UI_W / 2, 130, 14, DIM, 'center', 6);
+  tx(g, `${p.unitNo} ── ${p.callsign}`, UI_W / 2, 98, 34, CYAN, "center", 8);
+  tx(g, p.kana, UI_W / 2, 130, 14, DIM, "center", 6);
+
+  // Coin-op countdown over the turntable: amber, going red and popping on
+  // each tick for the last five seconds. Expiry launches (SelectScene).
+  const tsec = Math.max(0, Math.ceil(sel.timer));
+  const low = sel.timer <= 5;
+  const frac = sel.timer % 1;
+  const pop = low ? Math.max(0, (frac - 0.7) / 0.3) : 0;
+  tx(g, "TIME", UI_W / 2, 158, 10, DIM, "center", 5);
+  tx(
+    g,
+    String(tsec),
+    UI_W / 2,
+    186,
+    34 * (1 + pop * 0.35),
+    low ? RED : AMBER,
+    "center",
+    2,
+  );
 
   drawPortraitPanel(g);
   drawStatPanel(g);
   drawRoster(g);
 
   if (blink) {
-    tx(g, '◄ ► SELECT ── ENTER: LAUNCH 出撃', UI_W / 2, 626, 14, CYAN, 'center', 3);
+    tx(
+      g,
+      "◄ ► SELECT ── CONFIRM SLOT / ENTER: LAUNCH 出撃",
+      UI_W / 2,
+      626,
+      14,
+      CYAN,
+      "center",
+      3,
+    );
   }
-  tx(g, '© NEO-KYOTO GARRISON  1998', UI_W / 2, UI_H - 10, 11, DIM, 'center', 2);
 
   crtScanlines(g);
 }
@@ -276,9 +319,9 @@ function drawPortraitPanel(g: Ctx): void {
   const ph = 388;
 
   // CRT well behind the still.
-  g.fillStyle = 'rgba(8, 13, 24, 0.9)';
+  g.fillStyle = "rgba(8, 13, 24, 0.9)";
   g.fillRect(px, py, pw, ph);
-  g.fillStyle = 'rgba(127, 251, 255, 0.05)';
+  g.fillStyle = "rgba(127, 251, 255, 0.05)";
   g.fillRect(px, py, pw, ph);
 
   if (art) {
@@ -302,7 +345,17 @@ function drawPortraitPanel(g: Ctx): void {
         const sy = Math.max(dy, py + Math.random() * (ph - 18));
         const sh = 5 + Math.random() * 13;
         const ox = (Math.random() - 0.5) * 30 * gl;
-        g.drawImage(por, 0, (sy - dy) / k, por.width, sh / k, dx + ox, sy, dw, sh);
+        g.drawImage(
+          por,
+          0,
+          (sy - dy) / k,
+          por.width,
+          sh / k,
+          dx + ox,
+          sy,
+          dw,
+          sh,
+        );
       }
     }
     g.restore();
@@ -311,16 +364,16 @@ function drawPortraitPanel(g: Ctx): void {
 
   // Tube dressing: scanlines + a slow interference sweep.
   g.globalAlpha = 0.1;
-  g.fillStyle = '#02050c';
+  g.fillStyle = "#02050c";
   for (let yy = py; yy < py + ph; yy += 3) g.fillRect(px, yy, pw, 1);
   g.globalAlpha = 1;
   const sweep = py + ((hud.t * 34) % ph);
-  g.fillStyle = 'rgba(200, 240, 255, 0.06)';
+  g.fillStyle = "rgba(200, 240, 255, 0.06)";
   g.fillRect(px, sweep, pw, 3);
 
-  tx(g, 'PILOT ── 操縦士', px + 2, y + h - 48, 11, DIM, 'left', 3);
-  tx(g, p.pilot, px + 2, y + h - 26, 17, FG, 'left', 2);
-  tx(g, 'N-K GARRISON', px + pw - 2, y + h - 48, 10, DIM, 'right', 1);
+  tx(g, "PILOT ── 操縦士", px + 2, y + h - 48, 11, DIM, "left", 3);
+  tx(g, p.pilot, px + 2, y + h - 26, 17, FG, "left", 2);
+  tx(g, "REDLINE", px + pw - 2, y + h - 48, 10, DIM, "right", 1);
 }
 
 function drawStatPanel(g: Ctx): void {
@@ -332,39 +385,57 @@ function drawStatPanel(g: Ctx): void {
   panel(g, x, y, w, h);
   const lx = x + 16;
   const rw = w - 32;
-  const off = 'rgba(127, 251, 255, 0.12)';
+  const off = "rgba(127, 251, 255, 0.12)";
 
-  tx(g, 'ROLE ── 機種', lx, y + 26, 11, DIM, 'left', 3);
-  tx(g, p.role, lx, y + 50, 15, CYAN, 'left', 1);
-  tx(g, p.roleJa, lx, y + 70, 12, DIM, 'left', 2);
+  tx(g, "ROLE ── 機種", lx, y + 26, 11, DIM, "left", 3);
+  tx(g, p.role, lx, y + 50, 15, CYAN, "left", 1);
+  tx(g, p.roleJa, lx, y + 70, 12, DIM, "left", 2);
   rule(g, lx, y + 86, rw, LINE);
 
-  tx(g, 'DOCTRINE ── 戦術', lx, y + 108, 11, DIM, 'left', 3);
-  p.doctrine.forEach((line, i) => tx(g, line, lx, y + 132 + i * 20, 12, FG, 'left', 1));
+  tx(g, "DOCTRINE ── 戦術", lx, y + 108, 11, DIM, "left", 3);
+  p.doctrine.forEach((line, i) =>
+    tx(g, line, lx, y + 132 + i * 20, 12, FG, "left", 1),
+  );
   rule(g, lx, y + 196, rw, LINE);
 
-  tx(g, 'ARMOR ── 装甲', lx, y + 218, 11, DIM, 'left', 3);
+  // Spec-sheet fill: rows build block-by-block after a swap, staggered so
+  // armor ticks in first, then speed, then burst. A block flashes white the
+  // instant it lands, then settles to its colour.
+  const age = (start: number, per: number, i: number): number =>
+    sel.swapT - start - i * per;
+
+  tx(g, "ARMOR ── 装甲", lx, y + 218, 11, DIM, "left", 3);
   for (let i = 0; i < 5; i++) {
     const bx = lx + i * 38;
-    g.fillStyle = i < p.stats.armor ? CYAN : off;
+    const a = age(0.2, 0.05, i);
+    const on = i < p.stats.armor && a >= 0;
+    g.fillStyle = on ? (a < 0.09 ? "#ffffff" : CYAN) : off;
     g.fillRect(bx, y + 230, 30, 13);
     g.strokeStyle = LINE;
     g.lineWidth = 1;
     g.strokeRect(bx + 0.5, y + 230.5, 29, 12);
   }
 
-  tx(g, 'SPEED ── 速度', lx, y + 264, 11, DIM, 'left', 3);
+  tx(g, "SPEED ── 速度", lx, y + 264, 11, DIM, "left", 3);
   const segs = Math.max(1, Math.min(10, Math.round(p.stats.speed / 4)));
   for (let i = 0; i < 10; i++) {
-    g.fillStyle = i < segs ? AMBER : 'rgba(255, 181, 74, 0.12)';
+    const a = age(0.45, 0.035, i);
+    const on = i < segs && a >= 0;
+    g.fillStyle = on
+      ? a < 0.09
+        ? "#ffffff"
+        : AMBER
+      : "rgba(255, 181, 74, 0.12)";
     g.fillRect(lx + i * 19, y + 276, 14, 10);
   }
 
-  tx(g, 'BURST ── バースト', lx, y + 310, 11, DIM, 'left', 3);
+  tx(g, "BURST ── バースト", lx, y + 310, 11, DIM, "left", 3);
   for (let i = 0; i < 4; i++) {
     const bx = lx + i * 40;
     const cy = y + 332;
-    g.fillStyle = i < p.stats.burst ? CYAN : off;
+    const a = age(0.8, 0.08, i);
+    const on = i < p.stats.burst && a >= 0;
+    g.fillStyle = on ? (a < 0.09 ? "#ffffff" : CYAN) : off;
     g.beginPath();
     g.moveTo(bx + 13, cy - 8);
     g.lineTo(bx + 26, cy);
@@ -377,13 +448,13 @@ function drawStatPanel(g: Ctx): void {
     g.stroke();
   }
 
-  tx(g, p.trait, lx, y + 368, 12, AMBER, 'left', 1);
+  tx(g, p.trait, lx, y + 368, 12, AMBER, "left", 1);
   rule(g, lx, y + 386, rw, LINE);
 
   // Pilot voice, typed on after the panel settles.
   const chars = Math.max(0, Math.floor((sel.swapT - 0.25) * 46));
   if (chars > 0) {
-    tx(g, `「${p.quote.slice(0, chars)}」`, lx, y + 414, 13, DIM, 'left', 1);
+    tx(g, `「${p.quote.slice(0, chars)}」`, lx, y + 414, 13, DIM, "left", 1);
   }
 }
 
@@ -393,9 +464,9 @@ function drawRoster(g: Ctx): void {
     const r = selectSlotRect(i);
     const on = i === sel.ix;
     const hov = i === sel.hover;
-    g.fillStyle = on ? 'rgba(127, 251, 255, 0.12)' : PANEL;
+    g.fillStyle = on ? "rgba(127, 251, 255, 0.12)" : PANEL;
     g.fillRect(r.x, r.y, r.w, r.h);
-    g.strokeStyle = on ? CYAN : hov ? 'rgba(127, 251, 255, 0.55)' : LINE;
+    g.strokeStyle = on ? CYAN : hov ? "rgba(127, 251, 255, 0.55)" : LINE;
     g.lineWidth = 1;
     g.strokeRect(r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1);
     if (on) {
@@ -415,10 +486,19 @@ function drawRoster(g: Ctx): void {
       }
       g.stroke();
     }
-    tx(g, p.unitNo, r.x + 14, r.y + 21, 15, on ? AMBER : DIM, 'left', 2);
-    tx(g, p.callsign, r.x + 48, r.y + 21, 17, on ? FG : DIM, 'left', 3);
-    tx(g, p.pilot, r.x + 48, r.y + 39, 11, on ? CYAN : 'rgba(147, 160, 180, 0.7)', 'left', 1);
-    tx(g, p.kana, r.x + r.w - 12, r.y + 39, 10, DIM, 'right', 1);
+    tx(g, p.unitNo, r.x + 14, r.y + 21, 15, on ? AMBER : DIM, "left", 2);
+    tx(g, p.callsign, r.x + 48, r.y + 21, 17, on ? FG : DIM, "left", 3);
+    tx(
+      g,
+      p.pilot,
+      r.x + 48,
+      r.y + 39,
+      11,
+      on ? CYAN : "rgba(147, 160, 180, 0.7)",
+      "left",
+      1,
+    );
+    tx(g, p.kana, r.x + r.w - 12, r.y + 39, 10, DIM, "right", 1);
   }
 }
 
@@ -427,13 +507,19 @@ function drawLaunch(g: Ctx): void {
   const c = sel.confirmT;
   const art = getPilotArt(p.id);
 
+  // Cut-in faded to black — hold the fake NOW LOADING card until the mission.
+  if (c >= LAUNCH_T) {
+    drawLoading(g, c - LAUNCH_T);
+    return;
+  }
+
   // Near-black card — the lifting gear's thrusters glow through early on.
   g.fillStyle = `rgba(2, 5, 12, ${Math.min(0.86, c * 3)})`;
   g.fillRect(0, 0, UI_W, UI_H);
 
   // Diagonal speed lines streaking across — stepped jitter reads as motion.
   if (c > 0.05) {
-    g.strokeStyle = 'rgba(200, 245, 255, 0.4)';
+    g.strokeStyle = "rgba(200, 245, 255, 0.4)";
     for (let i = 0; i < 24; i++) {
       const yy = (i * 173 + Math.floor(c * 40) * 97) % UI_H;
       const xx = ((i * 259) % (UI_W + 500)) - 250;
@@ -466,12 +552,12 @@ function drawLaunch(g: Ctx): void {
     g.globalAlpha = Math.min(1, (c - 0.18) / 0.18);
     const cx = 320;
     const pop = 1 + Math.max(0, 0.32 - (c - 0.18)) * 0.9;
-    tx(g, `SORTIE ORDER ── ${p.unitNo}`, cx, 252, 13, DIM, 'center', 4);
-    tx(g, 'LAUNCH', cx, 322, 60 * pop, RED, 'center', 12);
-    tx(g, '出撃', cx, 374, 26, FG, 'center', 16);
+    tx(g, `SORTIE ORDER ── ${p.unitNo}`, cx, 252, 13, DIM, "center", 4);
+    tx(g, "LAUNCH", cx, 322, 60 * pop, RED, "center", 12);
+    tx(g, "出撃", cx, 374, 26, FG, "center", 16);
     rule(g, cx - 150, 404, 300, RED);
-    tx(g, p.callsign, cx, 436, 22, FG, 'center', 6);
-    tx(g, p.pilot, cx, 464, 14, CYAN, 'center', 3);
+    tx(g, p.callsign, cx, 436, 22, FG, "center", 6);
+    tx(g, p.pilot, cx, 464, 14, CYAN, "center", 3);
     g.globalAlpha = 1;
   }
 
@@ -488,22 +574,42 @@ function drawLaunch(g: Ctx): void {
   }
 }
 
+/** The joke everyone gets: nothing is loading, but the disc must spin. */
+function drawLoading(g: Ctx, t: number): void {
+  g.fillStyle = "#02050c";
+  g.fillRect(0, 0, UI_W, UI_H);
+
+  // Spinner clicks around in eighth-turn steps — smooth would break period.
+  const cx = UI_W - 296;
+  const cy = UI_H - 84;
+  const a0 = Math.floor(t * 9) * (Math.PI / 4);
+  g.strokeStyle = CYAN;
+  g.lineWidth = 3;
+  g.beginPath();
+  g.arc(cx, cy, 13, a0, a0 + Math.PI * 1.35);
+  g.stroke();
+
+  const dots = ".".repeat(1 + (Math.floor(t * 2.6) % 3));
+  tx(g, `NOW LOADING${dots}`, cx + 30, cy - 8, 18, FG, "left", 3);
+  tx(g, "ロード中", cx + 30, cy + 14, 11, DIM, "left", 3);
+}
+
 // ---- battle hud ----------------------------------------------------------
 
 function drawBattle(g: Ctx): void {
   const t = hud.t;
 
-  if (hud.phase !== 'intro') {
+  if (hud.phase !== "intro") {
     drawScore(g);
     drawMission(g);
     drawPilotCluster(g);
     drawMsg(g);
   }
-  if (hud.phase === 'boss' && hud.bossMax > 0) drawBossBar(g);
-  if (hud.phase === 'warning') drawWarning(g, t);
-  if (hud.phase === 'intro') drawIntro(g, t);
-  if (hud.phase === 'complete') drawEndCard(g, true);
-  if (hud.phase === 'failed') drawEndCard(g, false);
+  if (hud.phase === "boss" && hud.bossMax > 0) drawBossBar(g);
+  if (hud.phase === "warning") drawWarning(g, t);
+  if (hud.phase === "intro") drawIntro(g, t);
+  if (hud.phase === "complete") drawEndCard(g, true);
+  if (hud.phase === "failed") drawEndCard(g, false);
 
   // damage vignette
   if (hud.flashT > 0) {
@@ -528,7 +634,8 @@ function drawBattle(g: Ctx): void {
   }
 
   // Critical armor: a slow red heartbeat along the frame edges.
-  const inPlay = hud.phase === 'battle' || hud.phase === 'boss' || hud.phase === 'warning';
+  const inPlay =
+    hud.phase === "battle" || hud.phase === "boss" || hud.phase === "warning";
   if (inPlay && hud.armor === 1 && hud.flashT <= 0) {
     const a = 0.1 + 0.09 * Math.sin(t * 5.5);
     g.fillStyle = `rgba(255, 59, 83, ${a})`;
@@ -540,10 +647,10 @@ function drawBattle(g: Ctx): void {
   }
 
   if (hud.paused) {
-    g.fillStyle = 'rgba(5, 7, 13, 0.72)';
+    g.fillStyle = "rgba(5, 7, 13, 0.72)";
     g.fillRect(0, 0, UI_W, UI_H);
-    tx(g, 'PAUSE ── 一時停止', UI_W / 2, UI_H / 2 - 12, 40, FG, 'center', 6);
-    tx(g, 'P TO RESUME', UI_W / 2, UI_H / 2 + 36, 16, DIM, 'center', 4);
+    tx(g, "PAUSE ── 一時停止", UI_W / 2, UI_H / 2 - 12, 40, FG, "center", 6);
+    tx(g, "P TO RESUME", UI_W / 2, UI_H / 2 + 36, 16, DIM, "center", 4);
   }
 }
 
@@ -557,17 +664,28 @@ function drawScore(g: Ctx): void {
   }
   scorePop = Math.max(0, scorePop - frameDt * 5);
   panel(g, 24, 20, 236, 64);
-  tx(g, 'SCORE ── スコア', 40, 40, 13, DIM, 'left', 3);
+  tx(g, "SCORE ── スコア", 40, 40, 13, DIM, "left", 3);
   const size = 26 * (1 + scorePop * 0.1);
-  tx(g, String(hud.score).padStart(8, '0'), 40, 66, size, scorePop > 0.55 ? '#ffffff' : FG, 'left', 3);
+  tx(
+    g,
+    String(hud.score).padStart(8, "0"),
+    40,
+    66,
+    size,
+    scorePop > 0.55 ? "#ffffff" : FG,
+    "left",
+    3,
+  );
 }
 
 function drawMission(g: Ctx): void {
   panel(g, UI_W - 284, 20, 260, 64);
-  tx(g, 'MISSION 01 ── SECTOR 7', UI_W - 40, 40, 13, DIM, 'right', 2);
+  tx(g, "MISSION 01 ── SECTOR 7", UI_W - 40, 40, 13, DIM, "right", 2);
   const inBoss = hud.bossMax > 0; // stays true through the boss end cards
-  const label = inBoss ? 'TARGET: GOLGOTHA' : `WAVE ${String(hud.wave).padStart(2, '0')} / 06`;
-  tx(g, label, UI_W - 40, 66, 20, inBoss ? RED : CYAN, 'right', 2);
+  const label = inBoss
+    ? "TARGET: GOLGOTHA"
+    : `WAVE ${String(hud.wave).padStart(2, "0")} / 06`;
+  tx(g, label, UI_W - 40, 66, 20, inBoss ? RED : CYAN, "right", 2);
 }
 
 /** 1 far from the rect → 0.2 with the player gear on top of it. */
@@ -598,7 +716,7 @@ function drawPilotCluster(g: Ctx): void {
   const cx = x + 10;
   const cy = y + 10;
   const cs = 96;
-  g.fillStyle = 'rgba(8, 13, 24, 0.9)';
+  g.fillStyle = "rgba(8, 13, 24, 0.9)";
   g.fillRect(cx, cy, cs, cs);
   if (art) {
     const por = art.portrait;
@@ -618,13 +736,23 @@ function drawPilotCluster(g: Ctx): void {
         const yy = cy + Math.random() * (cs - 12);
         const hh = 3 + Math.random() * 9;
         const ox = (Math.random() - 0.5) * 24 * k;
-        g.drawImage(por, sx, sy + ((yy - cy) / cs) * sh, sw, (hh / cs) * sh, cx + ox, yy, cs, hh);
+        g.drawImage(
+          por,
+          sx,
+          sy + ((yy - cy) / cs) * sh,
+          sw,
+          (hh / cs) * sh,
+          cx + ox,
+          yy,
+          cs,
+          hh,
+        );
       }
       g.fillStyle = `rgba(255, 59, 83, ${Math.min(0.4, hud.flashT)})`;
       g.fillRect(cx, cy, cs, cs);
     }
     g.globalAlpha = 0.14 * fade;
-    g.fillStyle = '#02050c';
+    g.fillStyle = "#02050c";
     for (let yy = cy; yy < cy + cs; yy += 3) g.fillRect(cx, yy, cs, 1);
     g.globalAlpha = fade;
     g.restore();
@@ -635,26 +763,30 @@ function drawPilotCluster(g: Ctx): void {
 
   // Status column.
   const ix = cx + cs + 14;
-  tx(g, `${p.unitNo} ── ${p.callsign}`, ix, y + 24, 14, FG, 'left', 2);
-  if (hud.focus) tx(g, 'FOCUS', x + w - 14, y + 24, 12, AMBER, 'right', 3);
+  tx(g, `${p.unitNo} ── ${p.callsign}`, ix, y + 24, 14, FG, "left", 2);
+  if (hud.focus) tx(g, "FOCUS", x + w - 14, y + 24, 12, AMBER, "right", 3);
 
-  tx(g, 'ARMOR ── 装甲', ix, y + 46, 10, DIM, 'left', 3);
+  tx(g, "ARMOR ── 装甲", ix, y + 46, 10, DIM, "left", 3);
   for (let i = 0; i < hud.maxArmor; i++) {
     const bx = ix + i * 36;
     const on = i < hud.armor;
-    g.fillStyle = on ? (hud.armor === 1 ? RED : CYAN) : 'rgba(127, 251, 255, 0.12)';
+    g.fillStyle = on
+      ? hud.armor === 1
+        ? RED
+        : CYAN
+      : "rgba(127, 251, 255, 0.12)";
     g.fillRect(bx, y + 56, 30, 12);
     g.strokeStyle = LINE;
     g.strokeRect(bx + 0.5, y + 56.5, 29, 11);
   }
 
   const lit = hud.burstFlashT > 0;
-  tx(g, 'BURST ── バースト', ix, y + 86, 10, lit ? CYAN : DIM, 'left', 3);
+  tx(g, "BURST ── バースト", ix, y + 86, 10, lit ? CYAN : DIM, "left", 3);
   for (let i = 0; i < hud.maxBurst; i++) {
     const bx = ix + i * 34;
     const on = i < hud.burst;
     const my = y + 102;
-    g.fillStyle = on ? (lit ? '#c8ffff' : CYAN) : 'rgba(127, 251, 255, 0.12)';
+    g.fillStyle = on ? (lit ? "#c8ffff" : CYAN) : "rgba(127, 251, 255, 0.12)";
     g.beginPath();
     g.moveTo(bx + 12, my - 6);
     g.lineTo(bx + 24, my);
@@ -677,7 +809,7 @@ function drawMsg(g: Ctx): void {
   const mw = UI_W - 390 - 24;
   g.globalAlpha = Math.max(0, fade) * proxFade(390, UI_H - 64, mw, 40);
   panel(g, 390, UI_H - 64, mw, 40);
-  tx(g, shown, 410, UI_H - 44, 15, FG, 'left', 1);
+  tx(g, shown, 410, UI_H - 44, 15, FG, "left", 1);
   g.globalAlpha = 1;
 }
 
@@ -685,13 +817,13 @@ function drawBossBar(g: Ctx): void {
   const w = 640;
   const x = UI_W / 2 - w / 2;
   panel(g, x - 16, 20, w + 32, 58);
-  tx(g, hud.bossName, x, 40, 13, RED, 'left', 2);
+  tx(g, hud.bossName, x, 40, 13, RED, "left", 2);
   const frac = hud.bossMax > 0 ? hud.bossHp / hud.bossMax : 0;
-  g.fillStyle = 'rgba(255, 59, 83, 0.15)';
+  g.fillStyle = "rgba(255, 59, 83, 0.15)";
   g.fillRect(x, 52, w, 14);
   g.fillStyle = RED;
   g.fillRect(x, 52, w * frac, 14);
-  g.strokeStyle = 'rgba(255, 59, 83, 0.6)';
+  g.strokeStyle = "rgba(255, 59, 83, 0.6)";
   g.lineWidth = 1;
   for (let i = 1; i < 20; i++) {
     const sx = x + (w / 20) * i + 0.5;
@@ -710,22 +842,41 @@ function drawWarning(g: Ctx, t: number): void {
   rule(g, 0, 268, UI_W, RED);
   rule(g, 0, 450, UI_W, RED);
   g.globalAlpha = 0.55 + a * 0.45;
-  tx(g, '警告', UI_W / 2 - 330, 360, 46, RED, 'center', 8);
-  tx(g, 'WARNING', UI_W / 2, 358, 76, RED, 'center', 22);
-  tx(g, '警告', UI_W / 2 + 330, 360, 46, RED, 'center', 8);
+  tx(g, "警告", UI_W / 2 - 330, 360, 46, RED, "center", 8);
+  tx(g, "WARNING", UI_W / 2, 358, 76, RED, "center", 22);
+  tx(g, "警告", UI_W / 2 + 330, 360, 46, RED, "center", 8);
   g.globalAlpha = 1;
-  tx(g, 'FORTRESS-CLASS GEAR ON APPROACH', UI_W / 2, 424, 16, FG, 'center', 6);
+  tx(g, "FORTRESS-CLASS GEAR ON APPROACH", UI_W / 2, 424, 16, FG, "center", 6);
 }
 
 function drawIntro(g: Ctx, t: number): void {
-  const a = Math.min(1, t / 0.4) * (t > 3.0 ? Math.max(0, 1 - (t - 3.0) / 0.6) : 1);
+  const a =
+    Math.min(1, t / 0.4) * (t > 3.0 ? Math.max(0, 1 - (t - 3.0) / 0.6) : 1);
   g.globalAlpha = a;
-  tx(g, 'MISSION 01', UI_W / 2, 292, 56, FG, 'center', 14);
+  tx(g, "MISSION 01", UI_W / 2, 292, 56, FG, "center", 14);
   rule(g, UI_W / 2 - 250, 330, 500, RED);
-  tx(g, 'SECTOR 7 PERIMETER ── 第七区画防衛線', UI_W / 2, 366, 22, CYAN, 'center', 4);
-  tx(g, 'DESTROY ALL HOSTILE GEARS', UI_W / 2, 404, 15, DIM, 'center', 5);
+  tx(
+    g,
+    "SECTOR 7 PERIMETER ── 第七区画防衛線",
+    UI_W / 2,
+    366,
+    22,
+    CYAN,
+    "center",
+    4,
+  );
+  tx(g, "DESTROY ALL HOSTILE GEARS", UI_W / 2, 404, 15, DIM, "center", 5);
   const p = selectedPilot();
-  tx(g, `UNIT ${p.unitNo} ── ${p.callsign} // ${p.pilot}`, UI_W / 2, 442, 14, AMBER, 'center', 3);
+  tx(
+    g,
+    `UNIT ${p.unitNo} ── ${p.callsign} // ${p.pilot}`,
+    UI_W / 2,
+    442,
+    14,
+    AMBER,
+    "center",
+    3,
+  );
   g.globalAlpha = 1;
 }
 
@@ -742,25 +893,43 @@ function drawEndCard(g: Ctx, won: boolean): void {
   const y = UI_H / 2 - h / 2;
   panel(g, x, y, w, h);
   if (won) {
-    tx(g, 'MISSION COMPLETE', UI_W / 2, y + 62, 40, CYAN, 'center', 8);
-    tx(g, '任務完了', UI_W / 2, y + 102, 20, FG, 'center', 10);
+    tx(g, "MISSION COMPLETE", UI_W / 2, y + 62, 40, CYAN, "center", 8);
+    tx(g, "任務完了", UI_W / 2, y + 102, 20, FG, "center", 10);
   } else {
-    tx(g, 'MISSION FAILED', UI_W / 2, y + 62, 40, RED, 'center', 8);
-    tx(g, '機体大破 ── 任務失敗', UI_W / 2, y + 102, 20, FG, 'center', 8);
+    tx(g, "MISSION FAILED", UI_W / 2, y + 62, 40, RED, "center", 8);
+    tx(g, "機体大破 ── 任務失敗", UI_W / 2, y + 102, 20, FG, "center", 8);
   }
   rule(g, x + 60, y + 128, w - 120, won ? CYAN : RED);
-  tx(g, `SCORE  ${String(hud.score).padStart(8, '0')}`, UI_W / 2, y + 160, 20, FG, 'center', 3);
-  tx(g, `HI     ${String(hud.hi).padStart(8, '0')}`, UI_W / 2, y + 188, 16, AMBER, 'center', 3);
+  tx(
+    g,
+    `SCORE  ${String(hud.score).padStart(8, "0")}`,
+    UI_W / 2,
+    y + 160,
+    20,
+    FG,
+    "center",
+    3,
+  );
+  tx(
+    g,
+    `HI     ${String(hud.hi).padStart(8, "0")}`,
+    UI_W / 2,
+    y + 188,
+    16,
+    AMBER,
+    "center",
+    3,
+  );
   const wait = won ? 2 : 1;
   if (t > wait && Math.floor(t * 1.6) % 2 === 0) {
     tx(
       g,
-      won ? 'CLICK ── RETURN TO BASE' : 'CLICK ── RELAUNCH',
+      won ? "CLICK ── RETURN TO BASE" : "CLICK ── RELAUNCH",
       UI_W / 2,
       y + h - 28,
       16,
       DIM,
-      'center',
+      "center",
       4,
     );
   }

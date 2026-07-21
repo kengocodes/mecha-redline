@@ -1,4 +1,4 @@
-# Neo-Kyoto Garrison — Prototype Flight
+# MECHA REDLINE — Prototype Flight
 
 Playable roster for **MECHA REDLINE**. Gear callsign is primary; the pilot is the face in the hangar CRT still.
 
