@@ -2,12 +2,17 @@
 // pad under the keyed logo while the overlay dresses it as cabinet chrome.
 
 import Phaser from 'phaser';
-import { clearTap, takeTap } from '../../core/input';
+import { applyAudioSettings, music, sfx } from '../../core/audio';
+import { clearTap, pointer, takeKey, takeTap } from '../../core/input';
+import { SOCIAL_LINKS } from '../../core/links';
+import { setBus, toggleMuted, type BusId } from '../../core/settings';
+import { isLegalOpen, openLegal } from '../../legal/overlay';
 import { animateGear, buildGear, type Gear, setGearFlash } from '../../render/gearFactory';
 import { Stage3D } from '../../render/stage3d';
 import { ROSTER } from '../roster';
-import { attract, hud, setPhase } from '../ui/state';
-import { startWipe } from '../ui/wipe';
+import { attract, hud, setPhase, settingsUi } from '../ui/state';
+import { hitTitleChrome, sliderValueAt } from '../ui/titleChrome';
+import { startWipe, wipeActive } from '../ui/wipe';
 
 /** Seconds each roster gear holds the pad before the carousel advances. */
 const SWAP_EVERY = 7;
@@ -19,6 +24,7 @@ export class TitleScene extends Phaser.Scene {
   private gear!: Gear;
   private baseScale = 1;
   private yaw = 0;
+  private dragBus: BusId | null = null;
 
   constructor() {
     super('title');
@@ -30,8 +36,17 @@ export class TitleScene extends Phaser.Scene {
     s.setMode('showcase');
     setPhase('title');
     clearTap();
+    settingsUi.open = false;
+    this.dragBus = null;
     attract.swapT = 0;
     this.spawnGear(false);
+    music('title');
+    sfx('logo-slam'); // lands with the logo overscale hit
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.setCursor(false);
+      settingsUi.open = false;
+      this.dragBus = null;
+    });
   }
 
   private spawnGear(flash = true): void {
@@ -51,10 +66,26 @@ export class TitleScene extends Phaser.Scene {
     }
   }
 
+  private setCursor(hot: boolean): void {
+    const stage = document.getElementById('stage');
+    if (stage) stage.style.cursor = hot ? 'pointer' : '';
+  }
+
+  private applySlider(bus: BusId, t: number): void {
+    setBus(bus, t);
+    applyAudioSettings();
+  }
+
+  private setSettingsOpen(open: boolean): void {
+    settingsUi.open = open;
+  }
+
   update(_t: number, dms: number): void {
     const dt = Math.min(dms, 50) / 1000;
     hud.t += dt;
     attract.swapT += dt;
+    settingsUi.pointerX = pointer.x;
+    settingsUi.pointerY = pointer.y;
 
     if (attract.swapT >= SWAP_EVERY) {
       attract.ix = (attract.ix + 1) % ROSTER.length;
@@ -72,8 +103,85 @@ export class TitleScene extends Phaser.Scene {
     animateGear(this.gear, dt);
     Stage3D.I.update(dt);
 
-    if (hud.t > 0.5 && takeTap()) {
-      startWipe(() => this.scene.start('select'));
+    // Privacy/terms overlay owns input (audio silenced via setLegalSilent).
+    if (isLegalOpen()) {
+      clearTap();
+      this.setCursor(false);
+      return;
     }
+
+    // Slider drag — scrub by x while the button is held.
+    if (this.dragBus) {
+      if (!pointer.down) {
+        this.dragBus = null;
+      } else {
+        this.applySlider(this.dragBus, sliderValueAt(this.dragBus, pointer.x));
+        this.setCursor(true);
+        takeTap();
+        return;
+      }
+    }
+
+    const showLinks = hud.t > 0.7 && !settingsUi.open;
+    const hover = hitTitleChrome(pointer.x, pointer.y, settingsUi.open, { links: showLinks });
+    this.setCursor(!!hover && hover.kind !== 'panel');
+
+    if (settingsUi.open) {
+      if (takeKey('Escape')) {
+        sfx('ui-back');
+        this.setSettingsOpen(false);
+        clearTap();
+        return;
+      }
+      if (takeTap()) {
+        const hit = hitTitleChrome(pointer.x, pointer.y, true);
+        if (hit?.kind === 'slider') {
+          this.dragBus = hit.bus;
+          this.applySlider(hit.bus, hit.t);
+        } else if (hit?.kind === 'mute') {
+          toggleMuted();
+          applyAudioSettings();
+          sfx('ui-confirm');
+        } else if (hit?.kind === 'close') {
+          sfx('ui-back');
+          this.setSettingsOpen(false);
+        }
+      }
+      return;
+    }
+
+    if (takeKey('Escape')) {
+      sfx('ui-confirm');
+      this.setSettingsOpen(true);
+      clearTap();
+      return;
+    }
+
+    if (wipeActive() || hud.t <= 0.5) return;
+
+    // Keyboard start always sorties — chrome is pointer-driven.
+    if (takeKey('Enter') || takeKey('Space')) {
+      takeTap();
+      sfx('ui-confirm');
+      startWipe(() => this.scene.start('select'));
+      return;
+    }
+
+    if (!takeTap()) return;
+
+    const hit = hitTitleChrome(pointer.x, pointer.y, false, { links: showLinks });
+    if (hit?.kind === 'settings') {
+      sfx('ui-confirm');
+      this.setSettingsOpen(true);
+      return;
+    }
+    if (hit?.kind === 'link') {
+      sfx('ui-tick');
+      if (hit.id === 'privacy' || hit.id === 'terms') openLegal(hit.id);
+      else window.open(SOCIAL_LINKS[hit.id], '_blank', 'noopener,noreferrer');
+      return;
+    }
+    sfx('ui-confirm');
+    startWipe(() => this.scene.start('select'));
   }
 }

@@ -2,7 +2,9 @@
 // stage, then hands off to the title (or straight to battle with ?debug).
 
 import Phaser from 'phaser';
+import { initAudio } from '../../core/audio';
 import { HI_KEY } from '../../core/const';
+import { loadSettings } from '../../core/settings';
 import { Stage3D } from '../../render/stage3d';
 import { loadPilotArt } from '../ui/pilotArt';
 import { loadTitleArt } from '../ui/titleArt';
@@ -19,10 +21,12 @@ export class BootScene extends Phaser.Scene {
 
   private async boot(): Promise<void> {
     hud.hi = Number.parseInt(localStorage.getItem(HI_KEY) ?? '0', 10) || 0;
+    loadSettings(); // before initAudio so the graph boots at saved levels
+    initAudio(); // warm the sfx/vo cache; context unlocks on first gesture
 
     // Load both the Latin and Japanese subsets before any canvas text.
     const sample =
-      'MECHA REDLINE 0123456789 警告装甲第七区画任務完了失敗スコア操作出撃一時停止フリープレイゲームスタートボタンを押せ';
+      'MECHA REDLINE 0123456789 警告装甲第七区画任務完了失敗スコア操作出撃一時停止フリープレイゲームスタートボタンを押せ設定ミッションを中断します';
     try {
       await Promise.race([
         document.fonts.load('32px DotGothic16', sample),

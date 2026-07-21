@@ -41,10 +41,17 @@ export function initInput(stageEl: HTMLElement): void {
   window.addEventListener('pointermove', (e) => updatePointer(e.clientX, e.clientY));
   window.addEventListener('pointerdown', (e) => {
     updatePointer(e.clientX, e.clientY);
-    if (e.button === 0) {
-      pointer.down = true;
-      tapped = true;
+    if (e.button !== 0) return;
+    pointer.down = true;
+    // DOM chrome (legalnav, legal reader, real anchors) must not latch a game tap.
+    const t = e.target;
+    if (
+      t instanceof Element &&
+      t.closest('a, button, input, textarea, select, #legal')
+    ) {
+      return;
     }
+    tapped = true;
   });
   window.addEventListener('pointerup', (e) => {
     if (e.button === 0) pointer.down = false;

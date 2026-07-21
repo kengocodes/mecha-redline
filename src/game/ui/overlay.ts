@@ -2,10 +2,16 @@
 // Design language: sharp corners only, 1px hairlines, corner ticks,
 // DotGothic16 with katakana accents. Clean over the low-res 3D world.
 
+import { sfx } from "../../core/audio";
 import { UI_H, UI_W } from "../../core/const";
 import { ROSTER, selectedPilot } from "../roster";
 import { getPilotArt } from "./pilotArt";
-import { attract, hud, LAUNCH_T, sel } from "./state";
+import { attract, hud, LAUNCH_T, sel, settingsUi } from "./state";
+import {
+  drawSettingsPanel,
+  drawTitleChrome,
+  hitTitleChrome,
+} from "./titleChrome";
 import { getTitleArt } from "./titleArt";
 import { drawWipe } from "./wipe";
 
@@ -161,15 +167,16 @@ function drawTitle(g: Ctx): void {
   tx(g, `PILOT ── ${def.pilot}`, 84, 522, 11, DIM, "left", 2);
   g.globalAlpha = 1;
 
-  if (t > 0.7) {
-    rule(g, UI_W / 2 - 190, 640, 380, LINE);
+  if (t > 0.7 && !settingsUi.open) {
+    // Stack sits high enough that the link row below clears the frame edge.
+    rule(g, UI_W / 2 - 190, 620, 380, LINE);
     if (blink)
-      tx(g, "PRESS START BUTTON", UI_W / 2, 664, 20, CYAN, "center", 5);
+      tx(g, "PRESS START BUTTON", UI_W / 2, 644, 20, CYAN, "center", 5);
     tx(
       g,
       "ゲームスタート ── ボタンを押せ",
       UI_W / 2,
-      688,
+      668,
       11,
       DIM,
       "center",
@@ -177,12 +184,13 @@ function drawTitle(g: Ctx): void {
     );
   }
 
-  // Scrolling cabinet ticker along the very bottom.
-  g.font = "11px DotGothic16, monospace";
-  const tick =
-    "© MECHA REDLINE 1998 ── SECTOR 7 PERIMETER STATUS: RED ── 第七区画防衛線 ── ALL GEAR PILOTS REPORT TO HANGAR BAY 03 ── FREE PLAY ── フリープレイ ── INSERT CREDIT // ";
-  const tw = g.measureText(tick).width;
-  tx(g, tick, UI_W - ((t * 55) % (tw + UI_W)), 708, 11, DIM, "left", 1);
+  // Settings + Privacy/Terms/GitHub/X under PRESS START (DotGothic16).
+  const showLinks = t > 0.7 && !settingsUi.open;
+  const hover = hitTitleChrome(settingsUi.pointerX, settingsUi.pointerY, settingsUi.open, {
+    links: showLinks,
+  });
+  if (!settingsUi.open) drawTitleChrome(g, hover, { links: showLinks });
+  else drawSettingsPanel(g, hover);
 
   crtScanlines(g);
 }
@@ -376,6 +384,8 @@ function drawPortraitPanel(g: Ctx): void {
   tx(g, "REDLINE", px + pw - 2, y + h - 48, 10, DIM, "right", 1);
 }
 
+let statTicked = 0;
+
 function drawStatPanel(g: Ctx): void {
   const p = ROSTER[sel.ix];
   const x = 936;
@@ -403,6 +413,18 @@ function drawStatPanel(g: Ctx): void {
   // instant it lands, then settles to its colour.
   const age = (start: number, per: number, i: number): number =>
     sel.swapT - start - i * per;
+  const segs = Math.max(1, Math.min(10, Math.round(p.stats.speed / 4)));
+
+  // One audio tick per landed block; the counter resets when swapT rewinds.
+  const shown = (start: number, per: number, n: number): number =>
+    sel.swapT < start ? 0 : Math.min(n, Math.floor((sel.swapT - start) / per) + 1);
+  const revealed =
+    shown(0.2, 0.05, p.stats.armor) + shown(0.45, 0.035, segs) + shown(0.8, 0.08, p.stats.burst);
+  if (revealed < statTicked) statTicked = revealed;
+  if (revealed > statTicked) {
+    statTicked = revealed;
+    sfx("ui-tick", { throttleMs: 25, jitter: true });
+  }
 
   tx(g, "ARMOR ── 装甲", lx, y + 218, 11, DIM, "left", 3);
   for (let i = 0; i < 5; i++) {
@@ -417,7 +439,6 @@ function drawStatPanel(g: Ctx): void {
   }
 
   tx(g, "SPEED ── 速度", lx, y + 264, 11, DIM, "left", 3);
-  const segs = Math.max(1, Math.min(10, Math.round(p.stats.speed / 4)));
   for (let i = 0; i < 10; i++) {
     const a = age(0.45, 0.035, i);
     const on = i < segs && a >= 0;
@@ -647,10 +668,19 @@ function drawBattle(g: Ctx): void {
   }
 
   if (hud.paused) {
-    g.fillStyle = "rgba(5, 7, 13, 0.72)";
-    g.fillRect(0, 0, UI_W, UI_H);
-    tx(g, "PAUSE ── 一時停止", UI_W / 2, UI_H / 2 - 12, 40, FG, "center", 6);
-    tx(g, "P TO RESUME", UI_W / 2, UI_H / 2 + 36, 16, DIM, "center", 4);
+    const pauseOpts = {
+      heading: "PAUSE ── 一時停止",
+      footer: "P / ESC TO RESUME",
+      resume: true,
+      confirmExit: settingsUi.confirmExit,
+    };
+    const hover = hitTitleChrome(
+      settingsUi.pointerX,
+      settingsUi.pointerY,
+      true,
+      pauseOpts,
+    );
+    drawSettingsPanel(g, hover, pauseOpts);
   }
 }
 

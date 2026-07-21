@@ -3,6 +3,7 @@
 // stat bars, roster strip. Confirm plays a launch cut-in, then the mission.
 
 import Phaser from 'phaser';
+import { music, PILOT_VO, sfx, vo } from '../../core/audio';
 import { clearTap, takeKey, takeTap, pointer } from '../../core/input';
 import { animateGear, buildGear, type Gear, setGearFlash } from '../../render/gearFactory';
 import { Stage3D } from '../../render/stage3d';
@@ -38,6 +39,8 @@ export class SelectScene extends Phaser.Scene {
     sel.confirmT = -1;
     sel.timer = SELECT_T;
     this.spawnGear();
+    music('select');
+    vo('op-select-gear');
   }
 
   private spawnGear(): void {
@@ -58,6 +61,8 @@ export class SelectScene extends Phaser.Scene {
     sel.ix = ((ix % ROSTER.length) + ROSTER.length) % ROSTER.length;
     sel.swapT = 0;
     this.spawnGear();
+    sfx('ui-move');
+    vo(`${PILOT_VO[ROSTER[sel.ix].id]}-select`);
   }
 
   private confirm(): void {
@@ -67,6 +72,10 @@ export class SelectScene extends Phaser.Scene {
     Stage3D.I.addShake(0.45);
     setGearFlash(this.gear, true);
     this.time.delayedCall(120, () => setGearFlash(this.gear, false));
+    sfx('ui-confirm');
+    sfx('launch');
+    vo(`${PILOT_VO[ROSTER[sel.ix].id]}-launch`);
+    music(null, { fade: 1.2 }); // cut-in and NOW LOADING play dry
   }
 
   update(_t: number, dms: number): void {
@@ -91,6 +100,7 @@ export class SelectScene extends Phaser.Scene {
       if (takeKey('ArrowLeft') || takeKey('KeyA')) this.pick(sel.ix - 1);
       if (takeKey('ArrowRight') || takeKey('KeyD')) this.pick(sel.ix + 1);
       if (takeKey('Escape')) {
+        sfx('ui-back');
         startWipe(() => this.scene.start('title'));
         return;
       }
@@ -113,8 +123,17 @@ export class SelectScene extends Phaser.Scene {
         else if (sel.hover >= 0) this.pick(sel.hover);
       }
 
-      // Coin-op clock: no dithering in the hangar — expiry launches you.
+      // Coin-op clock: beeps from ten, urgent under five, the operator calls
+      // the closing window at seven. No dithering in the hangar — expiry
+      // launches you.
+      const before = Math.ceil(sel.timer);
       sel.timer -= dt;
+      const remain = Math.ceil(sel.timer);
+      if (remain < before && remain > 0) {
+        if (remain <= 5) sfx('timer-alarm');
+        else if (remain <= 10) sfx('timer-beep');
+        if (remain === 7) vo('op-timeout', { queue: true });
+      }
       if (sel.timer <= 0) {
         sel.timer = 0;
         this.confirm();

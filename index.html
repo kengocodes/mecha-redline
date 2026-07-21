@@ -10,11 +10,26 @@
       href="https://fonts.googleapis.com/css2?family=DotGothic16&display=swap"
       rel="stylesheet"
     />
+    <!-- Deep-link privacy/terms: skip loading chrome flash before modules run. -->
+    <script>
+      if (/^\/(privacy|terms)\/?$/.test(location.pathname)) {
+        document.documentElement.classList.add('legal-reading');
+      }
+    </script>
   </head>
   <body>
     <div id="stage">
       <div id="loading">MECHA REDLINE<span class="sub">LOADING SYSTEM ── 起動中</span></div>
     </div>
+
+    <!-- Legal pages live outside #stage so game chrome never wraps them. -->
+    <div id="legal" class="legal-screen hidden">
+      <div class="legal-shell">
+        <a href="/" id="btn-legal-back" class="legal-back">← Back to game</a>
+        <div id="legal-content"></div>
+      </div>
+    </div>
+
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

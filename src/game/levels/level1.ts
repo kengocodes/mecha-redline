@@ -4,7 +4,7 @@
 export interface LevelApi {
   husk(x: number, y?: number, seed?: number): void;
   lancer(x: number, y?: number): void;
-  say(text: string): void;
+  say(text: string, voId?: string): void;
   wave(n: number): void;
   /** Selected gear's display name, for operator chatter. */
   callsign: string;
@@ -20,7 +20,10 @@ function build(): LevelEvent[] {
   const add = (at: number, run: (g: LevelApi) => void) => ev.push({ at, run });
 
   add(0.8, (g) =>
-    g.say(`OPERATOR // Hostile gears crossing the redline. ${g.callsign}, weapons free.`),
+    g.say(
+      `OPERATOR // Hostile gears crossing the redline. ${g.callsign}, weapons free.`,
+      'op-weapons-free',
+    ),
   );
 
   // W1 — first contact: a line of husks.
@@ -36,7 +39,7 @@ function build(): LevelEvent[] {
   }
 
   // W3 — first lancer with escorts.
-  add(16.5, (g) => g.say('OPERATOR // Lancer-type signature. Watch the flak rings.'));
+  add(16.5, (g) => g.say('OPERATOR // Lancer-type signature. Watch the flak rings.', 'op-lancer'));
   add(17.5, (g) => {
     g.wave(3);
     g.lancer(0, -34);
@@ -72,7 +75,10 @@ function build(): LevelEvent[] {
   }
 
   add(64, (g) =>
-    g.say('OPERATOR // Sweep the stragglers. Something big is on your approach vector.'),
+    g.say(
+      'OPERATOR // Sweep the stragglers. Something big is on your approach vector.',
+      'op-stragglers',
+    ),
   );
 
   return ev.sort((a, b) => a.at - b.at);

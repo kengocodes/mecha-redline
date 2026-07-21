@@ -2,6 +2,7 @@
 // fires under full cover, then the same cells peel away. Scenes call
 // startWipe with their scene switch; drawUI paints it above everything.
 
+import { sfx } from '../../core/audio';
 import { UI_H, UI_W } from '../../core/const';
 
 const CELL = 40; // 32 × 18 grid over the 1280×720 UI
@@ -25,6 +26,7 @@ export function startWipe(cb: () => void): void {
   wipe.t = 0;
   wipe.fired = false;
   wipe.cb = cb;
+  sfx('wipe');
 }
 
 /** Advance + paint; called from drawUI every frame, above everything else. */

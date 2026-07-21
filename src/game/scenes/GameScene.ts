@@ -2,6 +2,7 @@
 // mission flow; pushes positions into the three.js stage every frame.
 
 import Phaser from 'phaser';
+import { applyAudioSettings, music, PILOT_VO, sfx, sfxLoopStart, sfxLoopStop, vo } from '../../core/audio';
 import {
   BK,
   type Bullet,
@@ -22,6 +23,7 @@ import {
   takeKey,
   takeTap,
 } from '../../core/input';
+import { setBus, toggleMuted, type BusId } from '../../core/settings';
 import {
   animateGear,
   buildGear,
@@ -52,7 +54,8 @@ import {
   tryBurst,
 } from '../systems/burst';
 import { emit } from '../systems/patterns';
-import { hud, say, setPhase } from '../ui/state';
+import { hud, say, setPhase, settingsUi } from '../ui/state';
+import { hitTitleChrome, sliderValueAt } from '../ui/titleChrome';
 import { startWipe } from '../ui/wipe';
 
 /** Real-time freeze frames on impact moments, seconds. */
@@ -81,6 +84,10 @@ export class GameScene extends Phaser.Scene {
   private hitstop = 0;
   private bossPhase = 1;
   private burst = createBurstState();
+  private voPfx = 'kira';
+  private clearVoDone = false;
+  private lastHitLine = 0;
+  private dragBus: BusId | null = null;
 
   constructor() {
     super('game');
@@ -117,6 +124,12 @@ export class GameScene extends Phaser.Scene {
     this.stats = pilot.stats;
     this.callsign = pilot.displayName;
     this.burst = createBurstState(this.stats.burst);
+    this.voPfx = PILOT_VO[pilot.id] ?? 'kira';
+    this.clearVoDone = false;
+    music('battle');
+    // Queued: the pilot's launch line from the select cut-in may still be going.
+    vo('op-mission-start', { queue: true });
+    sfxLoopStart('thruster');
 
     this.pGear = buildGear(pilot.gear);
     s.battleGroup.add(this.pGear.root);
@@ -132,6 +145,9 @@ export class GameScene extends Phaser.Scene {
     hud.bossMax = 0;
     hud.msg = '';
     hud.paused = false;
+    settingsUi.open = false;
+    settingsUi.confirmExit = false;
+    this.dragBus = null;
     setPhase('intro');
 
     // ?debug=boss jumps straight to the fortress fight.
@@ -140,6 +156,36 @@ export class GameScene extends Phaser.Scene {
       this.levelT = 999;
       setPhase('warning');
     }
+
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      hud.paused = false;
+      settingsUi.open = false;
+      settingsUi.confirmExit = false;
+      this.dragBus = null;
+    });
+  }
+
+  private setPaused(on: boolean): void {
+    hud.paused = on;
+    settingsUi.open = on;
+    settingsUi.confirmExit = false;
+    if (!on) this.dragBus = null;
+    clearTap();
+  }
+
+  private exitToTitle(): void {
+    sfx('ui-confirm');
+    sfxLoopStop('thruster');
+    music(null, { fade: 0.4 });
+    this.setPaused(false);
+    startWipe(() => this.scene.start('title'));
+  }
+
+  private pauseOpts() {
+    return {
+      resume: true as const,
+      confirmExit: settingsUi.confirmExit,
+    };
   }
 
   // ---- level script api ----
@@ -170,8 +216,62 @@ export class GameScene extends Phaser.Scene {
   };
 
   update(_t: number, dms: number): void {
-    if (takeKey('KeyP') || takeKey('Escape')) {
-      if (hud.phase === 'battle' || hud.phase === 'boss') hud.paused = !hud.paused;
+    settingsUi.pointerX = pointer.x;
+    settingsUi.pointerY = pointer.y;
+
+    const canPause = hud.phase === 'battle' || hud.phase === 'boss';
+
+    // Pause menu = audio settings + EXIT TO TITLE (confirm before abandon).
+    if (hud.paused) {
+      const opts = this.pauseOpts();
+      if (settingsUi.confirmExit) {
+        // Esc / P cancel the confirm (Sylvaria: safe option), not the whole pause.
+        if (takeKey('KeyP') || takeKey('Escape')) {
+          sfx('ui-back');
+          settingsUi.confirmExit = false;
+          clearTap();
+        } else if (takeTap()) {
+          const hit = hitTitleChrome(pointer.x, pointer.y, true, opts);
+          if (hit?.kind === 'exit-cancel') {
+            sfx('ui-back');
+            settingsUi.confirmExit = false;
+          } else if (hit?.kind === 'exit-confirm') {
+            this.exitToTitle();
+          }
+        }
+      } else if (this.dragBus) {
+        if (!pointer.down) {
+          this.dragBus = null;
+        } else {
+          setBus(this.dragBus, sliderValueAt(this.dragBus, pointer.x, opts));
+          applyAudioSettings();
+        }
+        takeTap();
+      } else if (takeKey('KeyP') || takeKey('Escape')) {
+        sfx('ui-back');
+        this.setPaused(false);
+      } else if (takeTap()) {
+        const hit = hitTitleChrome(pointer.x, pointer.y, true, opts);
+        if (hit?.kind === 'slider') {
+          this.dragBus = hit.bus;
+          setBus(hit.bus, hit.t);
+          applyAudioSettings();
+        } else if (hit?.kind === 'mute') {
+          toggleMuted();
+          applyAudioSettings();
+          sfx('ui-confirm');
+        } else if (hit?.kind === 'close') {
+          sfx('ui-back');
+          this.setPaused(false);
+        } else if (hit?.kind === 'exit') {
+          sfx('ui-confirm');
+          settingsUi.confirmExit = true;
+          clearTap();
+        }
+      }
+    } else if (canPause && (takeKey('KeyP') || takeKey('Escape'))) {
+      sfx('ui-confirm');
+      this.setPaused(true);
     }
 
     const raw = Math.min(dms, 50) / 1000;
@@ -183,6 +283,12 @@ export class GameScene extends Phaser.Scene {
     hud.msgT += raw;
     hud.flashT = Math.max(0, hud.flashT - raw);
     hud.burstFlashT = Math.max(0, hud.burstFlashT - raw);
+
+    // Pilot signs off once the operator's kill call has had its beat.
+    if (hud.phase === 'complete' && hud.t > 1.6 && !this.clearVoDone) {
+      this.clearVoDone = true;
+      vo(`${this.voPfx}-clear`);
+    }
 
     // End-state input.
     if (hud.phase === 'failed' && hud.t > 1 && takeTap()) {
@@ -213,7 +319,9 @@ export class GameScene extends Phaser.Scene {
       }
       if (this.scriptIx >= LEVEL1.length && this.enemies.length === 0 && this.p.alive) {
         setPhase('warning');
-        say('OPERATOR // Fortress-class contact. That is a Golgotha. Good luck, pilot.');
+        say('OPERATOR // Fortress-class contact. That is a Golgotha. Good luck, pilot.', 'op-warning');
+        sfx('warning');
+        music('boss', { fade: 1.4 });
       }
     } else if (hud.phase === 'warning' && hud.t > 2.8) {
       setPhase('boss');
@@ -242,10 +350,14 @@ export class GameScene extends Phaser.Scene {
     if (this.endT > 0) {
       this.endT -= dt;
       if (this.endT <= 0) {
+        sfxLoopStop('thruster');
         if (!this.p.alive) {
           setPhase('failed');
+          music('failed', { loop: false });
+          vo('op-failed', { queue: true });
         } else {
           setPhase('complete');
+          music('clear', { loop: false });
         }
         clearTap(); // require a fresh click, not a leftover firing press
         hud.hi = Math.max(hud.hi, hud.score);
@@ -303,6 +415,7 @@ export class GameScene extends Phaser.Scene {
       }
       this.pGear.muzzleT = 0.07;
       this.pGear.recoil = Math.min(1, this.pGear.recoil + 0.7);
+      sfx('shot-player', { jitter: true, throttleMs: 70 });
     }
   }
 
@@ -313,6 +426,7 @@ export class GameScene extends Phaser.Scene {
       eb: this.eb,
       playerAlive: this.p.alive && hud.phase !== 'intro',
     };
+    const shotsBefore = this.eb.length;
     for (let i = this.enemies.length - 1; i >= 0; i--) {
       const e = this.enemies[i];
       updateEnemy(e, ctx, dt);
@@ -322,6 +436,10 @@ export class GameScene extends Phaser.Scene {
         Stage3D.I.battleGroup.remove(e.gear.root);
         this.enemies.splice(i, 1);
       }
+    }
+    // One throttled zap per volley, not per bullet — rings would be noise.
+    if (this.eb.length > shotsBefore) {
+      sfx('shot-enemy', { jitter: true, throttleMs: 160 });
     }
   }
 
@@ -406,12 +524,17 @@ export class GameScene extends Phaser.Scene {
       }
       this.eb.length = 0; // mercy-clear the screen
       this.endT = 1.9;
-      say(`OPERATOR // Confirmed kill. Sector 7 holds. Bring the ${this.callsign} home.`);
+      say(
+        `OPERATOR // Confirmed kill. Sector 7 holds. Bring the ${this.callsign} home.`,
+        'op-boss-kill',
+      );
+      sfx('expl-boss');
     } else {
       const lancer = e.kind === 'lancer';
       s.fx.explode(e.x, e.y, lancer ? 1.5 : 1);
       s.addShake(lancer ? 0.45 : 0.2);
       this.stop(lancer ? HITSTOP.lancer : HITSTOP.husk);
+      sfx(lancer ? 'expl-big' : 'expl-small', { jitter: true, throttleMs: 60 });
     }
   }
 
@@ -435,6 +558,8 @@ export class GameScene extends Phaser.Scene {
     this.time.delayedCall(120, () => {
       if (this.p.alive) setGearFlash(this.pGear, false);
     });
+    sfx('burst');
+    vo(`${this.voPfx}-burst`);
   }
 
   private hitPlayer(): void {
@@ -458,6 +583,15 @@ export class GameScene extends Phaser.Scene {
       s.addShake(1.5);
       this.timescale = 0.35;
       this.endT = 0.8; // sim-seconds at 0.35x ≈ 2.3 real seconds of slow-mo
+      sfx('expl-big');
+      sfxLoopStop('thruster');
+    } else {
+      sfx('hit-armor');
+      // Rotate the bark: random of three, never the same one twice running.
+      let n = 1 + Math.floor(Math.random() * 3);
+      if (n === this.lastHitLine) n = (n % 3) + 1;
+      this.lastHitLine = n;
+      vo(`${this.voPfx}-hit${n === 1 ? '' : n}`);
     }
   }
 

@@ -1,5 +1,7 @@
 // Shared mutable HUD state: gameplay scenes write it, the HUD scene draws it.
 
+import { vo } from '../../core/audio';
+
 export type Phase =
   | 'boot'
   | 'title'
@@ -71,6 +73,15 @@ export const sel: SelectState = { ix: 0, hover: -1, swapT: 9, confirmT: -1, time
 /** Title attract carousel: TitleScene advances it, the overlay paints it. */
 export const attract = { ix: 0, swapT: 9 };
 
+/** Shared settings panel state — title + pause both drive this for hover paint. */
+export const settingsUi = {
+  open: false,
+  /** Pause only: confirm before abandoning the mission. */
+  confirmExit: false,
+  pointerX: 0,
+  pointerY: 0,
+};
+
 /** Launch cut-in length (confirm tap → fade to black), seconds. */
 export const LAUNCH_T = 1.15;
 /** Fake NOW LOADING dwell after the cut-in, before the mission starts. */
@@ -81,7 +92,9 @@ export function setPhase(p: Phase): void {
   hud.t = 0;
 }
 
-export function say(text: string): void {
+export function say(text: string, voId?: string): void {
   hud.msg = text;
   hud.msgT = 0;
+  // Operator narration waits its turn rather than cutting pilot chatter.
+  if (voId) vo(voId, { queue: true });
 }

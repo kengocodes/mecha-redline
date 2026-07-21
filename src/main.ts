@@ -8,6 +8,7 @@ import { GameScene } from './game/scenes/GameScene';
 import { HudScene } from './game/scenes/HudScene';
 import { SelectScene } from './game/scenes/SelectScene';
 import { TitleScene } from './game/scenes/TitleScene';
+import { initLegalOverlay } from './legal/overlay';
 import './style.css';
 
 const stage = document.getElementById('stage');
@@ -26,6 +27,7 @@ function fitStage(): void {
 }
 fitStage();
 
+initLegalOverlay();
 initInput(stage);
 
 const game = new Phaser.Game({
