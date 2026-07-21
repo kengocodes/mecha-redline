@@ -6,6 +6,7 @@ import { applyAudioSettings, music, PILOT_VO, sfx, sfxLoopStart, sfxLoopStop, vo
 import {
   BK,
   type Bullet,
+  CAM_ELEV,
   CHAIN,
   CULL_X,
   CULL_Y,
@@ -70,6 +71,12 @@ const HITSTOP = {
   burst: 0.08,
 };
 
+/** Smooth S-curve for camera blends. */
+function easeInOut(p: number): number {
+  const t = Math.max(0, Math.min(1, p));
+  return t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2;
+}
+
 export class GameScene extends Phaser.Scene {
   private p = { x: 0, y: 0, vx: 0, vy: 0, aim: -Math.PI / 2, inv: 0, fireCd: 0, alive: true };
   private pGear!: Gear;
@@ -86,6 +93,8 @@ export class GameScene extends Phaser.Scene {
   private endT = 0;
   private hitstop = 0;
   private bossPhase = 1;
+  private bossCineT = 99; // seconds since the boss reveal began
+  private bossEngaged = false; // touchdown fired
   private burst = createBurstState();
   private voPfx = 'kira';
   private clearVoDone = false;
@@ -122,6 +131,8 @@ export class GameScene extends Phaser.Scene {
     this.endT = 0;
     this.hitstop = 0;
     this.bossPhase = 1;
+    this.bossCineT = 99;
+    this.bossEngaged = false;
 
     const pilot = selectedPilot();
     this.stats = pilot.stats;
@@ -133,6 +144,7 @@ export class GameScene extends Phaser.Scene {
     // Queued: the pilot's launch line from the select cut-in may still be going.
     vo('op-mission-start', { queue: true });
     sfxLoopStart('thruster');
+    sfx('gear-arrive', { gain: 0.55 }); // servo settle under the hero shot
 
     this.pGear = buildGear(pilot.gear);
     s.battleGroup.add(this.pGear.root);
@@ -151,6 +163,7 @@ export class GameScene extends Phaser.Scene {
     hud.comboBest = 0;
     hud.waveBannerT = 0;
     hud.phaseBannerT = 0;
+    hud.cineBars = 0;
     popups.length = 0;
     hud.msg = '';
     hud.paused = false;
@@ -330,10 +343,39 @@ export class GameScene extends Phaser.Scene {
     }
 
     if (dt > 0) this.sim(dt);
+    this.updateCinematics(raw);
 
     // Push state into the 3D stage even while paused (render continues).
     this.syncStage(dt);
     Stage3D.I.update(dt);
+  }
+
+  /**
+   * Camera direction. Intro: hold a low hero shot on the player's gear
+   * (slow push-in), then pull out into the battle framing as the mission
+   * card types on. Boss: push in on the descending hull, hold through the
+   * touchdown, release before the first volley. The player keeps control
+   * throughout; letterbox bars track the blend.
+   */
+  private updateCinematics(raw: number): void {
+    const s = Stage3D.I;
+    let bars = 0;
+    if (hud.phase === 'intro') {
+      const t = hud.t;
+      const w = t < 1.5 ? 1 : 1 - easeInOut((t - 1.5) / 1.7);
+      const zoom = 3.0 + 0.4 * Math.min(1, t / 1.5);
+      s.setCine(this.p.x, this.p.y - 5, 2.6, zoom, 24, w);
+      bars = w;
+    } else if (this.boss && this.bossCineT < 3.2) {
+      const t = this.bossCineT;
+      const w = t < 0.6 ? easeInOut(t / 0.6) : t < 2.3 ? 1 : 1 - easeInOut((t - 2.3) / 0.9);
+      s.setCine(this.boss.x, this.boss.y + 3, 5, 1.65, 42, w);
+      bars = w;
+    } else {
+      s.setCine(0, 0, 0, 1, CAM_ELEV, 0);
+    }
+    hud.cineBars += (bars - hud.cineBars) * Math.min(1, raw * 8);
+    if (bars === 0 && hud.cineBars < 0.005) hud.cineBars = 0;
   }
 
   private sim(dt: number): void {
@@ -348,6 +390,7 @@ export class GameScene extends Phaser.Scene {
       }
       if (this.scriptIx >= LEVEL1.length && this.enemies.length === 0 && this.p.alive) {
         setPhase('warning');
+        this.eb.length = 0; // stage is clear for the reveal — no stray fire
         say('OPERATOR // Fortress-class contact. That is a Golgotha. Good luck, pilot.', 'op-warning');
         sfx('warning');
         music('boss', { fade: 1.4 });
@@ -355,6 +398,7 @@ export class GameScene extends Phaser.Scene {
     } else if (hud.phase === 'warning' && hud.t > 2.8) {
       setPhase('boss');
       this.boss = this.spawn('boss', 0, -44);
+      this.bossCineT = 0;
       hud.bossName = `${BOSS_NAME} ── ${BOSS_TAG}`;
       hud.bossMax = this.boss.maxHp;
       hud.bossHp = this.boss.maxHp;
@@ -375,7 +419,21 @@ export class GameScene extends Phaser.Scene {
     this.collide();
 
     hud.focus = focusing() && this.p.alive;
-    if (this.boss) hud.bossHp = Math.max(0, this.boss.hp);
+    if (this.boss) {
+      hud.bossHp = Math.max(0, this.boss.hp);
+      this.bossCineT = Math.min(10, this.bossCineT + dt);
+    }
+
+    // Boss touchdown: the hull slams onto its hold point mid-reveal.
+    if (this.boss && !this.bossEngaged && this.boss.ai.state === 1) {
+      this.bossEngaged = true;
+      const s = Stage3D.I;
+      s.addShake(0.9);
+      s.addPunch(0.5);
+      s.impact(0.008, 0.2, 0xff6a7a);
+      s.fx.burst(this.boss.x, this.boss.y, 0xff3b53, 0xffd0d8);
+      sfx('gear-arrive', { gain: 0.7 });
+    }
 
     // Boss phase transition: freeze + shake, a red shockwave off the hull,
     // a long white blink on the gear, and a slammed phase card.

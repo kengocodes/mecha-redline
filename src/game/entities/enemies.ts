@@ -158,9 +158,15 @@ function updateBoss(e: Enemy, c: SimCtx, dt: number): void {
   }
 
   if (a.state === 0) {
-    e.vy = (-15 - e.y) * 1.6;
+    // Cinematic entrance: steady descent to the hold point while the camera
+    // holds the hull, easing into a touchdown. The negative cycle keeps the
+    // first volley back until the camera has released to gameplay.
+    e.vy = Math.max(5, Math.min(16, (-15 - e.y) * 2.2));
     e.vx = 0;
-    if (e.y > -15.6) a.state = 1;
+    if (e.y > -15.6) {
+      a.state = 1;
+      a.cycle = -0.9;
+    }
     return;
   }
 

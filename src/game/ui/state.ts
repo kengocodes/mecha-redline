@@ -36,6 +36,7 @@ export interface HudState {
   waveBannerT: number; // WAVE slam banner countdown
   phaseBanner: string; // boss phase banner text
   phaseBannerT: number; // boss phase banner countdown
+  cineBars: number; // 0..1 letterbox strength while a camera cinematic runs
   msg: string; // operator comms line
   msgT: number;
   px: number; // player position in UI space, for HUD proximity fades
@@ -65,6 +66,7 @@ export const hud: HudState = {
   waveBannerT: 0,
   phaseBanner: '',
   phaseBannerT: 0,
+  cineBars: 0,
   msg: '',
   msgT: 0,
   px: 640,

@@ -93,6 +93,14 @@ export class Stage3D {
   private flashColor = new THREE.Color(1, 1, 1);
   private punch = 0;
   private battleMode = false;
+  private cineW = 0;
+  private cineTx = 0;
+  private cineTy = 0;
+  private cineH = 0;
+  private cineZoom = 1;
+  private cineElev = (CAM_ELEV * Math.PI) / 180;
+  private _look = new THREE.Vector3();
+  private _camPos = new THREE.Vector3();
   private elev = (CAM_ELEV * Math.PI) / 180;
   private lookTarget = new THREE.Vector3(0, 0, 0);
   private ray = new THREE.Raycaster();
@@ -234,6 +242,7 @@ export class Stage3D {
     this.aberr = 0;
     this.flash = 0;
     this.punch = 0;
+    this.cineW = 0;
   }
 
   addShake(mag: number): void {
@@ -255,6 +264,21 @@ export class Stage3D {
   /** Quick orthographic zoom-in kick — battle mode only. */
   addPunch(mag: number): void {
     this.punch = Math.min(1, this.punch + mag);
+  }
+
+  /**
+   * Cinematic camera blend, battle mode only. w = 0 is the standard battle
+   * framing; w = 1 frames the arena point (tx, ty) at world height h with
+   * the given zoom and elevation. Shake and punch still apply on top, so
+   * impacts land inside cinematics too.
+   */
+  setCine(tx: number, ty: number, h: number, zoom: number, elevDeg: number, w: number): void {
+    this.cineTx = tx;
+    this.cineTy = ty;
+    this.cineH = h;
+    this.cineZoom = zoom;
+    this.cineElev = (elevDeg * Math.PI) / 180;
+    this.cineW = w;
   }
 
   private _proj = new THREE.Vector3();
@@ -280,24 +304,31 @@ export class Stage3D {
   }
 
   update(dt: number): void {
-    // Camera shake: pure screen-space translation (orthographic).
-    const el = this.elev;
-    const base = new THREE.Vector3(0, CAM_DIST * Math.sin(el), CAM_DIST * Math.cos(el));
+    // Camera pose: the default framing blended toward any cinematic target
+    // (battle only), with pure screen-space shake on top (orthographic).
+    const cw = this.battleMode ? this.cineW : 0;
+    const el = this.elev + (this.cineElev - this.elev) * cw;
+    const look = this._look.set(this.cineTx * cw, this.cineH * cw, this.cineTy * cw);
+    const base = this._camPos.set(
+      look.x,
+      look.y + CAM_DIST * Math.sin(el),
+      look.z + CAM_DIST * Math.cos(el),
+    );
+    if (!this.battleMode) {
+      look.copy(this.lookTarget);
+      base.set(0, CAM_DIST * Math.sin(el), CAM_DIST * Math.cos(el));
+    }
     if (this.shake > 0.005) {
       const right = new THREE.Vector3(1, 0, 0);
       const up = new THREE.Vector3(0, Math.cos(el), -Math.sin(el));
       const ox = (Math.random() * 2 - 1) * this.shake;
       const oy = (Math.random() * 2 - 1) * this.shake;
       base.addScaledVector(right, ox).addScaledVector(up, oy);
-      this.camera.position.copy(base);
-      this.camera.lookAt(
-        this.lookTarget.clone().addScaledVector(right, ox).addScaledVector(up, oy),
-      );
+      look.addScaledVector(right, ox).addScaledVector(up, oy);
       this.shake *= Math.max(0, 1 - dt * 6);
-    } else {
-      this.camera.position.copy(base);
-      this.camera.lookAt(this.lookTarget);
     }
+    this.camera.position.copy(base);
+    this.camera.lookAt(look);
 
     this.space.update(dt);
     this.hangar.update(dt);
@@ -309,7 +340,7 @@ export class Stage3D {
     this.flash = this.flash < 0.01 ? 0 : this.flash * Math.exp(-dt * 12);
     this.punch = this.punch < 0.01 ? 0 : this.punch * Math.exp(-dt * 8);
     if (this.battleMode) {
-      const zoom = 1 + this.punch * 0.05;
+      const zoom = (1 + (this.cineZoom - 1) * cw) * (1 + this.punch * 0.05);
       if (Math.abs(zoom - this.camera.zoom) > 0.0005) {
         this.camera.zoom = zoom;
         this.camera.updateProjectionMatrix();

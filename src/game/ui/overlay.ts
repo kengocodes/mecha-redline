@@ -776,7 +776,8 @@ function drawLoading(g: Ctx, t: number): void {
 function drawBattle(g: Ctx): void {
   const t = hud.t;
 
-  if (hud.phase !== "intro") {
+  // Standard HUD stands down while a camera cinematic holds the frame.
+  if (hud.phase !== "intro" && hud.cineBars < 0.5) {
     drawScore(g);
     drawMission(g);
     drawPilotCluster(g);
@@ -786,7 +787,8 @@ function drawBattle(g: Ctx): void {
   }
   if (hud.phase === "battle") drawWaveBanner(g);
   if (hud.phase === "boss") drawPhaseBanner(g);
-  if (hud.phase === "boss" && hud.bossMax > 0) drawBossBar(g);
+  if (hud.phase === "boss" && hud.t > 0.55 && hud.t < 2.95) drawBossCard(g);
+  if (hud.phase === "boss" && hud.bossMax > 0 && hud.t > 2.9) drawBossBar(g);
   if (hud.phase === "warning") drawWarning(g, t);
   if (hud.phase === "intro") drawIntro(g, t);
   if (hud.phase === "complete") drawEndCard(g, true);
@@ -825,6 +827,14 @@ function drawBattle(g: Ctx): void {
     g.fillRect(0, uiH - b, uiW, b);
     g.fillRect(0, 0, b, uiH);
     g.fillRect(uiW - b, 0, b, uiH);
+  }
+
+  // Cinematic letterbox — slides in over everything during camera moves.
+  if (hud.cineBars > 0.01) {
+    const bh = 76 * hud.cineBars;
+    g.fillStyle = "#02050c";
+    g.fillRect(0, 0, uiW, bh);
+    g.fillRect(0, uiH - bh, uiW, bh);
   }
 
   if (hud.paused) {
@@ -938,6 +948,22 @@ function drawWaveBanner(g: Ctx): void {
   tx(g, `WAVE ${String(hud.wave).padStart(2, "0")}`, uiW / 2, y, 44 * pop, FG, "center", 12);
   tx(g, `第${hud.wave}波 ── 接敵`, uiW / 2, y + 40, 15, CYAN, "center", 6);
   rule(g, uiW / 2 - 210, y + 60, 420, RED);
+  g.globalAlpha = 1;
+}
+
+/** Boss reveal card — name slam + class tag in the lower third while the
+ * camera holds the descending hull. */
+function drawBossCard(g: Ctx): void {
+  const t = hud.t - 0.55;
+  const inA = Math.min(1, t / 0.15);
+  const out = hud.t > 2.55 ? Math.max(0, 1 - (hud.t - 2.55) / 0.4) : 1;
+  const pop = 1 + Math.max(0, 1 - t / 0.25) ** 2 * 0.6;
+  const [name, tag] = hud.bossName.split(" ── ");
+  g.globalAlpha = inA * out;
+  tx(g, name ?? hud.bossName, uiW / 2, 470, 64 * pop, RED, "center", 18);
+  if (tag) tx(g, tag, uiW / 2, 516, 20, FG, "center", 8);
+  rule(g, uiW / 2 - 240, 540, 480, RED);
+  tx(g, "FORTRESS-CLASS HOSTILE GEAR", uiW / 2, 562, 13, DIM, "center", 4);
   g.globalAlpha = 1;
 }
 
@@ -1126,8 +1152,10 @@ function drawWarning(g: Ctx, t: number): void {
 }
 
 function drawIntro(g: Ctx, t: number): void {
+  // Types on as the hero-shot camera starts its pull-back, out by battle.
   const a =
-    Math.min(1, t / 0.4) * (t > 3.0 ? Math.max(0, 1 - (t - 3.0) / 0.6) : 1);
+    Math.min(1, Math.max(0, (t - 1.3) / 0.4)) *
+    (t > 3.0 ? Math.max(0, 1 - (t - 3.0) / 0.6) : 1);
   g.globalAlpha = a;
   tx(g, "MISSION 01", uiW / 2, 292, 56, FG, "center", 14);
   rule(g, uiW / 2 - 250, 330, 500, RED);
