@@ -6,6 +6,7 @@ import { applyAudioSettings, music, PILOT_VO, sfx, sfxLoopStart, sfxLoopStop, vo
 import {
   BK,
   type Bullet,
+  CHAIN,
   CULL_X,
   CULL_Y,
   HI_KEY,
@@ -56,7 +57,7 @@ import {
   tryBurst,
 } from '../systems/burst';
 import { emit } from '../systems/patterns';
-import { hud, say, setPhase, settingsUi } from '../ui/state';
+import { addPopup, hud, popups, say, setPhase, settingsUi } from '../ui/state';
 import { hitTitleChrome, sliderValueAt } from '../ui/titleChrome';
 import { startWipe } from '../ui/wipe';
 
@@ -145,6 +146,12 @@ export class GameScene extends Phaser.Scene {
     hud.burstFlashT = 0;
     hud.wave = 0;
     hud.bossMax = 0;
+    hud.combo = 0;
+    hud.comboT = 0;
+    hud.comboBest = 0;
+    hud.waveBannerT = 0;
+    hud.phaseBannerT = 0;
+    popups.length = 0;
     hud.msg = '';
     hud.paused = false;
     settingsUi.open = false;
@@ -221,6 +228,8 @@ export class GameScene extends Phaser.Scene {
     say,
     wave: (n: number) => {
       hud.wave = n;
+      hud.waveBannerT = 1.5;
+      sfx('gear-arrive', { gain: 0.3 });
     },
     get callsign() {
       return selectedPilot().displayName;
@@ -301,6 +310,8 @@ export class GameScene extends Phaser.Scene {
     hud.msgT += raw;
     hud.flashT = Math.max(0, hud.flashT - raw);
     hud.burstFlashT = Math.max(0, hud.burstFlashT - raw);
+    hud.waveBannerT = Math.max(0, hud.waveBannerT - raw);
+    hud.phaseBannerT = Math.max(0, hud.phaseBannerT - raw);
 
     // Pilot signs off once the operator's kill call has had its beat.
     if (hud.phase === 'complete' && hud.t > 1.6 && !this.clearVoDone) {
@@ -349,6 +360,15 @@ export class GameScene extends Phaser.Scene {
       hud.bossHp = this.boss.maxHp;
     }
 
+    // Chain window drains in sim time (hitstop freezes it with the action).
+    if (hud.comboT > 0) {
+      hud.comboT -= dt;
+      if (hud.comboT <= 0) {
+        hud.combo = 0;
+        hud.comboT = 0;
+      }
+    }
+
     this.updatePlayer(dt);
     this.updateEnemies(dt);
     this.updateBullets(dt);
@@ -357,11 +377,21 @@ export class GameScene extends Phaser.Scene {
     hud.focus = focusing() && this.p.alive;
     if (this.boss) hud.bossHp = Math.max(0, this.boss.hp);
 
-    // Boss phase transition: punch it with a freeze + shake.
+    // Boss phase transition: freeze + shake, a red shockwave off the hull,
+    // a long white blink on the gear, and a slammed phase card.
     if (this.boss && (this.boss.ai.phase ?? 1) > this.bossPhase) {
       this.bossPhase = this.boss.ai.phase;
       this.stop(HITSTOP.bossPhase);
-      Stage3D.I.addShake(0.5);
+      const s = Stage3D.I;
+      s.addShake(0.5);
+      s.addPunch(0.5);
+      s.impact(0.01, 0.22, 0xff6a7a);
+      s.fx.burst(this.boss.x, this.boss.y, 0xff3b53, 0xffd0d8);
+      this.boss.flashT = 0.3;
+      hud.phaseBanner =
+        this.bossPhase >= 3 ? 'FINAL PHASE ── 最終形態' : `PHASE ${this.bossPhase} ── 第二形態`;
+      hud.phaseBannerT = 1.8;
+      sfx('warning', { gain: 0.4 });
     }
 
     // Deferred end states (let the explosion play out first).
@@ -528,16 +558,40 @@ export class GameScene extends Phaser.Scene {
     if (ix < 0) return;
     this.enemies.splice(ix, 1);
     Stage3D.I.battleGroup.remove(e.gear.root);
-    hud.score += e.score;
+
+    // Chain scoring: kills inside the window stack the chain; every
+    // CHAIN.per kills climb one multiplier tier. A hit breaks it.
+    const prevMult = Math.min(CHAIN.maxMult, 1 + Math.floor(hud.combo / CHAIN.per));
+    hud.combo += 1;
+    hud.comboT = CHAIN.window;
+    hud.comboBest = Math.max(hud.comboBest, hud.combo);
+    const mult = Math.min(CHAIN.maxMult, 1 + Math.floor(hud.combo / CHAIN.per));
+    const pts = e.score * mult;
+    hud.score += pts;
+
     const s = Stage3D.I;
+    const ui = s.uiPoint(e.x, e.y);
+    if (e.kind === 'boss') {
+      addPopup(ui.x, ui.y - 20, `+${pts}`, '#ffffff', 30);
+    } else {
+      addPopup(ui.x, ui.y - 14, `+${pts}`, mult > 1 ? '#7ffbff' : '#ffb54a', e.kind === 'husk' ? 15 : 19);
+    }
+    if (mult > prevMult) {
+      addPopup(ui.x, ui.y - 46, `CHAIN ×${mult}`, '#ffffff', 22);
+      sfx('coin', { throttleMs: 90 });
+    }
+
     if (e.kind === 'boss') {
       this.boss = null;
       s.addShake(1.4);
+      s.addPunch(1);
+      s.impact(0.014, 0.4);
       // Chain of blasts across the hull, then the mission wrap-up.
       for (let i = 0; i < 6; i++) {
         this.time.delayedCall(i * 220, () => {
           s.fx.explode(e.x + (Math.random() - 0.5) * 8, e.y + (Math.random() - 0.5) * 6, 2.2);
           s.addShake(0.7);
+          s.impact(0.006, 0.18);
         });
       }
       this.eb.length = 0; // mercy-clear the screen
@@ -550,7 +604,22 @@ export class GameScene extends Phaser.Scene {
     } else {
       const lancer = e.kind === 'lancer';
       s.fx.explode(e.x, e.y, lancer ? 1.5 : 1);
+      // Spark shower (+ a delayed secondary blast on lancers) so kills read
+      // as a shredding, not a single pop.
+      for (let i = 0; i < (lancer ? 10 : 5); i++) {
+        s.fx.spark(
+          e.x + (Math.random() - 0.5) * (lancer ? 4 : 2.4),
+          e.y + (Math.random() - 0.5) * (lancer ? 3 : 2),
+        );
+      }
+      if (lancer) {
+        this.time.delayedCall(110, () =>
+          s.fx.explode(e.x + (Math.random() - 0.5) * 3, e.y - 1, 0.8),
+        );
+      }
       s.addShake(lancer ? 0.45 : 0.2);
+      s.addPunch(lancer ? 0.3 : 0.1);
+      s.impact(lancer ? 0.005 : 0.0025, lancer ? 0.1 : 0.05);
       this.stop(lancer ? HITSTOP.lancer : HITSTOP.husk);
       sfx(lancer ? 'expl-big' : 'expl-small', { jitter: true, throttleMs: 60 });
     }
@@ -566,6 +635,8 @@ export class GameScene extends Phaser.Scene {
     const s = Stage3D.I;
     this.stop(HITSTOP.burst);
     s.addShake(0.55);
+    s.addPunch(0.45);
+    s.impact(0.007, 0.16, 0x9ffcff);
     s.fx.burst(p.x, p.y);
     // Sparks on a stride so a full screen of fire still reads as shatter, not noise.
     const stride = Math.max(1, Math.ceil(purged.length / 36));
@@ -584,10 +655,15 @@ export class GameScene extends Phaser.Scene {
     const p = this.p;
     hud.armor -= 1;
     hud.flashT = 0.45;
+    // Damage breaks the kill chain — the arcade stakes for playing greedy.
+    hud.combo = 0;
+    hud.comboT = 0;
     p.inv = PLAYER.invTime;
     const s = Stage3D.I;
     this.stop(HITSTOP.playerHit); // on death: 90ms freeze, then 0.35x slow-mo
     s.addShake(0.9);
+    s.addPunch(0.5);
+    s.impact(0.009, 0.28, 0xff5a70);
     s.fx.explode(p.x, p.y, 0.7);
     // Mercy: vaporise nearby bullets so respawn pressure is fair.
     for (let i = this.eb.length - 1; i >= 0; i--) {
@@ -599,6 +675,7 @@ export class GameScene extends Phaser.Scene {
       this.pGear.root.visible = false;
       s.fx.explode(p.x, p.y, 2.4);
       s.addShake(1.5);
+      s.impact(0.016, 0.45);
       this.timescale = 0.35;
       this.endT = 0.8; // sim-seconds at 0.35x ≈ 2.3 real seconds of slow-mo
       sfx('expl-big');

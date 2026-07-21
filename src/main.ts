@@ -63,12 +63,13 @@ function applyLayout(): void {
   fitStage();
   if (changed) {
     game.scale.resize(uiW, uiH);
-    const hud = game.scene.getScene('hud');
-    if (hud instanceof HudScene) hud.resizeCanvas(uiW, uiH);
     // BootScene constructs Stage3D; skip until then.
     const s3d = (Stage3D as unknown as { I?: Stage3D }).I;
     s3d?.applyUiAspect();
   }
+  // HUD is a DPR-backed DOM canvas — resync whenever the stage CSS box moves.
+  const hud = game.scene.getScene('hud');
+  if (hud instanceof HudScene) hud.syncCanvas();
   game.scale.refresh();
 }
 

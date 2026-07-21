@@ -52,6 +52,15 @@ export const PLAYER = {
 
 export const SCORE = { husk: 100, lancer: 500, boss: 10000 };
 
+/** Kill-chain scoring: kills inside `window` seconds keep the chain alive;
+ * every `per` kills raise the score multiplier one tier, capped at `maxMult`.
+ * Taking a hit breaks the chain. */
+export const CHAIN = {
+  window: 2.2,
+  per: 3,
+  maxMult: 8,
+};
+
 export const HI_KEY = 'mecha-redline-hi';
 
 /** Bullet kinds — index into the instanced pools. */

@@ -3,6 +3,7 @@
 // DotGothic16 with katakana accents. Clean over the low-res 3D world.
 
 import { sfx } from "../../core/audio";
+import { CHAIN } from "../../core/const";
 import { desktopPlayable } from "../../core/platform";
 import {
   cssToUi,
@@ -13,7 +14,7 @@ import {
 } from "../../core/uiSize";
 import { ROSTER, selectedPilot } from "../roster";
 import { getPilotArt } from "./pilotArt";
-import { attract, hud, LAUNCH_T, sel, settingsUi } from "./state";
+import { attract, hud, LAUNCH_T, popups, sel, settingsUi } from "./state";
 import {
   drawSettingsPanel,
   drawTitleChrome,
@@ -780,7 +781,11 @@ function drawBattle(g: Ctx): void {
     drawMission(g);
     drawPilotCluster(g);
     drawMsg(g);
+    drawPopups(g);
+    drawCombo(g);
   }
+  if (hud.phase === "battle") drawWaveBanner(g);
+  if (hud.phase === "boss") drawPhaseBanner(g);
   if (hud.phase === "boss" && hud.bossMax > 0) drawBossBar(g);
   if (hud.phase === "warning") drawWarning(g, t);
   if (hud.phase === "intro") drawIntro(g, t);
@@ -841,11 +846,20 @@ function drawBattle(g: Ctx): void {
 
 let scoreSeen = 0;
 let scorePop = 0;
+let scoreShown = 0;
 
 function drawScore(g: Ctx): void {
   if (hud.score !== scoreSeen) {
     if (hud.score > scoreSeen) scorePop = 1;
     scoreSeen = hud.score;
+  }
+  // Arcade odometer: the readout races up to the real score, never jumps.
+  if (scoreShown > hud.score) scoreShown = hud.score; // mission restart
+  else if (scoreShown < hud.score) {
+    scoreShown = Math.min(
+      hud.score,
+      scoreShown + Math.max(120, (hud.score - scoreShown) * 14) * frameDt,
+    );
   }
   scorePop = Math.max(0, scorePop - frameDt * 5);
   panel(g, 24, 20, 236, 64);
@@ -853,7 +867,7 @@ function drawScore(g: Ctx): void {
   const size = 26 * (1 + scorePop * 0.1);
   tx(
     g,
-    String(hud.score).padStart(8, "0"),
+    String(Math.floor(scoreShown)).padStart(8, "0"),
     40,
     66,
     size,
@@ -861,6 +875,83 @@ function drawScore(g: Ctx): void {
     "left",
     3,
   );
+}
+
+/** Floating +points popups at kill sites: pop in, drift up, fade out. */
+function drawPopups(g: Ctx): void {
+  for (let i = popups.length - 1; i >= 0; i--) {
+    const p = popups[i];
+    p.t += frameDt;
+    if (p.t > 0.9) {
+      popups.splice(i, 1);
+      continue;
+    }
+    const f = p.t / 0.9;
+    const pop = p.t < 0.12 ? 1.35 - (p.t / 0.12) * 0.35 : 1;
+    const a = f > 0.6 ? 1 - (f - 0.6) / 0.4 : 1;
+    const y = p.y - f * 30;
+    g.globalAlpha = a;
+    tx(g, p.text, p.x + 1, y + 1, p.size * pop, "rgba(2, 5, 12, 0.8)", "center", 1);
+    tx(g, p.text, p.x, y, p.size * pop, p.color, "center", 1);
+  }
+  g.globalAlpha = 1;
+}
+
+let comboPrev = 0;
+let comboPop = 0;
+
+/** Right-centre chain counter: hit count, multiplier, and a drain bar
+ * showing the chain window. Pops on every kill, reddens as it expires. */
+function drawCombo(g: Ctx): void {
+  if (hud.combo !== comboPrev) {
+    if (hud.combo > comboPrev) comboPop = 1;
+    comboPrev = hud.combo;
+  }
+  comboPop = Math.max(0, comboPop - frameDt * 6);
+  if (hud.combo < 2 || hud.comboT <= 0) return;
+  const mult = Math.min(CHAIN.maxMult, 1 + Math.floor(hud.combo / CHAIN.per));
+  const x = uiW - 128;
+  const y = uiH / 2 - 30;
+  g.globalAlpha = Math.min(1, hud.comboT / 0.35) * proxFade(x - 70, y - 40, 140, 130);
+  const pop = 1 + comboPop * 0.35;
+  tx(g, String(hud.combo), x, y, 46 * pop, comboPop > 0.6 ? "#ffffff" : CYAN, "center", 2);
+  tx(g, "CHAIN ── 連鎖", x, y + 34, 11, DIM, "center", 2);
+  if (mult > 1) tx(g, `×${mult}`, x, y + 62, 24, AMBER, "center", 2);
+  const bw = 104;
+  const frac = Math.max(0, Math.min(1, hud.comboT / CHAIN.window));
+  g.fillStyle = "rgba(127, 251, 255, 0.16)";
+  g.fillRect(x - bw / 2, y + 80, bw, 4);
+  g.fillStyle = frac < 0.3 ? RED : CYAN;
+  g.fillRect(x - bw / 2, y + 80, bw * frac, 4);
+  g.globalAlpha = 1;
+}
+
+/** WAVE slam banner: overscale hit, quick settle, fade. */
+function drawWaveBanner(g: Ctx): void {
+  if (hud.waveBannerT <= 0 || hud.wave <= 0) return;
+  const age = 1.5 - hud.waveBannerT;
+  const inA = Math.min(1, age / 0.12);
+  const out = hud.waveBannerT < 0.35 ? hud.waveBannerT / 0.35 : 1;
+  const pop = 1 + Math.max(0, 1 - age / 0.22) ** 2 * 0.4;
+  const y = 168;
+  g.globalAlpha = inA * out;
+  tx(g, `WAVE ${String(hud.wave).padStart(2, "0")}`, uiW / 2, y, 44 * pop, FG, "center", 12);
+  tx(g, `第${hud.wave}波 ── 接敵`, uiW / 2, y + 40, 15, CYAN, "center", 6);
+  rule(g, uiW / 2 - 210, y + 60, 420, RED);
+  g.globalAlpha = 1;
+}
+
+/** Boss phase card under the boss bar: red slam + urgent blink. */
+function drawPhaseBanner(g: Ctx): void {
+  if (hud.phaseBannerT <= 0) return;
+  const age = 1.8 - hud.phaseBannerT;
+  const inA = Math.min(1, age / 0.1);
+  const out = Math.min(1, hud.phaseBannerT / 0.4);
+  const pop = 1 + Math.max(0, 1 - age / 0.2) ** 2 * 0.5;
+  const blink = Math.floor(age * 10) % 2 === 0 ? 1 : 0.75;
+  g.globalAlpha = inA * out * blink;
+  tx(g, hud.phaseBanner, uiW / 2, 130, 30 * pop, RED, "center", 6);
+  g.globalAlpha = 1;
 }
 
 function drawMission(g: Ctx): void {
@@ -1073,7 +1164,7 @@ function drawEndCard(g: Ctx, won: boolean): void {
   if (t < 0.6) return;
 
   const w = 620;
-  const h = 250;
+  const h = 270;
   const x = uiW / 2 - w / 2;
   const y = uiH / 2 - h / 2;
   panel(g, x, y, w, h);
@@ -1089,17 +1180,29 @@ function drawEndCard(g: Ctx, won: boolean): void {
     g,
     `SCORE  ${String(hud.score).padStart(8, "0")}`,
     uiW / 2,
-    y + 160,
+    y + 158,
     20,
     FG,
     "center",
     3,
   );
+  if (hud.comboBest >= 2) {
+    tx(
+      g,
+      `BEST CHAIN  ${String(hud.comboBest).padStart(2, "0")} HITS`,
+      uiW / 2,
+      y + 186,
+      14,
+      CYAN,
+      "center",
+      3,
+    );
+  }
   tx(
     g,
     `HI     ${String(hud.hi).padStart(8, "0")}`,
     uiW / 2,
-    y + 188,
+    y + 212,
     16,
     AMBER,
     "center",

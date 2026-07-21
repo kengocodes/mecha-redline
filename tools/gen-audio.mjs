@@ -128,9 +128,9 @@ const VO = [
   { id: 'kira-select', v: 'kira', kind: 'pilot', tempo: 1.15, text: 'Checklist done. Launching.' },
   { id: 'kira-launch', v: 'kira', kind: 'pilot', tempo: 1.15, text: 'Valkyr, taking the rail. [exhales] Steady... go.' },
   { id: 'kira-burst', v: 'kira', kind: 'pilot', text: '[shouting] Purging! Clear the lane!' },
-  { id: 'kira-hit', v: 'kira', kind: 'pilot', text: '[grunts] Armor holding. I am still in this.' },
-  { id: 'kira-hit2', v: 'kira', kind: 'pilot', text: '[grunts] Took one on the plate. Systems still green.' },
-  { id: 'kira-hit3', v: 'kira', kind: 'pilot', text: '[strained] That one connected. Tightening up.' },
+  { id: 'kira-hit', v: 'kira', kind: 'pilot', text: '[steady] Armor holding. I am still in this.' },
+  { id: 'kira-hit2', v: 'kira', kind: 'pilot', text: '[clipped] Took one on the plate. Systems still green.' },
+  { id: 'kira-hit3', v: 'kira', kind: 'pilot', text: '[firm] That one connected. Tightening up.' },
   { id: 'kira-clear', v: 'kira', kind: 'pilot', text: '[sighs] Sector clear. Valkyr, returning to base.' },
 
   { id: 'ren-select', v: 'ren', kind: 'pilot', tempo: 1.15, text: 'Shortest path is through.' },

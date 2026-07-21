@@ -30,6 +30,12 @@ export interface HudState {
   bossHp: number;
   bossMax: number;
   bossName: string;
+  combo: number; // current kill chain, 0 = none
+  comboT: number; // seconds left in the chain window
+  comboBest: number; // longest chain this mission, for the end card
+  waveBannerT: number; // WAVE slam banner countdown
+  phaseBanner: string; // boss phase banner text
+  phaseBannerT: number; // boss phase banner countdown
   msg: string; // operator comms line
   msgT: number;
   px: number; // player position in UI space, for HUD proximity fades
@@ -53,11 +59,35 @@ export const hud: HudState = {
   bossHp: 0,
   bossMax: 0,
   bossName: '',
+  combo: 0,
+  comboT: 0,
+  comboBest: 0,
+  waveBannerT: 0,
+  phaseBanner: '',
+  phaseBannerT: 0,
   msg: '',
   msgT: 0,
   px: 640,
   py: 500,
 };
+
+/** Floating score popups: the sim spawns them in UI space at kill sites,
+ * the overlay drifts, fades and culls them. */
+export interface Popup {
+  x: number;
+  y: number;
+  text: string;
+  color: string;
+  size: number;
+  t: number; // age, seconds — advanced by the overlay
+}
+
+export const popups: Popup[] = [];
+
+export function addPopup(x: number, y: number, text: string, color: string, size = 16): void {
+  if (popups.length >= 24) popups.shift();
+  popups.push({ x, y, text, color, size, t: 0 });
+}
 
 /** Hangar select UI state: SelectScene drives it, the overlay paints it. */
 export interface SelectState {

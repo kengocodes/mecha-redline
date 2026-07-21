@@ -199,14 +199,17 @@ export class Fx3D {
     s.y = y + (Math.random() - 0.5) * 0.8;
   }
 
-  /** Cyan purge wave — player BURST special. */
-  burst(x: number, y: number): void {
+  /** Expanding purge wave — cyan for the player BURST, tintable for boss
+   * phase shockwaves. */
+  burst(x: number, y: number, ringColor = 0x7ffbff, flashColor = 0xc8ffff): void {
     const b = this.bursts.find((s) => !s.active) ?? this.bursts[0];
     b.active = true;
     b.t = 0;
     b.dur = 0.55;
     b.x = x;
     b.y = y;
+    (b.ringA.material as THREE.MeshBasicMaterial).color.setHex(ringColor);
+    (b.flash.material as THREE.MeshBasicMaterial).color.setHex(flashColor);
     b.ringA.visible = true;
     b.ringB.visible = true;
     b.flash.visible = true;

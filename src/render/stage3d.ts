@@ -35,6 +35,9 @@ const POST_FRAG = `
 uniform sampler2D tSrc;
 uniform float uTime;
 uniform float uParity;
+uniform float uAberr;
+uniform float uFlash;
+uniform vec3 uFlashColor;
 varying vec2 vUv;
 
 vec3 srgb(vec3 c) {
@@ -42,7 +45,14 @@ vec3 srgb(vec3 c) {
 }
 
 void main() {
-  vec3 c = srgb(texture2D(tSrc, vUv).rgb);
+  // Impact chromatic aberration: split R/B radially from centre. Idles at
+  // zero so the frame (and the space backdrop) is untouched between hits.
+  vec2 ab = (vUv - 0.5) * uAberr;
+  vec3 raw = vec3(
+    texture2D(tSrc, vUv + ab).r,
+    texture2D(tSrc, vUv).g,
+    texture2D(tSrc, vUv - ab).b);
+  vec3 c = srgb(raw);
 
   // 4x4 Bayer ordered dither, then crush to 15-bit colour (32 levels/channel).
   const mat4 B = mat4(
@@ -56,6 +66,9 @@ void main() {
   // CRT glass: faint interlaced scanlines + a slow rolling brightness band.
   c *= 1.0 - 0.07 * mod(floor(gl_FragCoord.y) + uParity, 2.0);
   c *= 1.0 + 0.02 * sin((vUv.y + uTime * 0.05) * 26.0);
+
+  // Full-frame impact flash (white hit / red damage / cyan burst).
+  c = mix(c, uFlashColor, uFlash);
 
   gl_FragColor = vec4(c, 1.0);
 }
@@ -75,6 +88,11 @@ export class Stage3D {
   private space!: SpaceBackdrop;
   private hangar!: HangarShowcase;
   private shake = 0;
+  private aberr = 0;
+  private flash = 0;
+  private flashColor = new THREE.Color(1, 1, 1);
+  private punch = 0;
+  private battleMode = false;
   private elev = (CAM_ELEV * Math.PI) / 180;
   private lookTarget = new THREE.Vector3(0, 0, 0);
   private ray = new THREE.Raycaster();
@@ -137,7 +155,14 @@ export class Stage3D {
       magFilter: THREE.NearestFilter,
     });
     this.postMat = new THREE.ShaderMaterial({
-      uniforms: { tSrc: { value: this.rt.texture }, uTime: { value: 0 }, uParity: { value: 0 } },
+      uniforms: {
+        tSrc: { value: this.rt.texture },
+        uTime: { value: 0 },
+        uParity: { value: 0 },
+        uAberr: { value: 0 },
+        uFlash: { value: 0 },
+        uFlashColor: { value: this.flashColor },
+      },
       vertexShader: POST_VERT,
       fragmentShader: POST_FRAG,
       depthTest: false,
@@ -178,6 +203,7 @@ export class Stage3D {
    */
   setMode(mode: 'battle' | 'showcase'): void {
     const showcase = mode === 'showcase';
+    this.battleMode = !showcase;
     this.elev = ((showcase ? 16 : CAM_ELEV) * Math.PI) / 180;
     this.hangar.group.visible = showcase;
     if (showcase) this.frameShowcase();
@@ -205,10 +231,30 @@ export class Stage3D {
     this.bullets.clear();
     this.fx.clear();
     this.shake = 0;
+    this.aberr = 0;
+    this.flash = 0;
+    this.punch = 0;
   }
 
   addShake(mag: number): void {
     this.shake = Math.min(1.6, this.shake + mag);
+  }
+
+  /**
+   * Screen-space impact feedback: RGB split + full-frame colour flash,
+   * decaying. Max not sum, so overlapping impacts hold the strongest hit.
+   */
+  impact(aberr: number, flash: number, color = 0xffffff): void {
+    this.aberr = Math.max(this.aberr, aberr);
+    if (flash >= this.flash) {
+      this.flash = flash;
+      this.flashColor.setHex(color);
+    }
+  }
+
+  /** Quick orthographic zoom-in kick — battle mode only. */
+  addPunch(mag: number): void {
+    this.punch = Math.min(1, this.punch + mag);
   }
 
   private _proj = new THREE.Vector3();
@@ -257,10 +303,25 @@ export class Stage3D {
     this.hangar.update(dt);
     this.fx.update(dt);
 
+    // Impact feedback decays in sim time, so hitstop freezes hold the frame
+    // at peak split/flash and release with the action.
+    this.aberr = this.aberr < 0.0004 ? 0 : this.aberr * Math.exp(-dt * 10);
+    this.flash = this.flash < 0.01 ? 0 : this.flash * Math.exp(-dt * 12);
+    this.punch = this.punch < 0.01 ? 0 : this.punch * Math.exp(-dt * 8);
+    if (this.battleMode) {
+      const zoom = 1 + this.punch * 0.05;
+      if (Math.abs(zoom - this.camera.zoom) > 0.0005) {
+        this.camera.zoom = zoom;
+        this.camera.updateProjectionMatrix();
+      }
+    }
+
     // Scene → low-res target, then the PS1/CRT finishing pass to the canvas.
     this.postT += dt;
     this.postMat.uniforms.uTime.value = this.postT;
     this.postMat.uniforms.uParity.value = 1 - this.postMat.uniforms.uParity.value;
+    this.postMat.uniforms.uAberr.value = this.aberr;
+    this.postMat.uniforms.uFlash.value = Math.min(0.5, this.flash);
     this.renderer.setRenderTarget(this.rt);
     this.renderer.render(this.scene, this.camera);
     this.renderer.setRenderTarget(null);
