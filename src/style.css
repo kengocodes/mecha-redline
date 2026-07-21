@@ -20,6 +20,13 @@ body {
   overflow: hidden;
 }
 
+/* HUD reticle on fine-pointer desktops; scenes swap to select.png over chrome. */
+@media (hover: hover) and (pointer: fine) {
+  #stage {
+    cursor: url("/cursors/aim.png") 15 15, crosshair;
+  }
+}
+
 /* three.js world canvas: fixed low internal resolution, stretched with
    nearest-neighbour sampling. */
 #stage canvas.world {

@@ -13,6 +13,7 @@ import {
   PLAY_Y,
   PLAYER,
 } from '../../core/const';
+import { setStageCursor } from '../../core/cursor';
 import { debugParam } from '../../core/debug';
 import {
   clearTap,
@@ -158,11 +159,13 @@ export class GameScene extends Phaser.Scene {
       setPhase('warning');
     }
 
+    setStageCursor('aim');
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       hud.paused = false;
       settingsUi.open = false;
       settingsUi.confirmExit = false;
       this.dragBus = null;
+      setStageCursor('auto');
     });
   }
 
@@ -233,6 +236,10 @@ export class GameScene extends Phaser.Scene {
     // Pause menu = audio settings + EXIT TO TITLE (confirm before abandon).
     if (hud.paused) {
       const opts = this.pauseOpts();
+      const hover = hitTitleChrome(pointer.x, pointer.y, true, opts);
+      setStageCursor(
+        this.dragBus || (hover && hover.kind !== 'panel') ? 'select' : 'aim',
+      );
       if (settingsUi.confirmExit) {
         // Esc / P cancel the confirm (Sylvaria: safe option), not the whole pause.
         if (takeKey('KeyP') || takeKey('Escape')) {
@@ -281,6 +288,8 @@ export class GameScene extends Phaser.Scene {
     } else if (canPause && (takeKey('KeyP') || takeKey('Escape'))) {
       sfx('ui-confirm');
       this.setPaused(true);
+    } else {
+      setStageCursor('aim');
     }
 
     const raw = Math.min(dms, 50) / 1000;

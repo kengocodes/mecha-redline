@@ -181,6 +181,11 @@ function drawTitleLandscape(g: Ctx): void {
   tx(g, `PILOT ── ${def.pilot}`, 84, 522, 11, DIM, "left", 2);
   g.globalAlpha = 1;
 
+  // Desktop only — combat bindings; phone attract stays clean.
+  if (t > 0.7 && desktopPlayable() && !settingsUi.open) {
+    drawTitleControls(g);
+  }
+
   if (t > 0.7 && !settingsUi.open) {
     // Sit above the link row (touch chips are tall — keep clear).
     const linkTop = touchUi()
@@ -245,6 +250,23 @@ function drawTitleLandscape(g: Ctx): void {
   else drawSettingsPanel(g, hover);
 
   crtScanlines(g);
+}
+
+/** Left-column combat bindings under the attract unit card. */
+function drawTitleControls(g: Ctx): void {
+  const x = 84;
+  const y0 = 556;
+  tx(g, "CONTROLS ── 操作", x, y0, 12, CYAN, "left", 3);
+  const lines = [
+    "WASD / ARROWS ── MOVE",
+    "MOUSE ── AIM · FIRE",
+    "SHIFT ── FOCUS",
+    "Z / X ── BURST",
+    "P / ESC ── PAUSE",
+  ];
+  for (let i = 0; i < lines.length; i++) {
+    tx(g, lines[i], x, y0 + 22 + i * 18, 12, DIM, "left", 2);
+  }
 }
 
 /**

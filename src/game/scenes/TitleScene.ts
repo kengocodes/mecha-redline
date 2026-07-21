@@ -3,6 +3,7 @@
 
 import Phaser from 'phaser';
 import { applyAudioSettings, music, sfx } from '../../core/audio';
+import { setStageCursor } from '../../core/cursor';
 import { clearTap, pointer, takeKey, takeTap } from '../../core/input';
 import { SOCIAL_LINKS } from '../../core/links';
 import { desktopPlayable } from '../../core/platform';
@@ -43,8 +44,9 @@ export class TitleScene extends Phaser.Scene {
     this.spawnGear(false);
     music('title');
     sfx('logo-slam'); // lands with the logo overscale hit
+    setStageCursor('aim');
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
-      this.setCursor(false);
+      setStageCursor('auto');
       settingsUi.open = false;
       this.dragBus = null;
     });
@@ -65,11 +67,6 @@ export class TitleScene extends Phaser.Scene {
       setGearFlash(this.gear, true);
       this.time.delayedCall(110, () => setGearFlash(this.gear, false));
     }
-  }
-
-  private setCursor(hot: boolean): void {
-    const stage = document.getElementById('stage');
-    if (stage) stage.style.cursor = hot ? 'pointer' : '';
   }
 
   private applySlider(bus: BusId, t: number): void {
@@ -107,7 +104,7 @@ export class TitleScene extends Phaser.Scene {
     // Privacy/terms overlay owns input (audio silenced via setLegalSilent).
     if (isLegalOpen()) {
       clearTap();
-      this.setCursor(false);
+      setStageCursor('auto');
       return;
     }
 
@@ -117,7 +114,7 @@ export class TitleScene extends Phaser.Scene {
         this.dragBus = null;
       } else {
         this.applySlider(this.dragBus, sliderValueAt(this.dragBus, pointer.x));
-        this.setCursor(true);
+        setStageCursor('select');
         takeTap();
         return;
       }
@@ -125,7 +122,7 @@ export class TitleScene extends Phaser.Scene {
 
     const showLinks = hud.t > 0.7 && !settingsUi.open;
     const hover = hitTitleChrome(pointer.x, pointer.y, settingsUi.open, { links: showLinks });
-    this.setCursor(!!hover && hover.kind !== 'panel');
+    setStageCursor(hover && hover.kind !== 'panel' ? 'select' : 'aim');
 
     if (settingsUi.open) {
       if (takeKey('Escape')) {

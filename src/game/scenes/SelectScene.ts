@@ -4,6 +4,7 @@
 
 import Phaser from 'phaser';
 import { music, PILOT_VO, sfx, vo } from '../../core/audio';
+import { setStageCursor } from '../../core/cursor';
 import { clearTap, takeKey, takeTap, pointer } from '../../core/input';
 import { animateGear, buildGear, type Gear, setGearFlash } from '../../render/gearFactory';
 import { Stage3D } from '../../render/stage3d';
@@ -41,6 +42,8 @@ export class SelectScene extends Phaser.Scene {
     this.spawnGear();
     music('title'); // hold the title bed through hangar select
     vo('op-select-gear');
+    setStageCursor('aim');
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => setStageCursor('auto'));
   }
 
   private spawnGear(): void {
@@ -86,6 +89,7 @@ export class SelectScene extends Phaser.Scene {
     let boost = 0.5;
     if (sel.confirmT >= 0) {
       // Launch: throttle up, then climb off the pad and out of frame.
+      setStageCursor('aim');
       sel.confirmT += dt;
       const c = sel.confirmT;
       boost = 1.2 + c * 1.6;
@@ -112,6 +116,7 @@ export class SelectScene extends Phaser.Scene {
           sel.hover = i;
         }
       }
+      setStageCursor(sel.hover >= 0 ? 'select' : 'aim');
 
       // Enter/Space launch; taps only pick a slot or re-confirm the current
       // one — bare clicks on the briefing / void must not sortie you.
