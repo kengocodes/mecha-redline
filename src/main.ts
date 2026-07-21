@@ -51,6 +51,8 @@ const game = new Phaser.Game({
   height: uiH,
   transparent: true,
   banner: false,
+  // All audio goes through core/audio.ts — don't let Phaser spin up a second AudioContext.
+  audio: { noAudio: true },
   scale: {
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH,
