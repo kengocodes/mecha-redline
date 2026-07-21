@@ -89,7 +89,7 @@ src/
     backdrops/            per-mission environments (space / wake / city)
     gearFactory.ts        procedural low-poly mecha + unit palettes + cloak
     seraph.ts             the SERAPH boss — robed frame, wing fans, halo
-    cerberus.ts           the CERBERUS boss — three-headed strider walker
+    cerberus.ts           the CERBERUS boss — three-headed hound quadruped
     sentinel.ts           the sentinel proximity mine
     pylon.ts              the fixed lane-emplacement turret
     bullets3d.ts          instanced bullet pools
