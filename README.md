@@ -34,9 +34,10 @@ once the site is deployed (e.g. `https://your.domain/og.png`).
 
 ## Controls
 
-**Desktop recommended.** Combat uses keyboard + mouse. Title / select /
-settings menus work with pointer (including touch browsers), but there are
-no on-screen combat controls yet.
+**Desktop + mouse required to play.** Combat uses keyboard + mouse. On
+phones (portrait) the title runs as a full-bleed vertical attract screen
+— Privacy, Terms, GitHub, and Follow on X stay available — with play
+gated behind a “play on desktop” message. Settings still open on touch.
 
 | Input         | Action                                     |
 | ------------- | ------------------------------------------ |

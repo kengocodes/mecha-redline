@@ -3,9 +3,9 @@
 // startWipe with their scene switch; drawUI paints it above everything.
 
 import { sfx } from '../../core/audio';
-import { UI_H, UI_W } from '../../core/const';
+import { uiH, uiW } from '../../core/uiSize';
 
-const CELL = 40; // 32 × 18 grid over the 1280×720 UI
+const CELL = 40; // grid cells over the logical UI
 const COVER = 0.22; // seconds for one cell to grow to full
 const STAGGER = 0.18; // diagonal sweep delay across the board
 const PARITY = 0.1; // extra delay on odd cells — the checkerboard read
@@ -45,8 +45,8 @@ export function drawWipe(g: CanvasRenderingContext2D, dt: number): void {
   }
 
   g.fillStyle = '#02050c';
-  const cols = Math.ceil(UI_W / CELL);
-  const rows = Math.ceil(UI_H / CELL);
+  const cols = Math.ceil(uiW / CELL);
+  const rows = Math.ceil(uiH / CELL);
   for (let cy = 0; cy < rows; cy++) {
     for (let cx = 0; cx < cols; cx++) {
       const delay = ((cx + cy) / (cols + rows)) * STAGGER + ((cx + cy) % 2) * PARITY;

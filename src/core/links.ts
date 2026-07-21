@@ -16,6 +16,6 @@ export const SITE_LINKS: readonly SiteLink[] = [
 ];
 
 export const SOCIAL_LINKS = {
-  github: 'https://github.com/mecha-redline/mecha-redline',
-  x: 'https://x.com/mecha_redline',
+  github: 'https://github.com/kengocodes/mecha-redline',
+  x: 'https://x.com/kevin_t_ngo',
 } as const;

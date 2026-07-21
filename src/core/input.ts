@@ -1,12 +1,12 @@
 // Raw DOM input, tracked once and polled by scenes. Pointer coords are
-// converted to logical 1280×720 UI space relative to the #stage box.
+// converted to logical UI space relative to the #stage box.
 
-import { UI_H, UI_W } from './const';
+import { uiH, uiW } from './uiSize';
 
 const keys = new Set<string>();
 const just = new Set<string>();
 
-export const pointer = { x: UI_W / 2, y: UI_H / 4, down: false };
+export const pointer = { x: uiW / 2, y: uiH / 4, down: false };
 
 let tapped = false;
 let stage: HTMLElement | null = null;
@@ -62,8 +62,8 @@ export function initInput(stageEl: HTMLElement): void {
 function updatePointer(cx: number, cy: number): void {
   if (!stage) return;
   const r = stage.getBoundingClientRect();
-  pointer.x = ((cx - r.left) / r.width) * UI_W;
-  pointer.y = ((cy - r.top) / r.height) * UI_H;
+  pointer.x = ((cx - r.left) / r.width) * uiW;
+  pointer.y = ((cy - r.top) / r.height) * uiH;
 }
 
 export function isDown(code: string): boolean {

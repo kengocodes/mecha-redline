@@ -3,7 +3,15 @@
 
 import { SITE_LINKS, type LinkId } from '../../core/links';
 import { audioSettings, type BusId } from '../../core/settings';
-import { UI_H, UI_W } from '../../core/const';
+import {
+  cssToUi,
+  portraitAttract,
+  touchGap,
+  touchMin,
+  touchUi,
+  uiH,
+  uiW,
+} from '../../core/uiSize';
 
 const CYAN = '#7ffbff';
 const RED = '#ff3b53';
@@ -38,19 +46,58 @@ const BUSES: { id: BusId; label: string }[] = [
   { id: 'voice', label: 'VOICE' },
 ];
 
-/** SETTINGS affordance under FREE PLAY. */
+/** SETTINGS affordance under FREE PLAY (desktop) / top-right (touch). */
 export function settingsBtnRect(): Rect {
-  return { x: UI_W - 168, y: 68, w: 132, h: 28 };
+  if (touchUi()) {
+    const s = touchMin();
+    const pad = Math.max(touchGap(), cssToUi(12));
+    return { x: uiW - pad - Math.max(s, cssToUi(120)), y: pad, w: Math.max(s, cssToUi(120)), h: s };
+  }
+  return { x: uiW - 168, y: 68, w: 132, h: 28 };
 }
 
 export function settingsPanelRect(opts: SettingsPanelOpts = {}): Rect {
+  if (touchUi()) {
+    const s = touchMin();
+    const gap = touchGap();
+    const head = cssToUi(72);
+    const sliderBlock = BUSES.length * (s + gap) + cssToUi(20);
+    const actions = opts.resume ? s * 2 + gap * 2 : s + gap;
+    const foot = cssToUi(36);
+    const h = head + sliderBlock + actions + foot + cssToUi(24);
+    const w = Math.min(uiW - cssToUi(24), Math.max(cssToUi(320), uiW * 0.92));
+    return { x: (uiW - w) / 2, y: Math.max(cssToUi(12), (uiH - h) / 2), w, h };
+  }
   const h = opts.resume ? 408 : 360;
-  return { x: (UI_W - 420) / 2, y: (UI_H - h) / 2, w: 420, h };
+  const w = Math.min(420, uiW - 48);
+  return { x: (uiW - w) / 2, y: (uiH - h) / 2, w, h };
 }
 
 function sliderTrack(i: number, opts: SettingsPanelOpts = {}): Rect {
   const p = settingsPanelRect(opts);
+  if (touchUi()) {
+    const s = touchMin();
+    const gap = touchGap();
+    const y = p.y + cssToUi(72) + i * (s + gap) + Math.floor((s - cssToUi(10)) / 2);
+    return { x: p.x + cssToUi(24), y, w: p.w - cssToUi(48), h: cssToUi(10) };
+  }
   return { x: p.x + 36, y: p.y + 88 + i * 48, w: p.w - 72, h: 10 };
+}
+
+function sliderHit(i: number, opts: SettingsPanelOpts = {}): Rect {
+  const p = settingsPanelRect(opts);
+  if (touchUi()) {
+    const s = touchMin();
+    const gap = touchGap();
+    return {
+      x: p.x + cssToUi(24),
+      y: p.y + cssToUi(72) + i * (s + gap),
+      w: p.w - cssToUi(48),
+      h: s,
+    };
+  }
+  const tr = sliderTrack(i, opts);
+  return { x: tr.x, y: tr.y - 12, w: tr.w, h: tr.h + 24 };
 }
 
 /** Map a pointer x onto a bus slider (clamped 0..1), for drag scrubbing. */
@@ -63,39 +110,92 @@ export function sliderValueAt(bus: BusId, x: number, opts: SettingsPanelOpts = {
 
 export function muteBtnRect(opts: SettingsPanelOpts = {}): Rect {
   const p = settingsPanelRect(opts);
+  if (touchUi()) {
+    const s = touchMin();
+    const y = p.y + p.h - cssToUi(36) - s - (opts.resume ? s + touchGap() : 0);
+    return { x: p.x + cssToUi(24), y, w: Math.max(s, (p.w - cssToUi(56)) / 2), h: s };
+  }
   return { x: p.x + 36, y: p.y + 286, w: 120, h: 28 };
 }
 
 export function closeBtnRect(opts: SettingsPanelOpts = {}): Rect {
   const p = settingsPanelRect(opts);
+  if (touchUi()) {
+    const s = touchMin();
+    const y = p.y + p.h - cssToUi(36) - s - (opts.resume ? s + touchGap() : 0);
+    const w = Math.max(s, (p.w - cssToUi(56)) / 2);
+    return { x: p.x + p.w - cssToUi(24) - w, y, w, h: s };
+  }
   return { x: p.x + p.w - 116, y: p.y + 286, w: 80, h: 28 };
 }
 
 /** Full-width EXIT TO TITLE — pause panel only. */
 export function exitBtnRect(opts: SettingsPanelOpts = {}): Rect {
   const p = settingsPanelRect(opts);
+  if (touchUi()) {
+    const s = touchMin();
+    return {
+      x: p.x + cssToUi(24),
+      y: p.y + p.h - cssToUi(36) - s,
+      w: p.w - cssToUi(48),
+      h: s,
+    };
+  }
   return { x: p.x + 36, y: p.y + 328, w: p.w - 72, h: 28 };
 }
 
 export function exitCancelRect(opts: SettingsPanelOpts = {}): Rect {
   const p = settingsPanelRect(opts);
+  if (touchUi()) {
+    const s = touchMin();
+    const w = Math.max(s, (p.w - cssToUi(56)) / 2);
+    return { x: p.x + cssToUi(24), y: p.y + p.h - cssToUi(36) - s, w, h: s };
+  }
   return { x: p.x + 36, y: p.y + p.h - 72, w: 160, h: 32 };
 }
 
 export function exitConfirmRect(opts: SettingsPanelOpts = {}): Rect {
   const p = settingsPanelRect(opts);
+  if (touchUi()) {
+    const s = touchMin();
+    const w = Math.max(s, (p.w - cssToUi(56)) / 2);
+    return { x: p.x + p.w - cssToUi(24) - w, y: p.y + p.h - cssToUi(36) - s, w, h: s };
+  }
   return { x: p.x + p.w - 196, y: p.y + p.h - 72, w: 160, h: 32 };
 }
 
-/** Legal / social row under PRESS START (DotGothic16). Keep clear of bottom edge. */
+/** Legal / social hits — underline row on desktop; ≥44 CSS px chips on touch. */
 export function titleLinkRects(): { id: LinkId; rect: Rect }[] {
+  if (touchUi()) {
+    const s = touchMin();
+    const gap = touchGap();
+    const side = Math.max(touchGap(), cssToUi(16));
+    if (portraitAttract()) {
+      const colW = (uiW - side * 2 - gap) / 2;
+      const baseY = uiH - cssToUi(20) - s * 2 - gap;
+      return [
+        { id: 'privacy', rect: { x: side, y: baseY, w: colW, h: s } },
+        { id: 'terms', rect: { x: side + colW + gap, y: baseY, w: colW, h: s } },
+        { id: 'github', rect: { x: side, y: baseY + s + gap, w: colW, h: s } },
+        { id: 'x', rect: { x: side + colW + gap, y: baseY + s + gap, w: colW, h: s } },
+      ];
+    }
+    // Landscape tablet / phone: one row of four chips along the bottom.
+    const n = SITE_LINKS.length;
+    const colW = (uiW - side * 2 - gap * (n - 1)) / n;
+    const y = uiH - cssToUi(16) - s;
+    return SITE_LINKS.map((link, i) => ({
+      id: link.id,
+      rect: { x: side + i * (colW + gap), y, w: colW, h: s },
+    }));
+  }
   const labels = SITE_LINKS.map((l) => l.label);
   const gap = 22;
   const pad = 10;
-  const widths = labels.map((s) => s.length * 7.2 + pad * 2);
+  const widths = labels.map((lab) => lab.length * 7.2 + pad * 2);
   const total = widths.reduce((a, b) => a + b, 0) + gap * (labels.length - 1);
-  let x = (UI_W - total) / 2;
-  const y = 692; // text middle; underline lands ~700, safe inside 720
+  let x = (uiW - total) / 2;
+  const y = 692;
   const h = 18;
   return SITE_LINKS.map((link, i) => {
     const w = widths[i];
@@ -134,9 +234,8 @@ export function hitTitleChrome(
       return { kind: 'panel' };
     }
     for (let i = 0; i < BUSES.length; i++) {
-      const tr = sliderTrack(i, opts);
-      const hit = { x: tr.x, y: tr.y - 12, w: tr.w, h: tr.h + 24 };
-      if (inside(hit, x, y)) {
+      if (inside(sliderHit(i, opts), x, y)) {
+        const tr = sliderTrack(i, opts);
         const t = Math.max(0, Math.min(1, (x - tr.x) / tr.w));
         return { kind: 'slider', bus: BUSES[i].id, t };
       }
@@ -199,6 +298,7 @@ function panel(g: Ctx, x: number, y: number, w: number, h: number): void {
 
 function chip(g: Ctx, r: Rect, label: string, hot: boolean, danger = false): void {
   const accent = danger ? RED : CYAN;
+  const touch = touchUi();
   g.fillStyle = hot
     ? danger
       ? 'rgba(255, 59, 83, 0.16)'
@@ -208,7 +308,8 @@ function chip(g: Ctx, r: Rect, label: string, hot: boolean, danger = false): voi
   g.strokeStyle = hot || danger ? accent : LINE;
   g.lineWidth = 1;
   g.strokeRect(r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1);
-  tx(g, label, r.x + r.w / 2, r.y + r.h / 2, 11, hot || danger ? accent : DIM, 'center', 2);
+  const size = touch ? Math.max(12, Math.round(cssToUi(13))) : 11;
+  tx(g, label, r.x + r.w / 2, r.y + r.h / 2, size, hot || danger ? accent : DIM, 'center', 2);
 }
 
 /** Settings button + footer links under PRESS START (title only, panel closed). */
@@ -225,6 +326,16 @@ export function drawTitleChrome(
   );
 
   if (opts.links === false) return;
+
+  if (touchUi()) {
+    for (const { id, rect } of titleLinkRects()) {
+      const hot = hover?.kind === 'link' && hover.id === id;
+      const link = SITE_LINKS.find((l) => l.id === id)!;
+      chip(g, rect, link.label, hot);
+    }
+    return;
+  }
+
   // Resting = near-white FG (≥7:1 on the hangar void); hover = cyan cue.
   for (const { id, rect } of titleLinkRects()) {
     const hot = hover?.kind === 'link' && hover.id === id;
@@ -242,42 +353,74 @@ export function drawSettingsPanel(
   opts: SettingsPanelOpts = {},
 ): void {
   g.fillStyle = 'rgba(5, 7, 13, 0.72)';
-  g.fillRect(0, 0, UI_W, UI_H);
+  g.fillRect(0, 0, uiW, uiH);
 
   const p = settingsPanelRect(opts);
   panel(g, p.x, p.y, p.w, p.h);
+  const touch = touchUi();
 
   if (opts.confirmExit) {
-    tx(g, 'EXIT TO TITLE?', p.x + p.w / 2, p.y + 56, 22, FG, 'center', 4);
+    tx(g, 'EXIT TO TITLE?', p.x + p.w / 2, p.y + (touch ? cssToUi(48) : 56), 22, FG, 'center', 4);
     g.fillStyle = 'rgba(255, 59, 83, 0.85)';
-    g.fillRect(p.x + 120, p.y + 76, p.w - 240, 2);
-    tx(g, 'The mission will be abandoned.', p.x + p.w / 2, p.y + 130, 14, DIM, 'center', 1);
-    tx(g, 'ミッションを中断します', p.x + p.w / 2, p.y + 156, 12, DIM, 'center', 2);
+    g.fillRect(p.x + 120, p.y + (touch ? cssToUi(68) : 76), p.w - 240, 2);
+    tx(
+      g,
+      'The mission will be abandoned.',
+      p.x + p.w / 2,
+      p.y + (touch ? cssToUi(120) : 130),
+      14,
+      DIM,
+      'center',
+      1,
+    );
+    tx(
+      g,
+      'ミッションを中断します',
+      p.x + p.w / 2,
+      p.y + (touch ? cssToUi(148) : 156),
+      12,
+      DIM,
+      'center',
+      2,
+    );
     chip(g, exitCancelRect(opts), 'KEEP PLAYING', hover?.kind === 'exit-cancel');
     chip(g, exitConfirmRect(opts), 'EXIT', hover?.kind === 'exit-confirm', true);
-    tx(g, 'ESC TO CANCEL', p.x + p.w / 2, p.y + p.h - 28, 10, DIM, 'center', 2);
+    if (!touch) tx(g, 'ESC TO CANCEL', p.x + p.w / 2, p.y + p.h - 28, 10, DIM, 'center', 2);
     return;
   }
 
-  tx(g, opts.heading ?? 'AUDIO ── 設定', p.x + p.w / 2, p.y + 36, 20, FG, 'center', 4);
+  tx(g, opts.heading ?? 'AUDIO ── 設定', p.x + p.w / 2, p.y + (touch ? cssToUi(32) : 36), 20, FG, 'center', 4);
   g.fillStyle = 'rgba(255, 59, 83, 0.85)';
-  g.fillRect(p.x + 140, p.y + 52, p.w - 280, 2);
+  g.fillRect(p.x + 140, p.y + (touch ? cssToUi(48) : 52), p.w - 280, 2);
 
   for (let i = 0; i < BUSES.length; i++) {
     const bus = BUSES[i];
     const tr = sliderTrack(i, opts);
+    const hit = sliderHit(i, opts);
     const val = audioSettings[bus.id];
     const hot = hover?.kind === 'slider' && hover.bus === bus.id;
-    tx(g, bus.label, tr.x, tr.y - 14, 12, DIM, 'left', 3);
-    tx(g, String(Math.round(val * 100)).padStart(3, ' '), tr.x + tr.w, tr.y - 14, 12, FG, 'right', 1);
+    const labelY = touch ? hit.y + cssToUi(12) : tr.y - 14;
+    tx(g, bus.label, tr.x, labelY, 12, DIM, 'left', 3);
+    tx(
+      g,
+      String(Math.round(val * 100)).padStart(3, ' '),
+      tr.x + tr.w,
+      labelY,
+      12,
+      FG,
+      'right',
+      1,
+    );
 
+    // Visual track centred in the touch hit row.
     g.fillStyle = TRACK;
     g.fillRect(tr.x, tr.y, tr.w, tr.h);
     g.fillStyle = audioSettings.muted ? 'rgba(147, 160, 180, 0.45)' : CYAN;
     g.fillRect(tr.x, tr.y, tr.w * val, tr.h);
     const kx = tr.x + tr.w * val;
     g.fillStyle = hot || !audioSettings.muted ? FG : DIM;
-    g.fillRect(kx - 3, tr.y - 4, 6, tr.h + 8);
+    const knobH = touch ? Math.max(tr.h + 8, cssToUi(22)) : tr.h + 8;
+    g.fillRect(kx - 3, tr.y + tr.h / 2 - knobH / 2, 6, knobH);
   }
 
   chip(g, muteBtnRect(opts), audioSettings.muted ? 'UNMUTE' : 'MUTE', hover?.kind === 'mute');
@@ -285,5 +428,7 @@ export function drawSettingsPanel(
   if (opts.resume) {
     chip(g, exitBtnRect(opts), 'EXIT TO TITLE', hover?.kind === 'exit', true);
   }
-  tx(g, opts.footer ?? 'ESC TO CLOSE', p.x + p.w / 2, p.y + p.h - 22, 10, DIM, 'center', 2);
+  if (!touch) {
+    tx(g, opts.footer ?? 'ESC TO CLOSE', p.x + p.w / 2, p.y + p.h - 22, 10, DIM, 'center', 2);
+  }
 }

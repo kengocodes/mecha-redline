@@ -5,6 +5,7 @@ import Phaser from 'phaser';
 import { applyAudioSettings, music, sfx } from '../../core/audio';
 import { clearTap, pointer, takeKey, takeTap } from '../../core/input';
 import { SOCIAL_LINKS } from '../../core/links';
+import { desktopPlayable } from '../../core/platform';
 import { setBus, toggleMuted, type BusId } from '../../core/settings';
 import { isLegalOpen, openLegal } from '../../legal/overlay';
 import { animateGear, buildGear, type Gear, setGearFlash } from '../../render/gearFactory';
@@ -159,9 +160,12 @@ export class TitleScene extends Phaser.Scene {
 
     if (wipeActive() || hud.t <= 0.5) return;
 
-    // Keyboard start always sorties — chrome is pointer-driven.
+    const canPlay = desktopPlayable();
+
+    // Keyboard start — desktop only (combat needs mouse aim).
     if (takeKey('Enter') || takeKey('Space')) {
       takeTap();
+      if (!canPlay) return;
       sfx('ui-confirm');
       startWipe(() => this.scene.start('select'));
       return;
@@ -181,6 +185,7 @@ export class TitleScene extends Phaser.Scene {
       else window.open(SOCIAL_LINKS[hit.id], '_blank', 'noopener,noreferrer');
       return;
     }
+    if (!canPlay) return;
     sfx('ui-confirm');
     startWipe(() => this.scene.start('select'));
   }

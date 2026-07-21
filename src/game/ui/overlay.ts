@@ -3,7 +3,14 @@
 // DotGothic16 with katakana accents. Clean over the low-res 3D world.
 
 import { sfx } from "../../core/audio";
-import { UI_H, UI_W } from "../../core/const";
+import { desktopPlayable } from "../../core/platform";
+import {
+  cssToUi,
+  portraitAttract,
+  touchUi,
+  uiH,
+  uiW,
+} from "../../core/uiSize";
 import { ROSTER, selectedPilot } from "../roster";
 import { getPilotArt } from "./pilotArt";
 import { attract, hud, LAUNCH_T, sel, settingsUi } from "./state";
@@ -11,6 +18,7 @@ import {
   drawSettingsPanel,
   drawTitleChrome,
   hitTitleChrome,
+  titleLinkRects,
 } from "./titleChrome";
 import { getTitleArt } from "./titleArt";
 import { drawWipe } from "./wipe";
@@ -81,7 +89,7 @@ export function drawUI(g: Ctx): void {
   const now = performance.now();
   frameDt = Math.min(0.05, (now - frameNow) / 1000);
   frameNow = now;
-  g.clearRect(0, 0, UI_W, UI_H);
+  g.clearRect(0, 0, uiW, uiH);
   switch (hud.phase) {
     case "boot":
       break;
@@ -100,6 +108,12 @@ export function drawUI(g: Ctx): void {
 // ---- title ---------------------------------------------------------------
 
 function drawTitle(g: Ctx): void {
+  if (portraitAttract()) drawTitlePortrait(g);
+  else drawTitleLandscape(g);
+}
+
+/** Desktop / landscape touch — original 16:9 cabinet chrome. */
+function drawTitleLandscape(g: Ctx): void {
   const t = hud.t;
   const art = getTitleArt();
   const blink = Math.floor(t * 1.5) % 2 === 0;
@@ -107,8 +121,8 @@ function drawTitle(g: Ctx): void {
   const gearArt = getPilotArt(def.id);
 
   // Ghosted gear plate drifting behind the right side of the hangar —
-  // poster-art depth for the unit currently holding the pad.
-  if (gearArt) {
+  // poster-art depth for the unit currently holding the pad (desktop only).
+  if (gearArt && !touchUi()) {
     const plate = gearArt.plate;
     const ph = 680;
     const pw = (plate.width / plate.height) * ph;
@@ -126,8 +140,8 @@ function drawTitle(g: Ctx): void {
   // Cabinet header — ranking left, free-play right.
   tx(g, "HI-SCORE", 36, 26, 11, DIM, "left", 3);
   tx(g, String(hud.hi).padStart(8, "0"), 36, 46, 18, AMBER, "left", 2);
-  tx(g, "フリープレイ", UI_W - 36, 26, 12, DIM, "right", 2);
-  if (blink) tx(g, "FREE PLAY", UI_W - 36, 46, 16, CYAN, "right", 3);
+  tx(g, "フリープレイ", uiW - 36, 26, 12, DIM, "right", 2);
+  if (blink) tx(g, "FREE PLAY", uiW - 36, 46, 16, CYAN, "right", 3);
 
   // Logo slam: overscale + white flash, then settle (OP title hit).
   const slam = Math.min(1, t / 0.55);
@@ -137,10 +151,10 @@ function drawTitle(g: Ctx): void {
   if (art) {
     const lw = art.logo.width;
     const lh = art.logo.height;
-    const baseW = Math.min(UI_W * 0.28, 360);
+    const baseW = Math.min(uiW * 0.28, 360);
     const logoW = baseW * pop;
     const logoH = logoW * (lh / lw);
-    const lx = (UI_W - logoW) / 2;
+    const lx = (uiW - logoW) / 2;
     const ly = 52 - (logoH - baseW * (lh / lw)) / 2;
     g.globalAlpha = Math.min(1, slam * 1.4);
     g.drawImage(art.logo, lx, ly, logoW, logoH);
@@ -153,7 +167,7 @@ function drawTitle(g: Ctx): void {
     g.globalAlpha = 1;
     if (t > 1.2) drawLogoSheen(g, art.logo, lx, ly, logoW, logoH, t);
   } else {
-    tx(g, "MECHA REDLINE", UI_W / 2, 96, 36, FG, "center", 8);
+    tx(g, "MECHA REDLINE", uiW / 2, 96, 36, FG, "center", 8);
   }
 
   // Attract spec card: the unit holding the pad, typed in on each swap.
@@ -168,34 +182,142 @@ function drawTitle(g: Ctx): void {
   g.globalAlpha = 1;
 
   if (t > 0.7 && !settingsUi.open) {
-    // Stack sits high enough that the link row below clears the frame edge.
-    rule(g, UI_W / 2 - 190, 608, 380, LINE);
-    if (blink)
-      tx(g, "PRESS START BUTTON", UI_W / 2, 630, 20, CYAN, "center", 5);
+    // Sit above the link row (touch chips are tall — keep clear).
+    const linkTop = touchUi()
+      ? titleLinkRects()[0]!.rect.y - cssToUi(16)
+      : 692;
+    const stackBottom = Math.min(672, linkTop - cssToUi(8));
+    const y0 = stackBottom - 64;
+    rule(g, uiW / 2 - 190, y0, 380, LINE);
+    if (desktopPlayable()) {
+      if (blink)
+        tx(g, "PRESS START BUTTON", uiW / 2, y0 + 22, 20, CYAN, "center", 5);
+      tx(
+        g,
+        "ゲームスタート ── ボタンを押せ",
+        uiW / 2,
+        y0 + 44,
+        11,
+        DIM,
+        "center",
+        3,
+      );
+      tx(
+        g,
+        "DESKTOP RECOMMENDED ── KEYBOARD + MOUSE",
+        uiW / 2,
+        y0 + 64,
+        10,
+        DIM,
+        "center",
+        2,
+      );
+    } else {
+      tx(g, "PLAY ON DESKTOP", uiW / 2, y0 + 22, 20, CYAN, "center", 5);
+      tx(
+        g,
+        "デスクトップでプレイ ── キーボード＋マウス",
+        uiW / 2,
+        y0 + 44,
+        11,
+        DIM,
+        "center",
+        3,
+      );
+      tx(
+        g,
+        "KEYBOARD + MOUSE REQUIRED",
+        uiW / 2,
+        y0 + 64,
+        10,
+        DIM,
+        "center",
+        2,
+      );
+    }
+  }
+
+  const showLinks = t > 0.7 && !settingsUi.open;
+  const hover = hitTitleChrome(settingsUi.pointerX, settingsUi.pointerY, settingsUi.open, {
+    links: showLinks,
+  });
+  if (!settingsUi.open) drawTitleChrome(g, hover, { links: showLinks });
+  else drawSettingsPanel(g, hover);
+
+  crtScanlines(g);
+}
+
+/**
+ * Phone portrait — full-bleed vertical stack: logo, hangar, unit card,
+ * play-on-desktop gate, then a 2×2 link grid (Privacy / Terms / GitHub / X).
+ */
+function drawTitlePortrait(g: Ctx): void {
+  const t = hud.t;
+  const art = getTitleArt();
+  const def = ROSTER[attract.ix];
+  const cx = uiW / 2;
+
+  // Extra top pad for notched phones (canvas can't read env(safe-area)).
+  tx(g, "HI-SCORE", 28, 56, 11, DIM, "left", 3);
+  tx(g, String(hud.hi).padStart(8, "0"), 28, 78, 16, AMBER, "left", 2);
+
+  const slam = Math.min(1, t / 0.55);
+  const pop = 1 + (1 - slam) * (1 - slam) * 0.22;
+  const flash = slam < 1 ? (1 - slam) * 0.55 : 0;
+
+  if (art) {
+    const lw = art.logo.width;
+    const lh = art.logo.height;
+    const baseW = Math.min(uiW * 0.62, 420);
+    const logoW = baseW * pop;
+    const logoH = logoW * (lh / lw);
+    const lx = (uiW - logoW) / 2;
+    const ly = 118 - (logoH - baseW * (lh / lw)) / 2;
+    g.globalAlpha = Math.min(1, slam * 1.4);
+    g.drawImage(art.logo, lx, ly, logoW, logoH);
+    if (flash > 0.02) {
+      g.globalAlpha = flash;
+      g.globalCompositeOperation = "lighter";
+      g.drawImage(art.logo, lx, ly, logoW, logoH);
+      g.globalCompositeOperation = "source-over";
+    }
+    g.globalAlpha = 1;
+    if (t > 1.2) drawLogoSheen(g, art.logo, lx, ly, logoW, logoH, t);
+  } else {
+    tx(g, "MECHA REDLINE", cx, 140, 28, FG, "center", 6);
+  }
+
+  // Unit card — centred above the gate, clear of the 3D hangar.
+  const ca = Math.min(1, Math.max(0, (attract.swapT - 0.08) * 3.5));
+  const cardY = uiH * 0.58;
+  g.globalAlpha = ca;
+  tx(g, `UNIT ${def.unitNo}`, cx, cardY, 12, DIM, "center", 4);
+  tx(g, def.callsign, cx, cardY + 34, 28, FG, "center", 5);
+  tx(g, def.kana, cx, cardY + 64, 13, CYAN, "center", 4);
+  tx(g, def.role, cx, cardY + 90, 12, DIM, "center", 2);
+  rule(g, cx - 80, cardY + 108, 160, RED);
+  tx(g, `PILOT ── ${def.pilot}`, cx, cardY + 130, 11, DIM, "center", 2);
+  g.globalAlpha = 1;
+
+  if (t > 0.7 && !settingsUi.open) {
+    // Gate sits just above the 2×2 touch chips.
+    const linkTop = titleLinkRects()[0]!.rect.y;
+    const gateY = linkTop - cssToUi(100);
+    rule(g, cx - 160, gateY, 320, LINE);
+    tx(g, "PLAY ON DESKTOP", cx, gateY + 28, 18, CYAN, "center", 4);
     tx(
       g,
-      "ゲームスタート ── ボタンを押せ",
-      UI_W / 2,
-      652,
+      "デスクトップでプレイ ── キーボード＋マウス",
+      cx,
+      gateY + 54,
       11,
-      DIM,
-      "center",
-      3,
-    );
-    // Combat is keyboard + mouse; menus stay pointer-friendly on touch.
-    tx(
-      g,
-      "DESKTOP RECOMMENDED ── KEYBOARD + MOUSE",
-      UI_W / 2,
-      672,
-      10,
       DIM,
       "center",
       2,
     );
+    tx(g, "KEYBOARD + MOUSE REQUIRED", cx, gateY + 78, 10, DIM, "center", 2);
   }
 
-  // Settings + Privacy/Terms/GitHub/X under PRESS START (DotGothic16).
   const showLinks = t > 0.7 && !settingsUi.open;
   const hover = hitTitleChrome(settingsUi.pointerX, settingsUi.pointerY, settingsUi.open, {
     links: showLinks,
@@ -265,7 +387,7 @@ function easeOutCubic(p: number): number {
 function crtScanlines(g: Ctx): void {
   g.globalAlpha = 0.055;
   g.fillStyle = "#02050c";
-  for (let y = 0; y < UI_H; y += 3) g.fillRect(0, y, UI_W, 1);
+  for (let y = 0; y < uiH; y += 3) g.fillRect(0, y, uiW, 1);
   g.globalAlpha = 1;
 }
 
@@ -281,10 +403,10 @@ function drawSelect(g: Ctx): void {
   const blink = Math.floor(hud.t * 1.5) % 2 === 0;
 
   // Header + callsign block, top-center above the turntable.
-  tx(g, "SELECT GEAR ── 機体選択", UI_W / 2, 36, 21, FG, "center", 6);
-  rule(g, UI_W / 2 - 148, 54, 296, RED);
-  tx(g, `${p.unitNo} ── ${p.callsign}`, UI_W / 2, 98, 34, CYAN, "center", 8);
-  tx(g, p.kana, UI_W / 2, 130, 14, DIM, "center", 6);
+  tx(g, "SELECT GEAR ── 機体選択", uiW / 2, 36, 21, FG, "center", 6);
+  rule(g, uiW / 2 - 148, 54, 296, RED);
+  tx(g, `${p.unitNo} ── ${p.callsign}`, uiW / 2, 98, 34, CYAN, "center", 8);
+  tx(g, p.kana, uiW / 2, 130, 14, DIM, "center", 6);
 
   // Coin-op countdown over the turntable: amber, going red and popping on
   // each tick for the last five seconds. Expiry launches (SelectScene).
@@ -292,11 +414,11 @@ function drawSelect(g: Ctx): void {
   const low = sel.timer <= 5;
   const frac = sel.timer % 1;
   const pop = low ? Math.max(0, (frac - 0.7) / 0.3) : 0;
-  tx(g, "TIME", UI_W / 2, 158, 10, DIM, "center", 5);
+  tx(g, "TIME", uiW / 2, 158, 10, DIM, "center", 5);
   tx(
     g,
     String(tsec),
-    UI_W / 2,
+    uiW / 2,
     186,
     34 * (1 + pop * 0.35),
     low ? RED : AMBER,
@@ -312,7 +434,7 @@ function drawSelect(g: Ctx): void {
     tx(
       g,
       "◄ ► SELECT ── CONFIRM SLOT / ENTER: LAUNCH 出撃",
-      UI_W / 2,
+      uiW / 2,
       626,
       14,
       CYAN,
@@ -547,14 +669,14 @@ function drawLaunch(g: Ctx): void {
 
   // Near-black card — the lifting gear's thrusters glow through early on.
   g.fillStyle = `rgba(2, 5, 12, ${Math.min(0.86, c * 3)})`;
-  g.fillRect(0, 0, UI_W, UI_H);
+  g.fillRect(0, 0, uiW, uiH);
 
   // Diagonal speed lines streaking across — stepped jitter reads as motion.
   if (c > 0.05) {
     g.strokeStyle = "rgba(200, 245, 255, 0.4)";
     for (let i = 0; i < 24; i++) {
-      const yy = (i * 173 + Math.floor(c * 40) * 97) % UI_H;
-      const xx = ((i * 259) % (UI_W + 500)) - 250;
+      const yy = (i * 173 + Math.floor(c * 40) * 97) % uiH;
+      const xx = ((i * 259) % (uiW + 500)) - 250;
       const len = 260 + ((i * 83) % 340);
       g.lineWidth = 1 + (i % 3);
       g.beginPath();
@@ -571,7 +693,7 @@ function drawLaunch(g: Ctx): void {
     const ph = 640;
     const pw = (plate.width / plate.height) * ph;
     g.save();
-    g.translate(UI_W + 340 - s * 750, 386);
+    g.translate(uiW + 340 - s * 750, 386);
     g.rotate(-0.05);
     g.globalAlpha = Math.min(1, c * 6);
     g.drawImage(plate, -pw / 2, -ph / 2, pw, ph);
@@ -597,23 +719,23 @@ function drawLaunch(g: Ctx): void {
   const flash = 0.7 - c * 2.6;
   if (flash > 0) {
     g.fillStyle = `rgba(232, 240, 255, ${flash})`;
-    g.fillRect(0, 0, UI_W, UI_H);
+    g.fillRect(0, 0, uiW, uiH);
   }
   const out = (c - 0.85) / 0.3;
   if (out > 0) {
     g.fillStyle = `rgba(2, 5, 12, ${Math.min(1, out)})`;
-    g.fillRect(0, 0, UI_W, UI_H);
+    g.fillRect(0, 0, uiW, uiH);
   }
 }
 
 /** The joke everyone gets: nothing is loading, but the disc must spin. */
 function drawLoading(g: Ctx, t: number): void {
   g.fillStyle = "#02050c";
-  g.fillRect(0, 0, UI_W, UI_H);
+  g.fillRect(0, 0, uiW, uiH);
 
   // Spinner clicks around in eighth-turn steps — smooth would break period.
-  const cx = UI_W - 296;
-  const cy = UI_H - 84;
+  const cx = uiW - 296;
+  const cy = uiH - 84;
   const a0 = Math.floor(t * 9) * (Math.PI / 4);
   g.strokeStyle = CYAN;
   g.lineWidth = 3;
@@ -648,10 +770,10 @@ function drawBattle(g: Ctx): void {
     const a = Math.min(0.45, hud.flashT);
     g.fillStyle = `rgba(255, 59, 83, ${a})`;
     const b = 26;
-    g.fillRect(0, 0, UI_W, b);
-    g.fillRect(0, UI_H - b, UI_W, b);
-    g.fillRect(0, 0, b, UI_H);
-    g.fillRect(UI_W - b, 0, b, UI_H);
+    g.fillRect(0, 0, uiW, b);
+    g.fillRect(0, uiH - b, uiW, b);
+    g.fillRect(0, 0, b, uiH);
+    g.fillRect(uiW - b, 0, b, uiH);
   }
 
   // burst vignette — thin cyan frame pulse
@@ -659,10 +781,10 @@ function drawBattle(g: Ctx): void {
     const a = Math.min(0.5, hud.burstFlashT * 1.1);
     g.strokeStyle = `rgba(127, 251, 255, ${a})`;
     g.lineWidth = 3;
-    g.strokeRect(10.5, 10.5, UI_W - 21, UI_H - 21);
+    g.strokeRect(10.5, 10.5, uiW - 21, uiH - 21);
     g.strokeStyle = `rgba(127, 251, 255, ${a * 0.35})`;
     g.lineWidth = 1;
-    g.strokeRect(18.5, 18.5, UI_W - 37, UI_H - 37);
+    g.strokeRect(18.5, 18.5, uiW - 37, uiH - 37);
   }
 
   // Critical armor: a slow red heartbeat along the frame edges.
@@ -672,10 +794,10 @@ function drawBattle(g: Ctx): void {
     const a = 0.1 + 0.09 * Math.sin(t * 5.5);
     g.fillStyle = `rgba(255, 59, 83, ${a})`;
     const b = 10;
-    g.fillRect(0, 0, UI_W, b);
-    g.fillRect(0, UI_H - b, UI_W, b);
-    g.fillRect(0, 0, b, UI_H);
-    g.fillRect(UI_W - b, 0, b, UI_H);
+    g.fillRect(0, 0, uiW, b);
+    g.fillRect(0, uiH - b, uiW, b);
+    g.fillRect(0, 0, b, uiH);
+    g.fillRect(uiW - b, 0, b, uiH);
   }
 
   if (hud.paused) {
@@ -720,13 +842,13 @@ function drawScore(g: Ctx): void {
 }
 
 function drawMission(g: Ctx): void {
-  panel(g, UI_W - 284, 20, 260, 64);
-  tx(g, "MISSION 01 ── SECTOR 7", UI_W - 40, 40, 13, DIM, "right", 2);
+  panel(g, uiW - 284, 20, 260, 64);
+  tx(g, "MISSION 01 ── SECTOR 7", uiW - 40, 40, 13, DIM, "right", 2);
   const inBoss = hud.bossMax > 0; // stays true through the boss end cards
   const label = inBoss
     ? "TARGET: GOLGOTHA"
     : `WAVE ${String(hud.wave).padStart(2, "0")} / 06`;
-  tx(g, label, UI_W - 40, 66, 20, inBoss ? RED : CYAN, "right", 2);
+  tx(g, label, uiW - 40, 66, 20, inBoss ? RED : CYAN, "right", 2);
 }
 
 /** 1 far from the rect → 0.2 with the player gear on top of it. */
@@ -746,7 +868,7 @@ function drawPilotCluster(g: Ctx): void {
   const p = selectedPilot();
   const art = getPilotArt(p.id);
   const x = 24;
-  const y = UI_H - 140;
+  const y = uiH - 140;
   const w = 342;
   const h = 116;
   const fade = proxFade(x, y, w, h);
@@ -847,16 +969,16 @@ function drawMsg(g: Ctx): void {
   const chars = Math.floor(hud.msgT * 46);
   const shown = hud.msg.slice(0, chars);
   const fade = hud.msgT > 5.5 ? 1 - (hud.msgT - 5.5) : 1;
-  const mw = UI_W - 390 - 24;
-  g.globalAlpha = Math.max(0, fade) * proxFade(390, UI_H - 64, mw, 40);
-  panel(g, 390, UI_H - 64, mw, 40);
-  tx(g, shown, 410, UI_H - 44, 15, FG, "left", 1);
+  const mw = uiW - 390 - 24;
+  g.globalAlpha = Math.max(0, fade) * proxFade(390, uiH - 64, mw, 40);
+  panel(g, 390, uiH - 64, mw, 40);
+  tx(g, shown, 410, uiH - 44, 15, FG, "left", 1);
   g.globalAlpha = 1;
 }
 
 function drawBossBar(g: Ctx): void {
   const w = 640;
-  const x = UI_W / 2 - w / 2;
+  const x = uiW / 2 - w / 2;
   panel(g, x - 16, 20, w + 32, 58);
   tx(g, hud.bossName, x, 40, 13, RED, "left", 2);
   const frac = hud.bossMax > 0 ? hud.bossHp / hud.bossMax : 0;
@@ -879,39 +1001,39 @@ function drawBossBar(g: Ctx): void {
 function drawWarning(g: Ctx, t: number): void {
   const a = 0.5 + 0.5 * Math.sin(t * 9);
   g.fillStyle = `rgba(120, 10, 24, ${0.25 + a * 0.2})`;
-  g.fillRect(0, 268, UI_W, 184);
-  rule(g, 0, 268, UI_W, RED);
-  rule(g, 0, 450, UI_W, RED);
+  g.fillRect(0, 268, uiW, 184);
+  rule(g, 0, 268, uiW, RED);
+  rule(g, 0, 450, uiW, RED);
   g.globalAlpha = 0.55 + a * 0.45;
-  tx(g, "警告", UI_W / 2 - 330, 360, 46, RED, "center", 8);
-  tx(g, "WARNING", UI_W / 2, 358, 76, RED, "center", 22);
-  tx(g, "警告", UI_W / 2 + 330, 360, 46, RED, "center", 8);
+  tx(g, "警告", uiW / 2 - 330, 360, 46, RED, "center", 8);
+  tx(g, "WARNING", uiW / 2, 358, 76, RED, "center", 22);
+  tx(g, "警告", uiW / 2 + 330, 360, 46, RED, "center", 8);
   g.globalAlpha = 1;
-  tx(g, "FORTRESS-CLASS GEAR ON APPROACH", UI_W / 2, 424, 16, FG, "center", 6);
+  tx(g, "FORTRESS-CLASS GEAR ON APPROACH", uiW / 2, 424, 16, FG, "center", 6);
 }
 
 function drawIntro(g: Ctx, t: number): void {
   const a =
     Math.min(1, t / 0.4) * (t > 3.0 ? Math.max(0, 1 - (t - 3.0) / 0.6) : 1);
   g.globalAlpha = a;
-  tx(g, "MISSION 01", UI_W / 2, 292, 56, FG, "center", 14);
-  rule(g, UI_W / 2 - 250, 330, 500, RED);
+  tx(g, "MISSION 01", uiW / 2, 292, 56, FG, "center", 14);
+  rule(g, uiW / 2 - 250, 330, 500, RED);
   tx(
     g,
     "SECTOR 7 PERIMETER ── 第七区画防衛線",
-    UI_W / 2,
+    uiW / 2,
     366,
     22,
     CYAN,
     "center",
     4,
   );
-  tx(g, "DESTROY ALL HOSTILE GEARS", UI_W / 2, 404, 15, DIM, "center", 5);
+  tx(g, "DESTROY ALL HOSTILE GEARS", uiW / 2, 404, 15, DIM, "center", 5);
   const p = selectedPilot();
   tx(
     g,
     `UNIT ${p.unitNo} ── ${p.callsign} // ${p.pilot}`,
-    UI_W / 2,
+    uiW / 2,
     442,
     14,
     AMBER,
@@ -925,26 +1047,26 @@ function drawEndCard(g: Ctx, won: boolean): void {
   const t = hud.t;
   const a = Math.min(0.75, t * 0.8);
   g.fillStyle = `rgba(5, 7, 13, ${a})`;
-  g.fillRect(0, 0, UI_W, UI_H);
+  g.fillRect(0, 0, uiW, uiH);
   if (t < 0.6) return;
 
   const w = 620;
   const h = 250;
-  const x = UI_W / 2 - w / 2;
-  const y = UI_H / 2 - h / 2;
+  const x = uiW / 2 - w / 2;
+  const y = uiH / 2 - h / 2;
   panel(g, x, y, w, h);
   if (won) {
-    tx(g, "MISSION COMPLETE", UI_W / 2, y + 62, 40, CYAN, "center", 8);
-    tx(g, "任務完了", UI_W / 2, y + 102, 20, FG, "center", 10);
+    tx(g, "MISSION COMPLETE", uiW / 2, y + 62, 40, CYAN, "center", 8);
+    tx(g, "任務完了", uiW / 2, y + 102, 20, FG, "center", 10);
   } else {
-    tx(g, "MISSION FAILED", UI_W / 2, y + 62, 40, RED, "center", 8);
-    tx(g, "機体大破 ── 任務失敗", UI_W / 2, y + 102, 20, FG, "center", 8);
+    tx(g, "MISSION FAILED", uiW / 2, y + 62, 40, RED, "center", 8);
+    tx(g, "機体大破 ── 任務失敗", uiW / 2, y + 102, 20, FG, "center", 8);
   }
   rule(g, x + 60, y + 128, w - 120, won ? CYAN : RED);
   tx(
     g,
     `SCORE  ${String(hud.score).padStart(8, "0")}`,
-    UI_W / 2,
+    uiW / 2,
     y + 160,
     20,
     FG,
@@ -954,7 +1076,7 @@ function drawEndCard(g: Ctx, won: boolean): void {
   tx(
     g,
     `HI     ${String(hud.hi).padStart(8, "0")}`,
-    UI_W / 2,
+    uiW / 2,
     y + 188,
     16,
     AMBER,
@@ -966,7 +1088,7 @@ function drawEndCard(g: Ctx, won: boolean): void {
     tx(
       g,
       won ? "CLICK ── RETURN TO BASE" : "CLICK ── RELAUNCH",
-      UI_W / 2,
+      uiW / 2,
       y + h - 28,
       16,
       DIM,

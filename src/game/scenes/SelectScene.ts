@@ -39,7 +39,7 @@ export class SelectScene extends Phaser.Scene {
     sel.confirmT = -1;
     sel.timer = SELECT_T;
     this.spawnGear();
-    music('select');
+    music('title'); // hold the title bed through hangar select
     vo('op-select-gear');
   }
 

@@ -3,7 +3,8 @@
 // nearest-neighbour sampling.
 
 import * as THREE from 'three';
-import { CAM_ELEV, RES_H, RES_W, UI_H, UI_W, VIEW_HH, VIEW_HW } from '../core/const';
+import { CAM_ELEV, RES_H, RES_W, VIEW_HH, VIEW_HW } from '../core/const';
+import { portraitAttract, uiH, uiW } from '../core/uiSize';
 import { Bullets3D } from './bullets3d';
 import { Fx3D } from './fx3d';
 import { HangarShowcase } from './hangarShowcase';
@@ -100,6 +101,7 @@ export class Stage3D {
     this.camera = new THREE.OrthographicCamera(-VIEW_HW, VIEW_HW, VIEW_HH, -VIEW_HH, 1, 400);
     this.camera.position.set(0, CAM_DIST * Math.sin(el), CAM_DIST * Math.cos(el));
     this.camera.lookAt(this.lookTarget);
+    this.applyUiAspect();
 
     // Soft void falloff only — backdrop materials opt out of fog so stars stay sharp.
     this.scene.fog = new THREE.Fog(VOID, 140, 260);
@@ -147,17 +149,43 @@ export class Stage3D {
   }
 
   /**
+   * Match the orthographic frustum to the live UI aspect (portrait phones
+   * are tall; desktop stays 16:9). Keeps vertical world scale stable.
+   */
+  applyUiAspect(): void {
+    const aspect = uiW / uiH;
+    const halfH = VIEW_HH;
+    const halfW = halfH * aspect;
+    this.camera.left = -halfW;
+    this.camera.right = halfW;
+    this.camera.top = halfH;
+    this.camera.bottom = -halfH;
+    if (this.hangar?.group.visible) this.frameShowcase();
+    else this.camera.updateProjectionMatrix();
+  }
+
+  /** Showcase framing — portrait pulls the unit mid-frame under the logo. */
+  private frameShowcase(): void {
+    const tall = portraitAttract();
+    this.camera.zoom = tall ? 2.55 : 3.35;
+    this.lookTarget.set(0, tall ? 3.8 : 5.4, tall ? 0.8 : 2.6);
+    this.camera.updateProjectionMatrix();
+  }
+
+  /**
    * Battle view vs hangar showcase. Showcase frames the gear in the lower
    * two-thirds so the keyed title logo has clear headroom above.
    */
   setMode(mode: 'battle' | 'showcase'): void {
     const showcase = mode === 'showcase';
     this.elev = ((showcase ? 16 : CAM_ELEV) * Math.PI) / 180;
-    this.camera.zoom = showcase ? 3.35 : 1;
-    // Aim high so the unit sits low in frame, nearer PRESS START.
-    this.lookTarget.set(0, showcase ? 5.4 : 0, showcase ? 2.6 : 0);
-    this.camera.updateProjectionMatrix();
     this.hangar.group.visible = showcase;
+    if (showcase) this.frameShowcase();
+    else {
+      this.camera.zoom = 1;
+      this.lookTarget.set(0, 0, 0);
+    }
+    this.applyUiAspect();
     // Stars stay up on title — deep void behind the hangar set.
     this.space.group.visible = true;
     // Camera sits ~CAM_DIST (100) from the gear — fog must start past that
@@ -189,14 +217,14 @@ export class Stage3D {
   uiPoint(x: number, y: number, h = 2.2): { x: number; y: number } {
     this._proj.set(x, h, y).project(this.camera);
     return {
-      x: ((this._proj.x + 1) / 2) * UI_W,
-      y: ((1 - this._proj.y) / 2) * UI_H,
+      x: ((this._proj.x + 1) / 2) * uiW,
+      y: ((1 - this._proj.y) / 2) * uiH,
     };
   }
 
   /** UI-space pointer position → arena-plane gameplay coords. */
   aimPoint(sx: number, sy: number): { x: number; y: number } {
-    const ndc = new THREE.Vector2((sx / UI_W) * 2 - 1, -(sy / UI_H) * 2 + 1);
+    const ndc = new THREE.Vector2((sx / uiW) * 2 - 1, -(sy / uiH) * 2 + 1);
     this.ray.setFromCamera(ndc, this.camera);
     const hit = new THREE.Vector3();
     if (this.ray.ray.intersectPlane(this.aimPlane, hit)) {

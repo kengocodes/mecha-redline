@@ -2,30 +2,43 @@
 
 import Phaser from 'phaser';
 import { resumeAudio, suspendAudio } from './core/audio';
-import { UI_H, UI_W } from './core/const';
 import { initInput } from './core/input';
+import { portraitAttract, syncUiSize, uiH, uiW } from './core/uiSize';
 import { BootScene } from './game/scenes/BootScene';
 import { GameScene } from './game/scenes/GameScene';
 import { HudScene } from './game/scenes/HudScene';
 import { SelectScene } from './game/scenes/SelectScene';
 import { TitleScene } from './game/scenes/TitleScene';
 import { initLegalOverlay } from './legal/overlay';
+import { Stage3D } from './render/stage3d';
 import './style.css';
 
 const stage = document.getElementById('stage');
 if (!stage) throw new Error('missing #stage');
 
-/** Keep #stage the largest centred 16:9 box the window allows. */
+/**
+ * Desktop: largest centred 16:9 box.
+ * Portrait phone attract: edge-to-edge (no landscape letterbox bars).
+ */
 function fitStage(): void {
   const el = stage as HTMLElement;
-  const scale = Math.min(window.innerWidth / UI_W, window.innerHeight / UI_H);
-  const w = Math.floor(UI_W * scale);
-  const h = Math.floor(UI_H * scale);
+  if (portraitAttract()) {
+    el.style.left = '0';
+    el.style.top = '0';
+    el.style.width = '100%';
+    el.style.height = '100%';
+    return;
+  }
+  const scale = Math.min(window.innerWidth / uiW, window.innerHeight / uiH);
+  const w = Math.floor(uiW * scale);
+  const h = Math.floor(uiH * scale);
   el.style.width = `${w}px`;
   el.style.height = `${h}px`;
   el.style.left = `${Math.floor((window.innerWidth - w) / 2)}px`;
   el.style.top = `${Math.floor((window.innerHeight - h) / 2)}px`;
 }
+
+syncUiSize();
 fitStage();
 
 initLegalOverlay();
@@ -34,8 +47,8 @@ initInput(stage);
 const game = new Phaser.Game({
   type: Phaser.AUTO,
   parent: 'stage',
-  width: UI_W,
-  height: UI_H,
+  width: uiW,
+  height: uiH,
   transparent: true,
   banner: false,
   scale: {
@@ -45,10 +58,22 @@ const game = new Phaser.Game({
   scene: [BootScene, TitleScene, SelectScene, GameScene, HudScene],
 });
 
-window.addEventListener('resize', () => {
+function applyLayout(): void {
+  const changed = syncUiSize();
   fitStage();
+  if (changed) {
+    game.scale.resize(uiW, uiH);
+    const hud = game.scene.getScene('hud');
+    if (hud instanceof HudScene) hud.resizeCanvas(uiW, uiH);
+    // BootScene constructs Stage3D; skip until then.
+    const s3d = (Stage3D as unknown as { I?: Stage3D }).I;
+    s3d?.applyUiAspect();
+  }
   game.scale.refresh();
-});
+}
+
+window.addEventListener('resize', applyLayout);
+window.addEventListener('orientationchange', applyLayout);
 
 // Tab away: freeze combat + suspend audio. Stay paused on return (player resumes).
 document.addEventListener('visibilitychange', () => {
