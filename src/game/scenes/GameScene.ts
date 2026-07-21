@@ -28,9 +28,11 @@ import {
   takeTap,
 } from '../../core/input';
 import { setBus, toggleMuted, type BusId } from '../../core/settings';
+import { isLegalOpen } from '../../legal/overlay';
 import {
   animateGear,
   buildGear,
+  disposeGear,
   type Gear,
   GOLGOTHA,
   HUSK,
@@ -177,6 +179,9 @@ export class GameScene extends Phaser.Scene {
       this.scriptIx = LEVEL1.length;
       this.levelT = 999;
       setPhase('warning');
+      // Mirror the real battle→warning transition or the fight runs silent.
+      music('boss', { fade: 1.4 });
+      sfx('warning');
     }
 
     setStageCursor('aim');
@@ -250,6 +255,14 @@ export class GameScene extends Phaser.Scene {
   };
 
   update(_t: number, dms: number): void {
+    // The legal reader can open mid-combat (browser Back/Forward) — freeze
+    // the sim like a pause until it closes, or the player dies blind.
+    if (isLegalOpen()) {
+      setStageCursor('auto');
+      Stage3D.I.update(0);
+      return;
+    }
+
     settingsUi.pointerX = pointer.x;
     settingsUi.pointerY = pointer.y;
 
@@ -540,6 +553,7 @@ export class GameScene extends Phaser.Scene {
         e.y > CULL_Y || e.y < -CULL_Y - 8 || e.x < -CULL_X - 8 || e.x > CULL_X + 8;
       if (gone && e.t > 3) {
         Stage3D.I.battleGroup.remove(e.gear.root);
+        disposeGear(e.gear.root);
         this.enemies.splice(i, 1);
       }
     }
@@ -564,22 +578,26 @@ export class GameScene extends Phaser.Scene {
   private collide(): void {
     const p = this.p;
 
-    // Player bullets vs enemies.
-    for (let i = this.pb.length - 1; i >= 0; i--) {
-      const b = this.pb[i];
-      for (const e of this.enemies) {
-        if (e.kind === 'boss' && e.ai.state === 0) continue; // entrance armour
-        const rr = e.hitR + b.r;
-        const dx = e.x - b.x;
-        const dy = e.y - b.y;
-        if (dx * dx + dy * dy < rr * rr) {
-          this.pb.splice(i, 1);
-          e.hp -= 1;
-          Stage3D.I.fx.spark(b.x, b.y);
-          // White blink on surviving hits; lethal hits get debris instead.
-          if (e.hp > 0 && e.flashT <= -FLASH_GAP) e.flashT = FLASH_DUR;
-          if (e.hp <= 0) this.killEnemy(e);
-          break;
+    // Player bullets vs enemies. A dead player's in-flight rounds are
+    // inert — otherwise they can kill the boss post-mortem and queue the
+    // "Confirmed kill" fanfare over the MISSION FAILED card.
+    if (p.alive) {
+      for (let i = this.pb.length - 1; i >= 0; i--) {
+        const b = this.pb[i];
+        for (const e of this.enemies) {
+          if (e.kind === 'boss' && e.ai.state === 0) continue; // entrance armour
+          const rr = e.hitR + b.r;
+          const dx = e.x - b.x;
+          const dy = e.y - b.y;
+          if (dx * dx + dy * dy < rr * rr) {
+            this.pb.splice(i, 1);
+            e.hp -= 1;
+            Stage3D.I.fx.spark(b.x, b.y);
+            // White blink on surviving hits; lethal hits get debris instead.
+            if (e.hp > 0 && e.flashT <= -FLASH_GAP) e.flashT = FLASH_DUR;
+            if (e.hp <= 0) this.killEnemy(e);
+            break;
+          }
         }
       }
     }
@@ -616,6 +634,7 @@ export class GameScene extends Phaser.Scene {
     if (ix < 0) return;
     this.enemies.splice(ix, 1);
     Stage3D.I.battleGroup.remove(e.gear.root);
+    disposeGear(e.gear.root);
 
     // Chain scoring: kills inside the window stack the chain; every
     // CHAIN.per kills climb one multiplier tier. A hit breaks it.

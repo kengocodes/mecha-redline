@@ -4,7 +4,14 @@
 import { uiH, uiW } from './uiSize';
 
 const keys = new Set<string>();
-const just = new Set<string>();
+/** One-shot presses, timestamped: a latch is only meaningful on the frames
+ * right after the press. Without an expiry, a key hit during a phase with
+ * no consumer (intro, warning card, select screen) would fire seconds
+ * later the moment some phase starts polling it. */
+const just = new Map<string, number>();
+/** Max age of a one-shot latch — generous for slow frames, far shorter
+ * than any phase transition. */
+const JUST_TTL_MS = 350;
 
 export const pointer = { x: uiW / 2, y: uiH / 4, down: false };
 
@@ -28,9 +35,10 @@ export function initInput(stageEl: HTMLElement): void {
 
   window.addEventListener('keydown', (e) => {
     if (CAPTURE.has(e.code)) e.preventDefault();
-    if (!keys.has(e.code)) just.add(e.code);
+    const fresh = !keys.has(e.code); // OS auto-repeat re-fires keydown while held
+    if (fresh) just.set(e.code, performance.now());
     keys.add(e.code);
-    if (e.code === 'Enter' || e.code === 'Space') tapped = true;
+    if (fresh && (e.code === 'Enter' || e.code === 'Space')) tapped = true;
   });
   window.addEventListener('keyup', (e) => keys.delete(e.code));
   window.addEventListener('blur', () => {
@@ -38,12 +46,16 @@ export function initInput(stageEl: HTMLElement): void {
     pointer.down = false;
   });
 
-  window.addEventListener('pointermove', (e) => updatePointer(e.clientX, e.clientY));
+  window.addEventListener('pointermove', (e) => {
+    updatePointer(e.clientX, e.clientY);
+    // Released off-window: no pointerup reaches the page, so the first move
+    // with no buttons pressed proves the fire latch is stale.
+    if (pointer.down && e.buttons === 0) pointer.down = false;
+  });
   window.addEventListener('pointerdown', (e) => {
     updatePointer(e.clientX, e.clientY);
     if (e.button !== 0) return;
-    pointer.down = true;
-    // DOM chrome (legalnav, legal reader, real anchors) must not latch a game tap.
+    // DOM chrome (legalnav, legal reader, real anchors) is not game input.
     const t = e.target;
     if (
       t instanceof Element &&
@@ -51,10 +63,14 @@ export function initInput(stageEl: HTMLElement): void {
     ) {
       return;
     }
+    pointer.down = true;
     tapped = true;
   });
   window.addEventListener('pointerup', (e) => {
     if (e.button === 0) pointer.down = false;
+  });
+  window.addEventListener('pointercancel', () => {
+    pointer.down = false;
   });
   window.addEventListener('contextmenu', (e) => e.preventDefault());
 }
@@ -72,7 +88,8 @@ export function isDown(code: string): boolean {
 
 /** One-shot key press; consuming it clears the latch. */
 export function takeKey(code: string): boolean {
-  if (just.has(code)) {
+  const t = just.get(code);
+  if (t !== undefined && performance.now() - t <= JUST_TTL_MS) {
     just.delete(code);
     return true;
   }

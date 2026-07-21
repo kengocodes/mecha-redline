@@ -188,11 +188,11 @@ function drawTitleLandscape(g: Ctx): void {
   }
 
   if (t > 0.7 && !settingsUi.open) {
-    // Sit above the link row (touch chips are tall — keep clear).
-    const linkTop = touchUi()
-      ? titleLinkRects()[0]!.rect.y - cssToUi(16)
-      : 692;
-    const stackBottom = Math.min(672, linkTop - cssToUi(8));
+    // Touch: sit above the chip row. Desktop: fixed band — links sit beside
+    // DESKTOP RECOMMENDED, not under the stack.
+    const stackBottom = touchUi()
+      ? titleLinkRects()[0]!.rect.y - cssToUi(16) - cssToUi(8)
+      : 672;
     const y0 = stackBottom - 64;
     rule(g, uiW / 2 - 190, y0, 380, LINE);
     if (desktopPlayable()) {
@@ -250,13 +250,23 @@ function drawTitleLandscape(g: Ctx): void {
   if (!settingsUi.open) drawTitleChrome(g, hover, { links: showLinks });
   else drawSettingsPanel(g, hover);
 
+  // Scrolling cabinet ticker along the very bottom (under the footer band).
+  if (!settingsUi.open) {
+    g.font = "11px DotGothic16, monospace";
+    const tick =
+      "© MECHA REDLINE 1998 ── SECTOR 7 PERIMETER STATUS: RED ── 第七区画防衛線 ── ALL GEAR PILOTS REPORT TO HANGAR BAY 03 ── FREE PLAY ── フリープレイ ── INSERT CREDIT // ";
+    const tw = g.measureText(tick).width;
+    tx(g, tick, uiW - ((t * 55) % (tw + uiW)), 708, 11, DIM, "left", 1);
+  }
+
   crtScanlines(g);
 }
 
 /** Left-column combat bindings under the attract unit card. */
 function drawTitleControls(g: Ctx): void {
   const x = 84;
-  const y0 = 556;
+  // Last binding line shares the ~672 footer band with Recommended + links.
+  const y0 = 578;
   tx(g, "CONTROLS ── 操作", x, y0, 12, CYAN, "left", 3);
   const lines = [
     "WASD / ARROWS ── MOVE",
@@ -402,6 +412,16 @@ export function selectSlotRect(i: number): {
   return { x: 36 + i * 304, y: 648, w: 296, h: 52 };
 }
 
+/** BACK chip — top-left, mirrors title SETTINGS. */
+export function selectBackRect(): {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+} {
+  return { x: 36, y: 24, w: 132, h: 28 };
+}
+
 function easeOutCubic(p: number): number {
   return 1 - (1 - p) ** 3;
 }
@@ -424,6 +444,18 @@ function drawSelect(g: Ctx): void {
 
   const p = ROSTER[sel.ix];
   const blink = Math.floor(hud.t * 1.5) % 2 === 0;
+
+  // BACK chip — top-left, same language as title SETTINGS.
+  {
+    const r = selectBackRect();
+    const hot = sel.hoverBack;
+    g.fillStyle = hot ? "rgba(127, 251, 255, 0.12)" : "rgba(6, 10, 18, 0.55)";
+    g.fillRect(r.x, r.y, r.w, r.h);
+    g.strokeStyle = hot ? CYAN : LINE;
+    g.lineWidth = 1;
+    g.strokeRect(r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1);
+    tx(g, "◄ BACK", r.x + r.w / 2, r.y + r.h / 2, 12, hot ? CYAN : DIM, "center", 2);
+  }
 
   // Header + callsign block, top-center above the turntable.
   tx(g, "SELECT GEAR ── 機体選択", uiW / 2, 36, 21, FG, "center", 6);

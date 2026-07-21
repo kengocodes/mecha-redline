@@ -16,6 +16,9 @@ body {
 
 #stage {
   position: absolute;
+  /* Fill the viewport until fitStage() computes the letterboxed box —
+     otherwise the pre-boot LOADING card shrink-wraps to 0×0. */
+  inset: 0;
   background: #02050c;
   overflow: hidden;
 }

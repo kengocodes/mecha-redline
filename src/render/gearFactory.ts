@@ -92,6 +92,35 @@ function glowMat(color: number): THREE.MeshBasicMaterial {
 /** Shared hit-flash material — never mutated, only swapped in and out. */
 const FLASH_MAT = new THREE.MeshBasicMaterial({ color: 0xffffff });
 
+/**
+ * Free a gear's per-instance GPU resources (blob shadow, muzzle flashes,
+ * thruster flames, focus dot). Removing from the scene graph alone never
+ * frees GL buffers — call this whenever a gear is torn down. Shared
+ * geoCache/matCache entries and FLASH_MAT are left alone: other gears use
+ * them.
+ */
+export function disposeGear(root: THREE.Object3D): void {
+  const sharedGeo = new Set(geoCache.values());
+  const sharedMat = new Set([...matCache.values(), FLASH_MAT]);
+  const doneGeo = new Set<THREE.BufferGeometry>();
+  const doneMat = new Set<THREE.Material>();
+  root.traverse((obj) => {
+    const m = obj as THREE.Mesh;
+    if (!m.isMesh) return;
+    const mat = m.material as THREE.Material;
+    // A flashing gear may sit on FLASH_MAT — its real material is stashed.
+    const real = (m.userData.mat as THREE.Material | undefined) ?? mat;
+    if (!sharedGeo.has(m.geometry) && !doneGeo.has(m.geometry)) {
+      doneGeo.add(m.geometry);
+      m.geometry.dispose();
+    }
+    if (!sharedMat.has(real) && !doneMat.has(real)) {
+      doneMat.add(real);
+      real.dispose();
+    }
+  });
+}
+
 /** Swap every armor mesh to solid white (and back) for hit feedback. */
 export function setGearFlash(g: Gear, on: boolean): void {
   if (on === g.flashing) return;

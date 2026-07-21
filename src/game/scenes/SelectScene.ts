@@ -9,7 +9,7 @@ import { clearTap, takeKey, takeTap, pointer } from '../../core/input';
 import { animateGear, buildGear, type Gear, setGearFlash } from '../../render/gearFactory';
 import { Stage3D } from '../../render/stage3d';
 import { ROSTER, selectPilot, selectedPilot } from '../roster';
-import { selectSlotRect } from '../ui/overlay';
+import { selectBackRect, selectSlotRect } from '../ui/overlay';
 import { hud, LAUNCH_T, LOAD_T, sel, setPhase } from '../ui/state';
 import { startWipe, wipeActive } from '../ui/wipe';
 
@@ -36,6 +36,7 @@ export class SelectScene extends Phaser.Scene {
     clearTap();
     sel.ix = ROSTER.findIndex((p) => p.id === selectedPilot().id);
     sel.hover = -1;
+    sel.hoverBack = false;
     sel.swapT = 0; // run the spec-sheet fill on entry too
     sel.confirmT = -1;
     sel.timer = SELECT_T;
@@ -81,6 +82,12 @@ export class SelectScene extends Phaser.Scene {
     music(null, { fade: 1.2 }); // cut-in and NOW LOADING play dry
   }
 
+  private goBack(): void {
+    if (sel.confirmT >= 0 || wipeActive()) return;
+    sfx('ui-back');
+    startWipe(() => this.scene.start('title'));
+  }
+
   update(_t: number, dms: number): void {
     const dt = Math.min(dms, 50) / 1000;
     hud.t += dt;
@@ -104,10 +111,16 @@ export class SelectScene extends Phaser.Scene {
       if (takeKey('ArrowLeft') || takeKey('KeyA')) this.pick(sel.ix - 1);
       if (takeKey('ArrowRight') || takeKey('KeyD')) this.pick(sel.ix + 1);
       if (takeKey('Escape')) {
-        sfx('ui-back');
-        startWipe(() => this.scene.start('title'));
+        this.goBack();
         return;
       }
+
+      const back = selectBackRect();
+      sel.hoverBack =
+        pointer.x >= back.x &&
+        pointer.x <= back.x + back.w &&
+        pointer.y >= back.y &&
+        pointer.y <= back.y + back.h;
 
       sel.hover = -1;
       for (let i = 0; i < ROSTER.length; i++) {
@@ -116,7 +129,7 @@ export class SelectScene extends Phaser.Scene {
           sel.hover = i;
         }
       }
-      setStageCursor(sel.hover >= 0 ? 'select' : 'aim');
+      setStageCursor(sel.hover >= 0 || sel.hoverBack ? 'select' : 'aim');
 
       // Enter/Space launch; taps only pick a slot or re-confirm the current
       // one — bare clicks on the briefing / void must not sortie you.
@@ -124,7 +137,8 @@ export class SelectScene extends Phaser.Scene {
         takeTap(); // eat the latch those keys also set
         this.confirm();
       } else if (takeTap()) {
-        if (sel.hover === sel.ix) this.confirm();
+        if (sel.hoverBack) this.goBack();
+        else if (sel.hover === sel.ix) this.confirm();
         else if (sel.hover >= 0) this.pick(sel.hover);
       }
 

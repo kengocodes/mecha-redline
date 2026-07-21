@@ -7,6 +7,7 @@ import { CAM_ELEV, RES_H, RES_W, VIEW_HH, VIEW_HW } from '../core/const';
 import { portraitAttract, uiH, uiW } from '../core/uiSize';
 import { Bullets3D } from './bullets3d';
 import { Fx3D } from './fx3d';
+import { disposeGear } from './gearFactory';
 import { HangarShowcase } from './hangarShowcase';
 import { SpaceBackdrop } from './spaceBackdrop';
 
@@ -88,6 +89,9 @@ export class Stage3D {
   private space!: SpaceBackdrop;
   private hangar!: HangarShowcase;
   private shake = 0;
+  /** Last applied shake offset — re-used while dt is 0 (pause/hitstop). */
+  private shakeOx = 0;
+  private shakeOy = 0;
   private aberr = 0;
   private flash = 0;
   private flashColor = new THREE.Color(1, 1, 1);
@@ -235,6 +239,8 @@ export class Stage3D {
   }
 
   clearBattle(): void {
+    // Removal alone never frees GL buffers — dispose per-gear resources.
+    for (const child of [...this.battleGroup.children]) disposeGear(child);
     this.battleGroup.clear();
     this.bullets.clear();
     this.fx.clear();
@@ -321,11 +327,15 @@ export class Stage3D {
     if (this.shake > 0.005) {
       const right = new THREE.Vector3(1, 0, 0);
       const up = new THREE.Vector3(0, Math.cos(el), -Math.sin(el));
-      const ox = (Math.random() * 2 - 1) * this.shake;
-      const oy = (Math.random() * 2 - 1) * this.shake;
-      base.addScaledVector(right, ox).addScaledVector(up, oy);
-      look.addScaledVector(right, ox).addScaledVector(up, oy);
-      this.shake *= Math.max(0, 1 - dt * 6);
+      // dt === 0 means paused or hitstop: hold the last offset so the frame
+      // freezes instead of jittering at full amplitude forever.
+      if (dt > 0) {
+        this.shakeOx = (Math.random() * 2 - 1) * this.shake;
+        this.shakeOy = (Math.random() * 2 - 1) * this.shake;
+        this.shake *= Math.max(0, 1 - dt * 6);
+      }
+      base.addScaledVector(right, this.shakeOx).addScaledVector(up, this.shakeOy);
+      look.addScaledVector(right, this.shakeOx).addScaledVector(up, this.shakeOy);
     }
     this.camera.position.copy(base);
     this.camera.lookAt(look);

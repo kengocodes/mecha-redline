@@ -123,6 +123,9 @@ let musicWant: MusicId | null = null;
 let musicWantLoop = true;
 let voNow: AudioBufferSourceNode | null = null;
 let voPending: VoId | null = null;
+/** Request counter: an interrupting line supersedes earlier ones still
+ * decoding — otherwise a slow older line would cut off the newer one. */
+let voReqSeq = 0;
 
 function fadeOutMusic(handle: MusicHandle, fade: number): void {
   if (!ctx) return;
@@ -165,6 +168,8 @@ function ensure(): AudioContext | null {
   masterBus.connect(ctx.destination);
   applyAudioSettings();
   window.addEventListener('pointerdown', unlockAudio, { capture: true });
+  // Touch pointerdown grants no user activation in Chrome — pointerup does.
+  window.addEventListener('pointerup', unlockAudio, { capture: true });
   window.addEventListener('keydown', unlockAudio, { capture: true });
   return ctx;
 }
@@ -224,7 +229,12 @@ async function load(path: string): Promise<AudioBuffer | null> {
         buffers.set(path, buf);
         return buf;
       })
-      .catch(() => null);
+      .catch(() => {
+        // Don't memoize failure — a transient 404/hiccup must be retried on
+        // the next play, not silence this sound for the whole session.
+        loading.delete(path);
+        return null;
+      });
     loading.set(path, p);
   }
   return p;
@@ -268,9 +278,17 @@ export function sfx(
 export function sfxLoopStart(id: SfxId, gain?: number): void {
   const c = ensure();
   if (!c || loops.has(id)) return;
-  loops.set(id, null as never); // reserve before the async load lands
+  // Reserve with a unique token before the async load lands. Checking mere
+  // presence at completion is racy: a stop→start across the pending load
+  // would let BOTH callbacks pass and orphan an unstoppable source.
+  const reservation = { src: null, gain: null } as never;
+  loops.set(id, reservation);
   void load(`sfx/${id}`).then((buf) => {
-    if (!buf || !loops.has(id)) return;
+    if (loops.get(id) !== reservation) return; // stopped or re-reserved
+    if (!buf) {
+      loops.delete(id); // failed load: free the slot so a retry can happen
+      return;
+    }
     const src = c.createBufferSource();
     src.buffer = buf;
     src.loop = true;
@@ -286,7 +304,8 @@ export function sfxLoopStop(id: SfxId, fade = 0.3): void {
   const c = ctx;
   const loop = loops.get(id);
   loops.delete(id);
-  if (!c || !loop) return;
+  // A pending reservation has null src/gain — nothing to fade out yet.
+  if (!c || !loop || !loop.src) return;
   loop.gain.gain.setTargetAtTime(0, c.currentTime, fade / 3);
   loop.src.stop(c.currentTime + fade);
 }
@@ -301,8 +320,10 @@ export function sfxLoopStop(id: SfxId, fade = 0.3): void {
 export function vo(id: VoId, opts: { queue?: boolean; gain?: number } = {}): void {
   const c = ensure();
   if (!c) return;
+  const seq = opts.queue ? 0 : ++voReqSeq;
   void load(`vo/${id}`).then((buf) => {
     if (!buf) return;
+    if (!opts.queue && seq !== voReqSeq) return; // superseded while decoding
     if (voNow && opts.queue) {
       voPending = id;
       return;
@@ -368,15 +389,19 @@ export function music(id: MusicId | null, opts: { loop?: boolean; fade?: number 
   void load(`music/${id}`).then((buf) => {
     if (!buf || musicWant !== id || musicNow?.id === id) return;
     if (c.state !== 'running') return;
+    const loop = opts.loop ?? true;
     const src = c.createBufferSource();
     src.buffer = buf;
-    src.loop = opts.loop ?? true;
+    src.loop = loop;
     const g = c.createGain();
     g.gain.value = 0;
     g.gain.setTargetAtTime(1, c.currentTime, fade / 3);
     src.connect(g).connect(musicBus);
     src.onended = () => {
       if (musicNow?.src === src) musicNow = null;
+      // One-shot stingers are done when they end — clear the want so the
+      // next gesture's unlockAudio kick doesn't replay them.
+      if (!loop && musicWant === id) musicWant = null;
     };
     src.start();
     musicNow = { id, src, gain: g };

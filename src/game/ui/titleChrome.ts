@@ -194,8 +194,9 @@ export function titleLinkRects(): { id: LinkId; rect: Rect }[] {
   const pad = 10;
   const widths = labels.map((lab) => lab.length * 7.2 + pad * 2);
   const total = widths.reduce((a, b) => a + b, 0) + gap * (labels.length - 1);
-  let x = (uiW - total) / 2;
-  const y = 692;
+  // Bottom-right chrome — text center aligns with DESKTOP RECOMMENDED (~672).
+  let x = uiW - total - 36;
+  const y = 663;
   const h = 18;
   return SITE_LINKS.map((link, i) => {
     const w = widths[i];

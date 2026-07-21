@@ -23,7 +23,9 @@ const DEFAULTS: AudioSettings = {
 
 export const audioSettings: AudioSettings = { ...DEFAULTS };
 
-function clamp01(n: number): number {
+function clamp01(n: number, fallback = 0): number {
+  // NaN/Infinity pass Math.min/max through — never let them near the graph.
+  if (!Number.isFinite(n)) return fallback;
   return Math.max(0, Math.min(1, n));
 }
 
@@ -33,10 +35,10 @@ export function loadSettings(): void {
     const raw = localStorage.getItem(AUDIO_KEY);
     if (!raw) return;
     const parsed = JSON.parse(raw) as Partial<AudioSettings>;
-    audioSettings.master = clamp01(Number(parsed.master ?? DEFAULTS.master));
-    audioSettings.music = clamp01(Number(parsed.music ?? DEFAULTS.music));
-    audioSettings.sfx = clamp01(Number(parsed.sfx ?? DEFAULTS.sfx));
-    audioSettings.voice = clamp01(Number(parsed.voice ?? DEFAULTS.voice));
+    audioSettings.master = clamp01(Number(parsed.master ?? DEFAULTS.master), DEFAULTS.master);
+    audioSettings.music = clamp01(Number(parsed.music ?? DEFAULTS.music), DEFAULTS.music);
+    audioSettings.sfx = clamp01(Number(parsed.sfx ?? DEFAULTS.sfx), DEFAULTS.sfx);
+    audioSettings.voice = clamp01(Number(parsed.voice ?? DEFAULTS.voice), DEFAULTS.voice);
     audioSettings.muted = Boolean(parsed.muted);
   } catch {
     Object.assign(audioSettings, DEFAULTS);

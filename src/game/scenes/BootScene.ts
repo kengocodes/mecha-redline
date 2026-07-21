@@ -17,11 +17,20 @@ export class BootScene extends Phaser.Scene {
   }
 
   create(): void {
-    void this.boot();
+    // Never let an unexpected boot failure hang silently on the loader.
+    void this.boot().catch((err: unknown) => {
+      console.error('boot failed', err);
+      const el = document.getElementById('loading');
+      if (el) el.textContent = 'BOOT FAILED — SEE CONSOLE';
+    });
   }
 
   private async boot(): Promise<void> {
-    hud.hi = Number.parseInt(localStorage.getItem(HI_KEY) ?? '0', 10) || 0;
+    try {
+      hud.hi = Number.parseInt(localStorage.getItem(HI_KEY) ?? '0', 10) || 0;
+    } catch {
+      hud.hi = 0; // storage blocked (private mode etc.) — hi-score just won't persist
+    }
     loadSettings(); // before initAudio so the graph boots at saved levels
     initAudio(); // warm the sfx/vo cache; context unlocks on first gesture
 

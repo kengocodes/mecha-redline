@@ -94,10 +94,15 @@ export function chromaKeyMagenta(
   return out;
 }
 
-export async function loadTitleArt(): Promise<TitleArt> {
+export async function loadTitleArt(): Promise<TitleArt | null> {
   if (art) return art;
-  const logoSrc = await loadImage('/branding/mecha-redline-logo.png');
-  art = { logo: chromaKeyMagenta(logoSrc) };
+  try {
+    const logoSrc = await loadImage('/branding/mecha-redline-logo.png');
+    art = { logo: chromaKeyMagenta(logoSrc) };
+  } catch {
+    // Missing/corrupt plate or no 2d context: overlay falls back to text.
+    return null;
+  }
   return art;
 }
 

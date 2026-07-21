@@ -37,18 +37,23 @@ function meanLuma(c: HTMLCanvasElement): number {
 export async function loadPilotArt(): Promise<void> {
   await Promise.all(
     ROSTER.map(async (p) => {
-      const [portrait, plate] = await Promise.all([
-        loadImage(p.portraitSrc),
-        loadImage(p.plateSrc),
-      ]);
-      // Portrait draws at ~430px tall, the launch cut-in plate at ~660px;
-      // key at full res, then hold roughly 2x the draw size.
-      const keyedPlate = chromaKeyMagenta(plate, { maxH: 1100 });
-      arts.set(p.id, {
-        portrait: chromaKeyMagenta(portrait, { flip: p.flipPortrait, maxH: 900 }),
-        plate: keyedPlate,
-        plateLuma: meanLuma(keyedPlate),
-      });
+      try {
+        const [portrait, plate] = await Promise.all([
+          loadImage(p.portraitSrc),
+          loadImage(p.plateSrc),
+        ]);
+        // Portrait draws at ~430px tall, the launch cut-in plate at ~660px;
+        // key at full res, then hold roughly 2x the draw size.
+        const keyedPlate = chromaKeyMagenta(plate, { maxH: 1100 });
+        arts.set(p.id, {
+          portrait: chromaKeyMagenta(portrait, { flip: p.flipPortrait, maxH: 900 }),
+          plate: keyedPlate,
+          plateLuma: meanLuma(keyedPlate),
+        });
+      } catch {
+        // Missing/corrupt art for one pilot must not sink the whole boot;
+        // getPilotArt returns null and the overlay paints its fallback.
+      }
     }),
   );
 }

@@ -6,7 +6,10 @@
 import * as THREE from 'three';
 import { BK, BULLET_H, type Bullet } from '../core/const';
 
-const CAPS: Record<BK, number> = { [BK.player]: 180, [BK.shot]: 450, [BK.orb]: 450 };
+// Enemy pools must hold the sim's full ENEMY_CAP (460, patterns.ts) of a
+// single kind — anything over the cap is culled from the mesh but still
+// collides, i.e. an invisible lethal bullet.
+const CAPS: Record<BK, number> = { [BK.player]: 180, [BK.shot]: 460, [BK.orb]: 460 };
 
 interface Layer {
   mesh: THREE.InstancedMesh;

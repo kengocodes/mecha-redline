@@ -81,6 +81,9 @@ export function initLegalOverlay(): void {
   window.addEventListener('keydown', (e) => {
     if (e.code === 'Escape' && isLegalOpen()) {
       e.preventDefault();
+      // Registered before initInput's listener (main.ts order) — stop the
+      // event here so the game never latches this Escape as fresh input.
+      e.stopImmediatePropagation();
       closeLegal();
     }
   });
