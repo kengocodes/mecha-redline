@@ -1423,9 +1423,10 @@ function drawEndCard(g: Ctx, won: boolean): void {
 /**
  * The campaign ending — the finale's complete card. Built on silence: the
  * first two seconds hold a near-black frame with nothing on it at all (the
- * song is gone; the delayed clear jingle lands at t=2), then the title
- * card, the operator's last line verbatim from comms, a short arcade staff
- * roll, and the final tallies. No cutscene reel — hold the quiet.
+ * song is gone; the delayed clear jingle lands at t=2), then ALL CLEAR,
+ * the operator's last line, a short arcade staff roll (hard cuts, no
+ * fades), and the final tallies. Near-monochrome — the void keeps the
+ * palette. No cutscene reel, no mission-title reprise.
  */
 function drawEnding(g: Ctx): void {
   const t = hud.t;
@@ -1434,24 +1435,23 @@ function drawEnding(g: Ctx): void {
   g.fillRect(0, 0, uiW, uiH);
   if (t < 2) return; // hold the silence
 
-  const a = (from: number, dur = 0.5): number =>
-    Math.max(0, Math.min(1, (t - from) / dur));
+  // Hard snap — cabinet pacing, not modern fades.
+  const show = (from: number): boolean => t >= from;
 
-  g.globalAlpha = a(2);
-  const pop = 1 + Math.max(0, 1 - (t - 2) / 0.3) ** 2 * 0.3;
-  tx(g, "EVENSONG", uiW / 2, 136, 54 * pop, AMBER, "center", 16);
-  tx(g, "終焉の聖歌", uiW / 2, 182, 18, FG, "center", 12);
-  g.globalAlpha = a(2.6);
-  tx(g, "THE SONG HAS ENDED", uiW / 2, 218, 15, DIM, "center", 6);
-  rule(g, uiW / 2 - 210, 238, 420, AMBER);
-
-  // The operator's last line, exactly as it came over comms.
-  if (hud.msg) {
-    g.globalAlpha = a(3.2);
-    tx(g, hud.msg, uiW / 2, 270, 13, CYAN, "center", 1);
+  if (show(2.0)) {
+    tx(g, "ALL CLEAR", uiW / 2, 150, 36, FG, "center", 10);
+  }
+  if (show(2.4)) {
+    tx(g, "THE SONG HAS ENDED", uiW / 2, 196, 15, DIM, "center", 6);
+    rule(g, uiW / 2 - 180, 216, 360, DIM);
   }
 
-  // Staff roll — the cabinet takes its bow.
+  // The operator's last line, exactly as it came over comms.
+  if (hud.msg && show(2.9)) {
+    tx(g, hud.msg, uiW / 2, 260, 13, FG, "center", 1);
+  }
+
+  // Staff roll — the cabinet takes its bow. One line at a time, no alpha.
   const roll: [string, string][] = [
     ["GARRISON OPERATOR", "ALICE"],
     ...ROSTER.map((p) => [`${p.callsign} PILOT`, p.pilot] as [string, string]),
@@ -1459,26 +1459,35 @@ function drawEnding(g: Ctx): void {
     ["SOUND", "THE CHOIR"],
     ["CAMPAIGN", "SECTOR 7 SURVIVORS"],
   ];
-  const y0 = 308;
+  const y0 = 300;
+  const rollAt = 3.4;
+  const step = 0.25;
   for (let i = 0; i < roll.length; i++) {
-    g.globalAlpha = a(3.8 + i * 0.3);
+    if (!show(rollAt + i * step)) continue;
     tx(g, roll[i][0], uiW / 2 - 20, y0 + i * 26, 12, DIM, "right", 2);
     tx(g, roll[i][1], uiW / 2 + 20, y0 + i * 26, 13, FG, "left", 2);
   }
-  g.globalAlpha = a(3.8 + roll.length * 0.3);
-  tx(g, "© 1998 MECHA REDLINE PROJECT", uiW / 2, y0 + roll.length * 26 + 16, 11, DIM, "center", 3);
-
-  const ty = y0 + roll.length * 26 + 56;
-  g.globalAlpha = a(5.4);
-  tx(g, `SCORE  ${String(hud.score).padStart(8, "0")}`, uiW / 2, ty, 20, FG, "center", 3);
-  if (hud.comboBest >= 2) {
-    tx(g, `BEST CHAIN  ${String(hud.comboBest).padStart(2, "0")} HITS`, uiW / 2, ty + 28, 13, CYAN, "center", 3);
+  const ty = y0 + roll.length * 26 + 36;
+  const scoreAt = rollAt + roll.length * step + 0.35;
+  if (show(scoreAt)) {
+    // One accent — the tally is the arcade payoff.
+    tx(g, `SCORE  ${String(hud.score).padStart(8, "0")}`, uiW / 2, ty, 20, CYAN, "center", 3);
+    if (hud.comboBest >= 2) {
+      tx(
+        g,
+        `BEST CHAIN  ${String(hud.comboBest).padStart(2, "0")} HITS`,
+        uiW / 2,
+        ty + 28,
+        13,
+        DIM,
+        "center",
+        3,
+      );
+    }
+    tx(g, `HI     ${String(hud.hi).padStart(8, "0")}`, uiW / 2, ty + 54, 15, FG, "center", 3);
   }
-  tx(g, `HI     ${String(hud.hi).padStart(8, "0")}`, uiW / 2, ty + 54, 15, AMBER, "center", 3);
 
   if (t > 6 && Math.floor(t * 1.6) % 2 === 0) {
-    g.globalAlpha = 1;
-    tx(g, "CLICK ── RETURN TO BASE", uiW / 2, uiH - 50, 16, CYAN, "center", 4);
+    tx(g, "CLICK ── RETURN TO BASE", uiW / 2, uiH - 50, 16, FG, "center", 4);
   }
-  g.globalAlpha = 1;
 }
