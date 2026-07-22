@@ -42,8 +42,8 @@ describe.each<EnemyKind>(['husk', 'ashhusk'])('%s fire contract', (kind) => {
   it('fires while alive and in the band (sanity — setup can fire)', () => {
     const e = makeEnemy(kind, 0, 0, fakeGear(), 1);
     const c = ctx();
-    e.t = 2.0; // past the 1.2s minimum
-    e.fireT = 2.0; // past the 1.9s refire gate
+    e.t = 3.0; // past the 1.2s minimum
+    e.fireT = 3.0; // past the refire gate (husk 2.4s / ashhusk 1.9s)
     updateEnemy(e, c, DT);
     expect(c.eb.length).toBe(1);
   });
@@ -52,7 +52,7 @@ describe.each<EnemyKind>(['husk', 'ashhusk'])('%s fire contract', (kind) => {
     const e = makeEnemy(kind, 0, 0, fakeGear(), 1);
     const c = ctx();
     e.t = e.life + 0.5; // expired: retreating at 16 u/s
-    e.fireT = 2.0;
+    e.fireT = 3.0;
     updateEnemy(e, c, DT);
     // The tell is correctly suppressed (guarded by e.t < e.life)...
     expect(e.gear.aimTarget).toBe(0);

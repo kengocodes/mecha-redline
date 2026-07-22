@@ -94,9 +94,9 @@ export function makeEnemy(
     case 'husk':
       return { ...base, kind, hp: 3, maxHp: 3, hitR: 1.5, score: SCORE.husk, life: 18 };
     case 'lancer':
-      return { ...base, kind, hp: 22, maxHp: 22, hitR: 2.1, score: SCORE.lancer, life: 26 };
+      return { ...base, kind, hp: 16, maxHp: 16, hitR: 2.1, score: SCORE.lancer, life: 26 };
     case 'boss':
-      return { ...base, kind, hp: 560, maxHp: 560, hitR: 4.6, score: SCORE.boss, life: Infinity };
+      return { ...base, kind, hp: 340, maxHp: 340, hitR: 4.6, score: SCORE.boss, life: Infinity };
     case 'dart':
       return { ...base, kind, hp: 2, maxHp: 2, hitR: 1.1, score: SCORE.dart, life: 14 };
     case 'mortar':
@@ -106,7 +106,7 @@ export function makeEnemy(
     case 'kai':
       return { ...base, kind, hp: 40, maxHp: 40, hitR: 2.4, score: SCORE.kai, life: 30 };
     case 'seraph':
-      return { ...base, kind, hp: 640, maxHp: 640, hitR: 3.4, score: SCORE.seraph, life: Infinity };
+      return { ...base, kind, hp: 560, maxHp: 560, hitR: 3.4, score: SCORE.seraph, life: Infinity };
     case 'ashhusk':
       return { ...base, kind, hp: 3, maxHp: 3, hitR: 1.5, score: SCORE.husk, life: 18 };
     case 'shade':
@@ -191,13 +191,17 @@ function updateHusk(e: Enemy, c: SimCtx, _dt: number): void {
   e.vx = a.hx * spd - a.hy * weave;
   e.vy = a.hy * spd + a.hx * weave;
   const inBand = Math.abs(e.x) < PLAY_X + 2 && Math.abs(e.y) < PLAY_Y + 2;
+  // Ash rebuilds (M03) run hotter than the M01 baseline grunt.
+  const refire = e.kind === 'ashhusk' ? 1.9 : 2.4;
+  const shotSpd = e.kind === 'ashhusk' ? 22 : 19;
   // Raise the arm cannon ~0.7s before the shot — a readable tell.
-  e.gear.aimTarget = c.playerAlive && e.t < e.life && e.t > 0.9 && e.fireT > 1.2 && inBand ? 1 : 0;
-  if (c.playerAlive && e.t < e.life && e.fireT > 1.9 && e.t > 1.2 && inBand) {
+  e.gear.aimTarget =
+    c.playerAlive && e.t < e.life && e.t > 0.9 && e.fireT > refire - 0.7 && inBand ? 1 : 0;
+  if (c.playerAlive && e.t < e.life && e.fireT > refire && e.t > 1.2 && inBand) {
     e.fireT = 0;
     e.muzzleT = 0.07;
     const m = armMuzzle(e, c);
-    emit(c.eb, m.x, m.y, aimAngle(e.x, e.y, c.px, c.py), 22, BK.shot);
+    emit(c.eb, m.x, m.y, aimAngle(e.x, e.y, c.px, c.py), shotSpd, BK.shot);
   }
 }
 
@@ -250,26 +254,28 @@ function updateLancer(e: Enemy, c: SimCtx, dt: number): void {
   e.vx = (a.tx - e.x) * 1.4 + Math.cos(e.t * 0.7 + e.seed) * 5;
   a.ringT += dt;
   // Cannon comes up ahead of the fan volley (rings fire from the frame).
-  e.gear.aimTarget = c.playerAlive && e.fireT > 1.8 && e.t > 1.4 ? 1 : 0;
+  e.gear.aimTarget = c.playerAlive && e.fireT > 2.2 && e.t > 1.6 ? 1 : 0;
   if (!c.playerAlive) return;
-  if (e.fireT > 2.4 && e.t > 2) {
+  if (e.fireT > 2.9 && e.t > 2.2) {
     e.fireT = 0;
     e.muzzleT = 0.07;
     const m = armMuzzle(e, c);
-    fan(c.eb, m.x, m.y, aimAngle(e.x, e.y, c.px, c.py), 5, 0.65, 18, BK.shot);
+    fan(c.eb, m.x, m.y, aimAngle(e.x, e.y, c.px, c.py), 5, 0.65, 16, BK.shot);
   }
-  if (a.ringT > 4.1 && e.t > 3.2) {
+  if (a.ringT > 5.2 && e.t > 3.6) {
     a.ringT = 0;
     e.muzzleT = 0.07;
-    ring(c.eb, e.x, e.y, 16, 13, BK.orb, e.seed);
+    ring(c.eb, e.x, e.y, 12, 11, BK.orb, e.seed);
   }
 }
 
 /**
- * GOLGOTHA: three phases keyed off remaining hp.
- *   P1 — aimed triple fans + slow rings, lazy strafe.
- *   P2 (<60%) — adds a two-arm spiral, faster strafe.
- *   P3 (<28%) — dense rings, reversed spiral, everything ~20% faster.
+ * GOLGOTHA: three phases keyed off remaining hp. The mission-01 boss is an
+ * introduction — each phase adds ONE readable layer, and the spiral (the
+ * campaign's first curtain pattern) is saved for the final stretch.
+ *   P1 — aimed triple fans + a sparse ring, lazy strafe.
+ *   P2 (<60%) — the ring doubles up (offset pair), faster strafe.
+ *   P3 (<28%) — the two-arm spiral arrives, densest rings, ~10% faster.
  */
 function updateBoss(e: Enemy, c: SimCtx, dt: number): void {
   const a = e.ai;
@@ -297,7 +303,7 @@ function updateBoss(e: Enemy, c: SimCtx, dt: number): void {
   const frac = e.hp / e.maxHp;
   const phase = frac < 0.28 ? 3 : frac < 0.6 ? 2 : 1;
   a.phase = phase; // read by GameScene for phase-transition hitstop
-  const rate = phase === 3 ? 1.2 : 1;
+  const rate = phase === 3 ? 1.1 : 1;
 
   e.vx = Math.sin(e.t * (phase === 1 ? 0.55 : 0.8)) * (phase === 1 ? 10 : 14);
   e.vy = (-15 + Math.sin(e.t * 0.9) * 2.5 - e.y) * 1.2;
@@ -316,27 +322,28 @@ function updateBoss(e: Enemy, c: SimCtx, dt: number): void {
     const n = phase === 1 ? 5 : 7;
     // Volleys alternate between the two over-shoulder barrels.
     const m = armMuzzle(e, c, a.burst % 2);
-    fan(c.eb, m.x, m.y, aimAngle(e.x, e.y, c.px, c.py), n, 0.8, 19 * rate, BK.shot);
+    fan(c.eb, m.x, m.y, aimAngle(e.x, e.y, c.px, c.py), n, 0.8, 17 * rate, BK.shot);
   }
   if (a.burst === 3 && a.cycle > 2.6) {
     a.burst = 4;
     e.muzzleT = 0.07;
-    const n = phase === 3 ? 30 : 24;
-    ring(c.eb, e.x, e.y, n, 13 * rate, BK.orb, a.cycle + e.t);
-    if (phase >= 2) ring(c.eb, e.x, e.y, n, 10 * rate, BK.orb, a.cycle + e.t + Math.PI / n);
+    const n = phase === 1 ? 14 : phase === 2 ? 18 : 24;
+    ring(c.eb, e.x, e.y, n, 11.5 * rate, BK.orb, a.cycle + e.t);
+    if (phase >= 2) ring(c.eb, e.x, e.y, n, 9 * rate, BK.orb, a.cycle + e.t + Math.PI / n);
   }
-  // The continuous spiral below gets no muzzle flash — at its 70-90ms cadence
+  // The continuous spiral below gets no muzzle flash — at its ~90ms cadence
   // it would read as a constant glow, not a tell.
 
-  // Continuous spiral arms from phase 2 on.
-  if (phase >= 2) {
+  // Continuous spiral arms in the final phase only — the mission-01 player
+  // meets the campaign's first curtain as a finale, not a wall.
+  if (phase === 3) {
     a.spiralT += dt;
-    const gap = phase === 3 ? 0.07 : 0.09;
+    const gap = 0.09;
     while (a.spiralT > gap) {
       a.spiralT -= gap;
-      a.spiral += phase === 3 ? -0.26 : 0.23;
-      emit(c.eb, e.x, e.y, a.spiral, 15 * rate, BK.orb);
-      emit(c.eb, e.x, e.y, a.spiral + Math.PI, 15 * rate, BK.orb);
+      a.spiral -= 0.26;
+      emit(c.eb, e.x, e.y, a.spiral, 13 * rate, BK.orb);
+      emit(c.eb, e.x, e.y, a.spiral + Math.PI, 13 * rate, BK.orb);
     }
   }
 }

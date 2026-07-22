@@ -41,13 +41,7 @@ export const privacyPolicy: LegalDocument = {
     {
       heading: 'Hosting and server logs',
       paragraphs: [
-        'The site is hosted on Vercel. Like most hosts, Vercel may process technical request data — for example IP address, user agent, timestamps, and the pages or files requested — in order to serve the site, keep it secure, and operate the platform. That processing is subject to Vercel’s privacy policy. This project does not run a separate analytics product on top of that.',
-      ],
-      links: [
-        {
-          text: 'Vercel’s privacy policy',
-          href: 'https://vercel.com/legal/privacy-policy',
-        },
+        'Copies of the game may be served from different hosts (for example the author’s site, itch.io, or similar platforms). Like most hosts, the platform serving your copy may process technical request data — for example IP address, user agent, timestamps, and the pages or files requested — in order to serve the game, keep it secure, and operate the platform. That processing is subject to that host’s privacy policy. This project does not run a separate analytics product on top of that.',
       ],
     },
     {

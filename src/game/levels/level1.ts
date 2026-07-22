@@ -63,7 +63,9 @@ function build(): LevelEvent[] {
     g.spawn('husk', 28, 34, 3.7);
   });
 
-  // W5 — pinwheel swarm: husks pour in from every edge.
+  // W5 — pinwheel swarm: husks pour in from every edge. Intro-mission
+  // density: a steady stream, not a wall — the lesson is reading the
+  // chevrons, and W6 + the boss are still ahead on the same armor bar.
   add(39, (g) => g.wave(5));
   const swarm: [number, number][] = [
     [-20, -36],
@@ -71,21 +73,18 @@ function build(): LevelEvent[] {
     [24, 34],
     [-SIDE, -14],
     [8, -36],
-    [-24, 34],
     [SIDE, 2],
-    [-8, -36],
     [-SIDE, 6],
     [20, -36],
   ];
   swarm.forEach(([x, y], i) => {
-    add(39 + i * 0.55, (g) => g.spawn('husk', x, y, i * 1.1));
+    add(39 + i * 0.7, (g) => g.spawn('husk', x, y, i * 1.1));
   });
 
-  // W6 — final push: a lancer wall with a husk pincer.
+  // W6 — final push: a lancer pair with a husk pincer.
   add(50, (g) => {
     g.wave(6);
     g.spawn('lancer', 0, -36);
-    g.spawn('lancer', -SIDE - 3, -14);
     g.spawn('lancer', SIDE + 3, -14);
   });
   for (let i = 0; i < 3; i++) {

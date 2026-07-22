@@ -1,5 +1,7 @@
 // Title logo: chroma-keyed from the magenta plate in public/branding/.
 
+import { assetUrl } from '../../core/assetUrl';
+
 export interface TitleArt {
   logo: HTMLCanvasElement;
 }
@@ -97,7 +99,7 @@ export function chromaKeyMagenta(
 export async function loadTitleArt(): Promise<TitleArt | null> {
   if (art) return art;
   try {
-    const logoSrc = await loadImage('/branding/mecha-redline-logo.png');
+    const logoSrc = await loadImage(assetUrl('branding/mecha-redline-logo.png'));
     art = { logo: chromaKeyMagenta(logoSrc) };
   } catch {
     // Missing/corrupt plate or no 2d context: overlay falls back to text.

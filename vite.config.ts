@@ -1,6 +1,9 @@
 import { defineConfig } from 'vite';
 
 export default defineConfig({
+  // Relative base so a zip of dist/ works under itch.io / Newgrounds iframes
+  // (and still resolves correctly at site root on Vercel).
+  base: './',
   server: {
     port: 5199,
   },

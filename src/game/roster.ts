@@ -2,6 +2,7 @@
 // primary; the pilot is the face on the hangar CRT. Stats here are the
 // per-pilot overrides GameScene applies on top of the shared PLAYER tuning.
 
+import { assetUrl } from '../core/assetUrl';
 import type { GearOptions } from '../render/gearFactory';
 import { VALKYR } from '../render/gearFactory';
 
@@ -119,8 +120,8 @@ export const ROSTER: PilotDef[] = [
     doctrine: ['BALANCED ALL-ROUNDER.', 'READABLE MOVEMENT, RELIABLE RIFLE.', 'THE MISSION DEFAULT.'],
     trait: 'BALANCED FRAME',
     quote: 'Checklist done. Launching.',
-    portraitSrc: '/portraits/valkyr-kira-ash.png',
-    plateSrc: '/gears/valkyr.png',
+    portraitSrc: assetUrl('portraits/valkyr-kira-ash.png'),
+    plateSrc: assetUrl('gears/valkyr.png'),
     flipPortrait: true,
     gear: VALKYR,
     stats: {
@@ -147,8 +148,8 @@ export const ROSTER: PilotDef[] = [
     doctrine: ['HIGH-MOBILITY KNIFE FIGHT.', 'GET IN, EMPTY THE MAG, GET OUT.', 'PUNISHES HESITATION.'],
     trait: 'THIN HITBOX · HOT ENGINE',
     quote: 'Shortest path is through.',
-    portraitSrc: '/portraits/raven-ren-okada.png',
-    plateSrc: '/gears/raven.png',
+    portraitSrc: assetUrl('portraits/raven-ren-okada.png'),
+    plateSrc: assetUrl('gears/raven.png'),
     flipPortrait: true,
     gear: RAVEN_GEAR,
     stats: {
@@ -175,8 +176,8 @@ export const ROSTER: PilotDef[] = [
     doctrine: ['OWNS THE FOCUS LANE.', 'NORMAL FIRE IS POLITE;', 'FOCUS IS A NEEDLE.'],
     trait: 'NEEDLE FOCUS · 0.3° SPREAD',
     quote: 'One breath. One shot.',
-    portraitSrc: '/portraits/ivory-sera-vale.png',
-    plateSrc: '/gears/ivory.png',
+    portraitSrc: assetUrl('portraits/ivory-sera-vale.png'),
+    plateSrc: assetUrl('gears/ivory.png'),
     flipPortrait: false,
     gear: IVORY_GEAR,
     stats: {
@@ -203,8 +204,8 @@ export const ROSTER: PilotDef[] = [
     doctrine: ['WALK THE REDLINE. TRADE HITS.', 'CLEAR THE BOARD.', 'GOOD AT ENDING ARGUMENTS.'],
     trait: 'WIDE SPREAD · HEAVY FRAME',
     quote: 'Armor is a personality trait.',
-    portraitSrc: '/portraits/basalt-juno-hale.png',
-    plateSrc: '/gears/basalt.png',
+    portraitSrc: assetUrl('portraits/basalt-juno-hale.png'),
+    plateSrc: assetUrl('gears/basalt.png'),
     flipPortrait: false,
     gear: BASALT_GEAR,
     stats: {

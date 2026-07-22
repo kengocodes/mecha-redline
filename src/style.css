@@ -23,12 +23,11 @@ body {
   overflow: hidden;
 }
 
-/* HUD reticle on fine-pointer desktops; scenes swap to select.png over chrome. */
+/* Fine-pointer desktops: generic fallback until setStageCursor() applies the
+   public/ cursor (relative BASE_URL — must not hardcode a site-root url()). */
 @media (hover: hover) and (pointer: fine) {
   #stage {
-    cursor:
-      url("/cursors/aim.png") 15 15,
-      crosshair;
+    cursor: crosshair;
   }
 }
 

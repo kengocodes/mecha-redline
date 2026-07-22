@@ -3,6 +3,7 @@
 
 import { setLegalSilent } from '../core/audio';
 import { LEGAL_PATHS, legalDocument, renderLegalDocument } from './render';
+import { ownsLegalRoutes } from './routes';
 import type { LegalPageId } from './types';
 
 const DEFAULT_TITLE = 'MECHA REDLINE';
@@ -45,7 +46,9 @@ export function openLegal(id: LegalPageId, push = true): void {
   document.title = doc.metaTitle;
   legalEl.scrollTop = 0;
   $('legal-heading').focus({ preventScroll: true });
-  if (push) history.pushState({ legal: id }, '', `/${id}`);
+  // Only rewrite history on canonical deploys that own /privacy|/terms.
+  // itch.io / Newgrounds deep paths must keep their embed URL intact.
+  if (push && ownsLegalRoutes()) history.pushState({ legal: id }, '', `/${id}`);
 }
 
 function closeLegal(push = true): void {
@@ -55,7 +58,7 @@ function closeLegal(push = true): void {
   legalEl.removeAttribute('aria-labelledby');
   setLegalReading(false);
   document.title = DEFAULT_TITLE;
-  if (push) history.pushState({}, '', '/');
+  if (push && ownsLegalRoutes()) history.pushState({}, '', '/');
 }
 
 /** Wire click / history handlers once after the DOM shell exists. */

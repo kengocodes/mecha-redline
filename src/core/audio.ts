@@ -6,6 +6,7 @@
 // Player mix (master / music / sfx / voice / mute) lives in settings.ts and
 // is applied through applyAudioSettings().
 
+import { assetUrl } from './assetUrl';
 import { audioSettings } from './settings';
 
 // Bus mix: music beds under gameplay SFX; VO sits in the middle so
@@ -274,7 +275,7 @@ async function load(path: string): Promise<AudioBuffer | null> {
   if (hit) return hit;
   let p = loading.get(path);
   if (!p) {
-    p = fetch(`/audio/${path}.mp3`)
+    p = fetch(assetUrl(`audio/${path}.mp3`))
       .then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(`${r.status}`))))
       .then((ab) => c.decodeAudioData(ab))
       .then((buf) => {

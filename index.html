@@ -14,20 +14,20 @@
     <meta name="theme-color" content="#02050c" />
     <meta name="color-scheme" content="dark" />
 
-    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="icon" href="./favicon.ico" sizes="any" />
     <link
       rel="icon"
       type="image/png"
-      href="/icons/favicon-32.png"
+      href="./icons/favicon-32.png"
       sizes="32x32"
     />
     <link
       rel="icon"
       type="image/png"
-      href="/icons/icon-512.png"
+      href="./icons/icon-512.png"
       sizes="512x512"
     />
-    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png" />
 
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://mecha-redline.vercel.app/" />
@@ -62,8 +62,17 @@
       href="https://fonts.googleapis.com/css2?family=DotGothic16&display=swap"
       rel="stylesheet"
     />
-    <!-- Deep-link privacy/terms: skip loading chrome flash before modules run. -->
+    <!-- Deep-link privacy/terms: skip loading chrome flash before modules run.
+         Strip a trailing slash so relative BASE_URL assets still resolve
+         (./assets from /privacy/ would otherwise look under /privacy/). -->
     <script>
+      if (/^\/(privacy|terms)\/$/.test(location.pathname)) {
+        history.replaceState(
+          null,
+          "",
+          location.pathname.slice(0, -1) + location.search + location.hash,
+        );
+      }
       if (/^\/(privacy|terms)\/?$/.test(location.pathname)) {
         document.documentElement.classList.add("legal-reading");
       }
@@ -79,11 +88,11 @@
     <!-- Legal pages live outside #stage so game chrome never wraps them. -->
     <div id="legal" class="legal-screen hidden">
       <div class="legal-shell">
-        <a href="/" id="btn-legal-back" class="legal-back">← Back to game</a>
+        <a href="./" id="btn-legal-back" class="legal-back">← Back to game</a>
         <div id="legal-content"></div>
       </div>
     </div>
 
-    <script type="module" src="/src/main.ts"></script>
+    <script type="module" src="./src/main.ts"></script>
   </body>
 </html>
