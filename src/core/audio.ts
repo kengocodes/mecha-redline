@@ -163,6 +163,35 @@ let legalSilent = false;
 
 const buffers = new Map<string, AudioBuffer>();
 const loading = new Map<string, Promise<AudioBuffer | null>>();
+
+// A decoded AudioBuffer is raw PCM — ~40MB for a two-minute stereo track —
+// so music tracks are evicted once they stop instead of accumulating across
+// a campaign (~500MB by the ending). Menu beds stay for instant transitions;
+// an evicted track just re-fetches (async, under the crossfade) on replay.
+const MUSIC_KEEP = new Set(['music/title', 'music/select']);
+
+function evictMusic(id: MusicId): void {
+  const path = `music/${id}`;
+  if (MUSIC_KEEP.has(path)) return;
+  buffers.delete(path);
+  loading.delete(path);
+}
+
+/** Decoded-buffer cache contents — tests and the DEV console hook. */
+export function audioCacheKeys(): string[] {
+  return [...buffers.keys()];
+}
+
+if (typeof window !== 'undefined' && import.meta.env.DEV) {
+  const w = window as unknown as { __audioCache?: () => string[]; __audioDebug?: () => unknown };
+  w.__audioCache = audioCacheKeys;
+  w.__audioDebug = () => ({
+    keys: audioCacheKeys(),
+    state: ctx?.state ?? 'none',
+    now: musicNow?.id ?? null,
+    want: musicWant,
+  });
+}
 const lastPlay = new Map<string, number>();
 const loops = new Map<string, { src: AudioBufferSourceNode; gain: GainNode }>();
 
@@ -421,13 +450,22 @@ export function vo(id: VoId, opts: { queue?: boolean; gain?: number } = {}): voi
 export function music(id: MusicId | null, opts: { loop?: boolean; fade?: number } = {}): void {
   const c = ensure();
   if (!c) return;
+  const prevWant = musicWant;
   musicWant = id;
   musicWantLoop = opts.loop ?? true;
   const fade = opts.fade ?? 0.8;
   if (musicNow && musicNow.id !== id) {
     const old = musicNow;
     musicNow = null;
+    // Replace the bookkeeping handler (musicNow is already cleared and want
+    // already points at the new track): the fade's scheduled stop is now the
+    // moment the outgoing PCM becomes dead weight.
+    old.src.onended = () => evictMusic(old.id);
     fadeOutMusic(old, fade);
+  } else if (!musicNow && prevWant && prevWant !== id) {
+    // Superseded before it ever played (warm-loaded behind the autoplay
+    // lock): there is no source to end, so evict at the handover itself.
+    evictMusic(prevWant);
   }
   if (!id || (musicNow && musicNow.id === id)) return;
 
@@ -435,12 +473,21 @@ export function music(id: MusicId | null, opts: { loop?: boolean; fade?: number 
   // will re-enter once the context is running (title bed waits on first click).
   if (c.state === 'suspended') {
     c.resume().catch(() => {});
-    void load(`music/${id}`); // warm decode so the first gesture is instant
+    void load(`music/${id}`).then(() => {
+      // Warm decode so the first gesture is instant — unless the want moved
+      // on while this was still decoding behind the lock.
+      if (musicWant !== id) evictMusic(id);
+    });
     return;
   }
 
   void load(`music/${id}`).then((buf) => {
-    if (!buf || musicWant !== id || musicNow?.id === id) return;
+    if (!buf) return;
+    if (musicWant !== id || musicNow?.id === id) {
+      // Superseded while decoding — don't let the abandoned PCM linger.
+      if (musicWant !== id) evictMusic(id);
+      return;
+    }
     if (c.state !== 'running') return;
     const loop = opts.loop ?? true;
     const src = c.createBufferSource();
@@ -453,8 +500,12 @@ export function music(id: MusicId | null, opts: { loop?: boolean; fade?: number 
     src.onended = () => {
       if (musicNow?.src === src) musicNow = null;
       // One-shot stingers are done when they end — clear the want so the
-      // next gesture's unlockAudio kick doesn't replay them.
-      if (!loop && musicWant === id) musicWant = null;
+      // next gesture's unlockAudio kick doesn't replay them, and drop the
+      // decoded buffer (a switch-away replaces this handler instead).
+      if (!loop) {
+        if (musicWant === id) musicWant = null;
+        evictMusic(id);
+      }
     };
     src.start();
     musicNow = { id, src, gain: g };
