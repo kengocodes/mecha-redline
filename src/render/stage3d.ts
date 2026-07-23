@@ -10,6 +10,7 @@ import { portraitAttract, uiH, uiW } from '../core/uiSize';
 import { Bullets3D } from './bullets3d';
 import { Fx3D } from './fx3d';
 import { disposeGear, setArenaCam } from './gearFactory';
+import { BATTLE_HZ, IDLE_HZ, renderDue, resetGovernor } from './renderGovernor';
 import { HangarShowcase } from './hangarShowcase';
 import { DECK_THEMES, DeckBackdrop } from './backdrops/deck';
 import { SpaceBackdrop } from './backdrops/space';
@@ -137,11 +138,15 @@ export class Stage3D {
   private postCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
   private postMat!: THREE.ShaderMaterial;
   private postT = 0;
+  /** Gates the GPU passes below display refresh; sim ticks stay per-rAF. */
+  private gov = resetGovernor();
 
   constructor(container: HTMLElement) {
     Stage3D.I = this;
 
-    this.renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
+    // low-power: 640×360 needs no dGPU — on dual-GPU MacBooks the
+    // high-performance hint lit the discrete chip for nothing.
+    this.renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'low-power' });
     this.renderer.setPixelRatio(1);
     this.renderer.setSize(RES_W, RES_H, false);
     this.renderer.setClearColor(VOID);
@@ -270,6 +275,7 @@ export class Stage3D {
       this.applyBackdrop();
     }
     this.worldEl.classList.remove('hidden');
+    resetGovernor(this.gov); // mode switches paint immediately
     this.update(0);
   }
 
@@ -477,7 +483,13 @@ export class Stage3D {
     }
 
     // Scene → low-res target, then the PS1/CRT finishing pass to the canvas.
+    // postT accumulates sim time every tick — skipped frames must not slow
+    // the CRT roll — but the GPU passes themselves run governed: 60fps in
+    // live battle, 30 on menus/pause/hitstop (dt 0). The sim above still
+    // ran, so nothing gameplay-side ever waits on a skipped render.
     this.postT += dt;
+    const hz = this.battleMode && dt > 0 ? BATTLE_HZ : IDLE_HZ;
+    if (!renderDue(this.gov, performance.now(), hz)) return;
     this.postMat.uniforms.uTime.value = this.postT;
     this.postMat.uniforms.uParity.value = 1 - this.postMat.uniforms.uParity.value;
     this.postMat.uniforms.uAberr.value = this.aberr;
