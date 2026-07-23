@@ -133,7 +133,7 @@ export const sel: SelectState = {
   hoverBack: false,
   swapT: 9,
   confirmT: -1,
-  timer: 35,
+  timer: 60,
 };
 
 /** Title attract carousel: TitleScene advances it, the overlay paints it. */

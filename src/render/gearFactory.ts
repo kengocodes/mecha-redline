@@ -5,6 +5,10 @@
 
 import * as THREE from 'three';
 import { BULLET_H, PCAM } from '../core/const';
+import { buildGearGlb, gearGlbReady } from './gearGlb';
+
+/** Rigid GLB frames: rest lean (near-upright, matches the pad stance). */
+const RIGID_LEAN_REST = 0.06;
 
 interface GearPalette {
   armor: number; // main plating
@@ -30,7 +34,12 @@ export interface GearOptions {
   focusMarker?: boolean;
   /** Muzzle flash tint; defaults per weapon (cyan rifle, amber cannon). */
   flashColor?: number;
+  /** External GLB frame. Falls back to procedural if unloaded. */
+  model?: GlbModel;
 }
+
+/** Frames with an external GLB (see gearGlb.ts SPECS). */
+export type GlbModel = 'valkyr-glb' | 'raven-glb' | 'ivory-glb' | 'basalt-glb';
 
 export interface Gear {
   root: THREE.Group; // carries x/z position + yaw
@@ -107,6 +116,8 @@ export function disposeGear(root: THREE.Object3D): void {
   root.traverse((obj) => {
     const m = obj as THREE.Mesh;
     if (!m.isMesh) return;
+    // Imported GLB meshes share a cached template — never free them here.
+    if (m.userData.shared) return;
     const mat = m.material as THREE.Material;
     // A flashing gear may sit on FLASH_MAT — its real material is stashed.
     const real = (m.userData.mat as THREE.Material | undefined) ?? mat;
@@ -119,6 +130,65 @@ export function disposeGear(root: THREE.Object3D): void {
       real.dispose();
     }
   });
+}
+
+/** Shared soft radial gradient for the hero light pool — one texture ever;
+ * each gear tints its own material (disposeGear frees the material, and
+ * material.dispose() leaves the map alone). Same recipe as the hangar pad
+ * disc so the two read as the same light. */
+let poolTex: THREE.CanvasTexture | null = null;
+function poolTexture(): THREE.CanvasTexture {
+  if (poolTex) return poolTex;
+  const S = 64;
+  const cv = document.createElement('canvas');
+  cv.width = S;
+  cv.height = S;
+  const g = cv.getContext('2d')!;
+  const grad = g.createRadialGradient(S / 2, S / 2, 2, S / 2, S / 2, S / 2);
+  grad.addColorStop(0, 'rgba(255,255,255,0.9)');
+  grad.addColorStop(0.55, 'rgba(255,255,255,0.32)');
+  grad.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = grad;
+  g.fillRect(0, 0, S, S);
+  poolTex = new THREE.CanvasTexture(cv);
+  return poolTex;
+}
+
+/**
+ * Player-only pad glow: the hangar aura vocabulary carried into battle. A
+ * soft gradient light pool on the deck under the gear — smooth falloff, no
+ * edge to read as a marker — plus a faint underlight that rims the hull,
+ * both in the pilot's glow colour. Keeps the hero findable in bullet
+ * clutter while reading as the machine's own light on the deck, so the
+ * floating-gear look survives. Rides root (not att): the pool sits still on
+ * the deck through hover bob and i-frame blink — exactly when the eye needs
+ * the anchor. Returns the per-frame driver.
+ */
+export function attachHeroLight(g: Gear, color: number): (t: number) => void {
+  const mat = new THREE.MeshBasicMaterial({
+    map: poolTexture(),
+    color,
+    transparent: true,
+    opacity: 0.3,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+  });
+  const pool = new THREE.Mesh(new THREE.CircleGeometry(2.7, 24), mat);
+  pool.rotation.x = -Math.PI / 2;
+  // Under the blob shadow (0.05): the shadow keeps the feet grounded and
+  // the glow spills around it instead of washing the silhouette out.
+  pool.position.y = 0.04;
+  pool.renderOrder = -1;
+  g.root.add(pool);
+  const light = new THREE.PointLight(color, 1.5, 12, 2);
+  light.position.set(0, 0.9, 0);
+  g.root.add(light);
+  return (t) => {
+    // Slow breathe — powered, not strobing.
+    const breathe = 1 + Math.sin(t * 2.1) * 0.12;
+    mat.opacity = 0.3 * breathe;
+    light.intensity = 1.5 * breathe;
+  };
 }
 
 /** Swap every armor mesh to solid white (and back) for hit feedback. */
@@ -261,6 +331,10 @@ function put(
 
 /** Build one humanoid gear facing +z (yaw 0 = down-screen). ~4.8u tall at scale 1. */
 export function buildGear(o: GearOptions): Gear {
+  if (o.model && gearGlbReady(o.model)) {
+    const glb = buildGearGlb(o.model, o);
+    if (glb) return glb;
+  }
   const p = o.palette;
   const armor = lambert(p.armor);
   const dark = lambert(p.dark);
@@ -593,6 +667,16 @@ export function muzzleArenaPos(g: Gear, ix = 0): { x: number; y: number } | null
 }
 
 /**
+ * Showcase turntable step (title/select pads). Not a constant spin: the lap
+ * slows while the gear faces the camera (yaw ~ 0) and hurries past the back,
+ * so ~3/4 of every lap shows face or profile. One lap ~6.5 s — on the title
+ * the gear is front-on again just before the 7 s roster swap.
+ */
+export function showcaseYawStep(yaw: number, dt: number): number {
+  return yaw + dt * 1.32 * (1 - 0.68 * Math.cos(yaw));
+}
+
+/**
  * Per-frame idle: hover bob, banking, thruster flicker, weapon flash, recoil.
  * boost scales the thruster flames with speed; 0 = cold, 1 = full burn,
  * values above 1 overdrive (enemies in a hard burn).
@@ -669,7 +753,39 @@ export function animateGear(g: Gear, dt: number, bank = 0, pitch = 0, boost = 0.
     }
   }
   g.recoil = Math.max(0, g.recoil - dt * 9);
-  if (g.rifleGrp) g.rifleGrp.position.z = g.rifleGrp.userData.baseZ - g.recoil * 0.28;
+  if (g.rifleGrp) {
+    g.rifleGrp.position.z = g.rifleGrp.userData.baseZ - g.recoil * 0.28;
+    // Gatling frames park a barrel cluster here: lazy idle turn, spun up
+    // hard while the trigger is down.
+    const spin = g.rifleGrp.userData.spin as THREE.Object3D | undefined;
+    if (spin) spin.rotation.z += dt * (firing ? 26 : 1.6);
+  }
+
+  // Rigid GLB frames: the torso mesh has no skeleton, so the whole body
+  // sells the hover-combat read — upright idle like the procedural stance,
+  // tipping into a combat lean only past cruise boost, plus bob, drift,
+  // bank and recoil punch around the hip pivot.
+  const body = g.root.userData.rigidBody as THREE.Object3D | undefined;
+  if (body) {
+    const a = g.aim * g.aim * (3 - 2 * g.aim);
+    const boostLean = Math.max(0, Math.min(1.2, b) - 0.35) * 0.4;
+    const bob = Math.sin(g.t * 2.4);
+    const sway = Math.sin(g.t * 1.15);
+    const hipY = (body.userData.hipY as number | undefined) ?? body.position.y;
+    body.rotation.x =
+      RIGID_LEAN_REST +
+      boostLean -
+      0.05 * a -
+      g.recoil * 0.08 +
+      bob * 0.045 * (1 - 0.35 * b1);
+    // Aim twist brings the weapon shoulder forward; idle scan wanders slowly.
+    body.rotation.y =
+      Math.sin(g.t * 0.9) * 0.07 + bank * 0.35 - g.aimSide * (0.12 * a - g.recoil * 0.05);
+    body.rotation.z = sway * 0.05 + bank * 0.3;
+    body.position.y = hipY + bob * 0.06 * (1 - 0.4 * b1);
+    body.position.x = sway * 0.04 + bank * 0.15;
+    body.position.z = -boostLean * 0.2 - g.recoil * 0.12 + bob * 0.02;
+  }
 }
 
 // ---- unit palettes -------------------------------------------------------
@@ -693,6 +809,7 @@ export const VALKYR: GearOptions = {
   wings: true,
   bulk: 1,
   flashColor: 0xc8ffff,
+  model: 'valkyr-glb',
 };
 
 export const HUSK: GearOptions = {

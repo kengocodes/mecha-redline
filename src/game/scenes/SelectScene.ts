@@ -11,7 +11,13 @@ import {
   takeTabDir,
   takeTap,
 } from '../../core/input';
-import { animateGear, buildGear, type Gear, setGearFlash } from '../../render/gearFactory';
+import {
+  animateGear,
+  buildGear,
+  type Gear,
+  setGearFlash,
+  showcaseYawStep,
+} from '../../render/gearFactory';
 import { Stage3D } from '../../render/stage3d';
 import { Scene } from '../../core/scene';
 import { selectLevel } from '../levels';
@@ -34,7 +40,7 @@ import { startWipe, wipeActive } from '../ui/wipe';
 const ARRIVE_YAW = 0.42;
 
 /** Coin-op select countdown, seconds; auto-confirms on expiry. */
-const SELECT_T = 35;
+const SELECT_T = 60;
 
 export class SelectScene extends Scene {
   private gear!: Gear;
@@ -233,7 +239,7 @@ export class SelectScene extends Scene {
     const ease = 1 - (1 - p) ** 3;
     this.gear.root.scale.setScalar(this.baseScale * (0.86 + 0.14 * ease));
 
-    this.yaw += dt * 0.55;
+    this.yaw = showcaseYawStep(this.yaw, dt);
     this.gear.root.rotation.y = this.yaw;
     animateGear(this.gear, dt, 0, 0, boost);
     Stage3D.I.update(dt);

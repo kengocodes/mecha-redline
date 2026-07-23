@@ -15,7 +15,13 @@ import { desktopPlayable } from '../../core/platform';
 import { audioSettings, setBus, toggleMuted, type BusId } from '../../core/settings';
 import { Scene } from '../../core/scene';
 import { isLegalOpen, openLegal } from '../../legal/overlay';
-import { animateGear, buildGear, type Gear, setGearFlash } from '../../render/gearFactory';
+import {
+  animateGear,
+  buildGear,
+  type Gear,
+  setGearFlash,
+  showcaseYawStep,
+} from '../../render/gearFactory';
 import { Stage3D } from '../../render/stage3d';
 import { ROSTER } from '../roster';
 import {
@@ -166,7 +172,7 @@ export class TitleScene extends Scene {
     const ease = 1 - (1 - p) ** 3;
     this.gear.root.scale.setScalar(this.baseScale * (0.86 + 0.14 * ease));
 
-    this.yaw += dt * 0.55;
+    this.yaw = showcaseYawStep(this.yaw, dt);
     this.gear.root.rotation.y = this.yaw;
     animateGear(this.gear, dt);
     Stage3D.I.update(dt);

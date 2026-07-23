@@ -3,11 +3,13 @@
 
 import { initAudio } from '../../core/audio';
 import { HI_KEY } from '../../core/const';
-import { debugParam } from '../../core/debug';
+import { debugParam, debugPilotParam } from '../../core/debug';
 import { Scene } from '../../core/scene';
 import { loadSettings } from '../../core/settings';
 import { Stage3D } from '../../render/stage3d';
+import { preloadGearGlbs } from '../../render/gearGlb';
 import { selectLevel } from '../levels';
+import { selectPilot } from '../roster';
 import { loadPilotArt } from '../ui/pilotArt';
 import { loadTitleArt } from '../ui/titleArt';
 import { hud, setPhase } from '../ui/state';
@@ -50,7 +52,7 @@ export class BootScene extends Scene {
     const stage = document.getElementById('stage');
     if (!stage) throw new Error('missing #stage');
     new Stage3D(stage);
-    await Promise.all([loadTitleArt(), loadPilotArt()]);
+    await Promise.all([loadTitleArt(), loadPilotArt(), preloadGearGlbs()]);
     document.getElementById('loading')?.remove();
 
     this.scene.launch('hud');
@@ -63,6 +65,8 @@ export class BootScene extends Scene {
     const m = dbg?.match(/^(battle|boss)(\d?)[gx]?$/);
     if (m) {
       selectLevel(m[2] ? Number.parseInt(m[2], 10) - 1 : 0);
+      const pilot = debugPilotParam();
+      if (pilot !== null) selectPilot(pilot - 1);
       this.scene.start('game');
     } else if (dbg === 'ending') {
       selectLevel(3);

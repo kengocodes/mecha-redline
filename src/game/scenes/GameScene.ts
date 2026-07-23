@@ -46,6 +46,7 @@ import {
 import {
   animateGear,
   ASH_HUSK,
+  attachHeroLight,
   buildGear,
   DART,
   disposeGear,
@@ -125,6 +126,7 @@ function easeInOut(p: number): number {
 export class GameScene extends Scene {
   private p = { x: 0, y: 0, vx: 0, vy: 0, aim: -Math.PI / 2, inv: 0, fireCd: 0, alive: true };
   private pGear!: Gear;
+  private heroLight!: (t: number) => void;
   private stats: PilotStats = ROSTER[0].stats;
   private callsign = ROSTER[0].displayName;
   private level: LevelDef = currentLevel();
@@ -211,6 +213,7 @@ export class GameScene extends Scene {
 
     this.pGear = buildGear(pilot.gear);
     s.battleGroup.add(this.pGear.root);
+    this.heroLight = attachHeroLight(this.pGear, pilot.gear.palette.glow);
     s.bullets.setPlayerStyle(pilot.id);
 
     hud.score = 0;
@@ -877,7 +880,9 @@ export class GameScene extends Scene {
     // Cannon frames (Basalt) hold the first shot until the arm is most of
     // the way up (~0.1s) so the raise reads; the arm stays up mid-fight,
     // so sustained combat pays this only once.
-    const cannonGate = this.pGear.aimArm !== null && this.pGear.rifleGrp === null;
+    const cannonGate =
+      this.pGear.root.userData.cannonGate === true ||
+      (this.pGear.aimArm !== null && this.pGear.rifleGrp === null);
     const armReady = !cannonGate || this.pGear.aim > 0.55;
     if (wantFire && armReady && p.fireCd <= 0) {
       const foc = focusing();
@@ -1515,6 +1520,7 @@ export class GameScene extends Scene {
       // i-frame blink
       this.pGear.att.visible = p.inv <= 0 || Math.floor(hud.t * 14) % 2 === 0;
       if (this.pGear.focusDot) this.pGear.focusDot.visible = focusing();
+      this.heroLight(hud.t);
     }
 
     for (const e of this.enemies) {
