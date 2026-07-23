@@ -101,7 +101,7 @@ import {
 import { emit, ring } from '../systems/patterns';
 import { addPopup, hud, popups, say, setPhase, settingsUi } from '../ui/state';
 import { hitTitleChrome, sliderValueAt } from '../ui/titleChrome';
-import { startWipe } from '../ui/wipe';
+import { startWipe, wipeActive } from '../ui/wipe';
 
 /** Seconds a scripted spawn telegraphs (edge chevron) before the enemy
  * materializes. Spawn points sit barely off the field, so without this
@@ -596,11 +596,15 @@ export class GameScene extends Scene {
 
     // End-state input. A win rolls into the next mission when one exists.
     // The finale holds its card longer — the silence and the roll get read.
-    if (hud.phase === 'failed' && hud.t > 1 && takeTap()) {
+    // wipeActive must gate these: startWipe is a no-op while a wipe runs,
+    // but advanceLevel() is not — spam taps during cover would skip missions.
+    if (wipeActive()) {
+      // Drain latches so a held mash does not fire once the next scene boots.
+      if (hud.phase === 'complete' || hud.phase === 'failed') clearTap();
+    } else if (hud.phase === 'failed' && hud.t > 1 && takeTap()) {
       startWipe(() => this.scene.restart());
       return;
-    }
-    if (hud.phase === 'complete' && hud.t > (this.level.finale ? 6 : 2) && takeTap()) {
+    } else if (hud.phase === 'complete' && hud.t > (this.level.finale ? 6 : 2) && takeTap()) {
       if (advanceLevel()) {
         sfx('ui-confirm');
         startWipe(() => this.scene.restart());
