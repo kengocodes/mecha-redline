@@ -65,9 +65,11 @@ const SPECS: Record<GlbModel, GlbFrameSpec> = {
     aimRaise: -1.18,
     rifleRx: 1.12,
     thrust: [0.07, 0.64, -0.05],
-    gain: 1.18,
+    // Cobalt midtones mud under PS1 crush — modest gain lift; keep emissive
+    // low enough that the red V / cyan visor still read as lit accents.
+    gain: 1.36,
     sat: 1.15,
-    emissive: 0.24,
+    emissive: 0.3,
   },
   'ivory-glb': {
     url: 'gears/glb/ivory.glb',
@@ -79,11 +81,12 @@ const SPECS: Record<GlbModel, GlbFrameSpec> = {
     aimRaise: -1.35,
     rifleRx: 1.29,
     thrust: [0.1, 0.63, -0.072],
-    // Bone-white plate: barely lift, keep chroma neutral — the warm JPEG
-    // cast turns this paint job cream-brown at valkyr's sat.
-    gain: 1.1,
+    // Bone-white plate: lift enough to stay luminous and keep joint greys
+    // from sinking to voids. Sat stays neutral — the warm JPEG cast turns
+    // this paint job cream-brown at valkyr's sat.
+    gain: 1.3,
     sat: 1.0,
-    emissive: 0.24,
+    emissive: 0.32,
   },
   'raven-glb': {
     url: 'gears/glb/raven.glb',
@@ -95,12 +98,12 @@ const SPECS: Record<GlbModel, GlbFrameSpec> = {
     aimRaise: -1.5,
     rifleRx: 1.44,
     thrust: [0.025, 0.71, -0.12],
-    // Charcoal plate: hard lift, neutral chroma — the warm JPEG cast at
-    // valkyr's sat reads as skin, and at valkyr's gain the whole frame
-    // vanishes into the deck.
-    gain: 1.55,
+    // Charcoal plate: prefer emissive over hard gain (gold trim clips
+    // first). Sat stays neutral — warm JPEG cast at valkyr's sat reads as
+    // skin, and at low gain the whole frame vanishes into the deck.
+    gain: 1.75,
     sat: 1.0,
-    emissive: 0.34,
+    emissive: 0.48,
   },
   'basalt-glb': {
     url: 'gears/glb/basalt.glb',
@@ -119,11 +122,12 @@ const SPECS: Record<GlbModel, GlbFrameSpec> = {
     // mesh forearm stub instead of hanging detached below it.
     cannon: [0.024, -0.108, 0.035],
     thrust: [0.07, 0.72, -0.26],
-    // Rust-and-charcoal plate: firm lift, neutral chroma — the paint is
-    // already warm, so any sat push tips it toward mud.
-    gain: 1.4,
+    // Rust-and-charcoal plate: lift midtones + joint cavities so bone
+    // stripes and the orange eye stay the bright notes. Sat stays neutral —
+    // the paint is already warm, so any sat push tips it toward mud.
+    gain: 1.58,
     sat: 1.0,
-    emissive: 0.28,
+    emissive: 0.4,
   },
 };
 
