@@ -123,8 +123,8 @@ export const ROSTER: PilotDef[] = [
     doctrine: ['BALANCED ALL-ROUNDER.', 'READABLE MOVEMENT, RELIABLE RIFLE.', 'THE MISSION DEFAULT.'],
     trait: 'BALANCED FRAME',
     quote: 'Checklist done. Launching.',
-    portraitSrc: assetUrl('portraits/valkyr-kira-ash.png'),
-    plateSrc: assetUrl('gears/valkyr.png'),
+    portraitSrc: assetUrl('portraits/valkyr-kira-ash.webp'),
+    plateSrc: assetUrl('gears/valkyr.webp'),
     flipPortrait: true,
     gear: VALKYR,
     stats: {
@@ -151,8 +151,8 @@ export const ROSTER: PilotDef[] = [
     doctrine: ['HIGH-MOBILITY KNIFE FIGHT.', 'GET IN, EMPTY THE MAG, GET OUT.', 'PUNISHES HESITATION.'],
     trait: 'THIN HITBOX · HOT ENGINE',
     quote: 'Shortest path is through.',
-    portraitSrc: assetUrl('portraits/raven-ren-okada.png'),
-    plateSrc: assetUrl('gears/raven.png'),
+    portraitSrc: assetUrl('portraits/raven-ren-okada.webp'),
+    plateSrc: assetUrl('gears/raven.webp'),
     flipPortrait: true,
     gear: RAVEN_GEAR,
     stats: {
@@ -179,8 +179,8 @@ export const ROSTER: PilotDef[] = [
     doctrine: ['OWNS THE FOCUS LANE.', 'NORMAL FIRE IS POLITE;', 'FOCUS IS A NEEDLE.'],
     trait: 'NEEDLE FOCUS · 0.3° SPREAD',
     quote: 'One breath. One shot.',
-    portraitSrc: assetUrl('portraits/ivory-sera-vale.png'),
-    plateSrc: assetUrl('gears/ivory.png'),
+    portraitSrc: assetUrl('portraits/ivory-sera-vale.webp'),
+    plateSrc: assetUrl('gears/ivory.webp'),
     flipPortrait: false,
     gear: IVORY_GEAR,
     stats: {
@@ -207,8 +207,8 @@ export const ROSTER: PilotDef[] = [
     doctrine: ['WALK THE REDLINE. TRADE HITS.', 'CLEAR THE BOARD.', 'GOOD AT ENDING ARGUMENTS.'],
     trait: 'WIDE SPREAD · HEAVY FRAME',
     quote: 'Armor is a personality trait.',
-    portraitSrc: assetUrl('portraits/basalt-juno-hale.png'),
-    plateSrc: assetUrl('gears/basalt.png'),
+    portraitSrc: assetUrl('portraits/basalt-juno-hale.webp'),
+    plateSrc: assetUrl('gears/basalt.webp'),
     flipPortrait: false,
     gear: BASALT_GEAR,
     stats: {

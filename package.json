@@ -10,7 +10,8 @@
     "build": "tsc -p tsconfig.json && vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "perf": "node tools/perf-budget.mjs"
+    "perf": "node tools/perf-budget.mjs",
+    "size": "node tools/size-budget.mjs"
   },
   "dependencies": {
     "three": "^0.182.0"
