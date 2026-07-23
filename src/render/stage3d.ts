@@ -9,7 +9,7 @@ import { PCAM, RES_H, RES_W, VIEW_HH, VIEW_HW } from '../core/const';
 import { portraitAttract, uiH, uiW } from '../core/uiSize';
 import { Bullets3D } from './bullets3d';
 import { Fx3D } from './fx3d';
-import { disposeGear, setArenaCamElev } from './gearFactory';
+import { disposeGear, setArenaCam } from './gearFactory';
 import { HangarShowcase } from './hangarShowcase';
 import { DECK_THEMES, DeckBackdrop } from './backdrops/deck';
 import { SpaceBackdrop } from './backdrops/space';
@@ -415,7 +415,6 @@ export class Stage3D {
     const persp = this.battleMode;
     const baseEl = persp ? (PCAM.elev * Math.PI) / 180 : this.elev;
     const el = baseEl + (this.cineElev - baseEl) * cw;
-    setArenaCamElev(el); // keep objectArenaPos hit zones on the live view line
     const dist = persp ? PCAM.dist : CAM_DIST;
     if (persp && dt > 0) {
       const k = Math.min(1, dt * 3);
@@ -454,6 +453,10 @@ export class Stage3D {
     const cam = this.cam;
     cam.position.copy(base);
     cam.lookAt(look);
+    // Keep objectArenaPos muzzle spawns / hit zones on the live view line —
+    // the posed position matters, not just the pitch, so this sits after the
+    // camera pose (shake included; its plane-projection error is sub-pixel).
+    setArenaCam(el, persp ? cam.position : null);
 
     this.space.update(dt);
     this.deck.update(dt);

@@ -638,11 +638,18 @@ const _muzzleWorld = new THREE.Vector3();
  * elevation (GameScene updateCinematics → Stage3D.setCine), and the hit
  * zones must follow where the player actually sees the geometry. */
 let camDrop = 1 / Math.tan((PCAM.elev * Math.PI) / 180);
+/** Battle camera world position; null while the orthographic showcase cam
+ * flies (parallel rays — the elevation drop alone is exact there). */
+const _arenaCamPos = new THREE.Vector3();
+let arenaCamPersp = false;
 
 /** Stage3D calls this each frame with the camera's effective elevation
- * (radians) so arena-plane projections match the live view line. */
-export function setArenaCamElev(elevRad: number): void {
+ * (radians) and, for the perspective battle cam, its world position, so
+ * arena-plane projections match the live view line. */
+export function setArenaCam(elevRad: number, pos: THREE.Vector3 | null): void {
   camDrop = 1 / Math.tan(elevRad);
+  arenaCamPersp = pos !== null;
+  if (pos) _arenaCamPos.copy(pos);
 }
 
 /**
@@ -653,6 +660,19 @@ export function setArenaCamElev(elevRad: number): void {
  */
 export function objectArenaPos(obj: THREE.Object3D): { x: number; y: number } {
   obj.getWorldPosition(_muzzleWorld);
+  if (arenaCamPersp) {
+    // Perspective rays diverge off-axis: an elevated point projects sideways
+    // as well as down-screen, so intersect the camera→object ray with the
+    // bullet plane. The screen-centre pitch alone leaves muzzle spawns
+    // drifting toward screen centre — bullets visibly stream beside the
+    // barrel at the arena edges.
+    const dy = _arenaCamPos.y - _muzzleWorld.y;
+    const t = dy > 1e-3 ? (_arenaCamPos.y - BULLET_H) / dy : 1;
+    return {
+      x: _arenaCamPos.x + (_muzzleWorld.x - _arenaCamPos.x) * t,
+      y: _arenaCamPos.z + (_muzzleWorld.z - _arenaCamPos.z) * t,
+    };
+  }
   return { x: _muzzleWorld.x, y: _muzzleWorld.z - (_muzzleWorld.y - BULLET_H) * camDrop };
 }
 
